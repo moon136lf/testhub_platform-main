@@ -61,3 +61,14 @@ class TestCaseCreateEnumRejection:
     def test_accept_partial_automated(self):
         c = CaseCreateRequest(**{**self._base(), "automation_status": "partial_automated"})
         assert c.automation_status == "partial_automated"
+
+
+class TestModelConstraints:
+    def test_testcase_has_unique_project_name(self):
+        from app.models.test_case import TestCase
+        assert any("project_id" in str(c) and "name" in str(c) for c in TestCase.__table__.constraints)
+
+    def test_steps_column_is_jsonb(self):
+        from app.models.test_case import TestCase
+        col = TestCase.__table__.c.steps
+        assert col.type.__class__.__name__ == "JSONB"
