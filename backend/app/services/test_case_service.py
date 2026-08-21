@@ -346,6 +346,20 @@ class TestCaseService:
             logger.error(f"Error updating test case: {str(e)}")
             raise
 
+    async def list_versions(self, case_id: str) -> list:
+        q = select(CaseVersion).where(
+            CaseVersion.case_id == UUID(case_id)
+        ).order_by(CaseVersion.version.desc())
+        result = await self.db.execute(q)
+        return result.scalars().all()
+
+    async def get_version(self, case_id: str, version: int) -> Optional[CaseVersion]:
+        q = select(CaseVersion).where(
+            CaseVersion.case_id == UUID(case_id),
+            CaseVersion.version == version
+        ).order_by(CaseVersion.created_at.desc())
+        return (await self.db.execute(q)).scalar_one_or_none()
+
     async def rollback_case(self, case_id: str, target_version: int) -> Optional[CaseDetailResponse]:
         """Rollback case to a snapshot version. version continues to increment."""
         try:

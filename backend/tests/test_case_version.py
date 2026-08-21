@@ -100,3 +100,14 @@ class TestRollback:
         assert len(added) == 1
         assert added[0].args[0].version == 4
         assert "回滚到 v2" in (added[0].args[0].diff_summary or "")
+
+
+class TestVersionList:
+    @pytest.mark.asyncio
+    async def test_list_versions_returns_desc(self, mock_db):
+        v1 = Mock(); v1.version = 1; v1.created_at = None; v1.changed_by = "a"
+        v2 = Mock(); v2.version = 2; v2.created_at = None; v2.changed_by = "b"
+        mock_db.execute.return_value = Mock(scalars=Mock(return_value=Mock(all=Mock(return_value=[v2, v1]))))
+        svc = TestCaseService(mock_db)
+        result = await svc.list_versions(str(uuid4()))
+        assert result[0].version == 2  # desc order preserved from query

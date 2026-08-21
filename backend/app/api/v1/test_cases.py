@@ -195,3 +195,37 @@ async def batch_operation_test_cases(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/{case_id}/versions")
+async def list_case_versions(case_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        service = get_test_case_service(db)
+        versions = await service.list_versions(case_id)
+        return {"code": 0, "data": [v.to_dict() for v in versions]}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{case_id}/versions/{version}")
+async def get_case_version(case_id: str, version: int, db: AsyncSession = Depends(get_db)):
+    try:
+        service = get_test_case_service(db)
+        v = await service.get_version(case_id, version)
+        if not v:
+            raise HTTPException(status_code=404, detail="Version not found")
+        return {"code": 0, "data": v.to_dict()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{case_id}/rollback")
+async def rollback_case(case_id: str, version: int = Query(..., ge=1), db: AsyncSession = Depends(get_db)):
+    try:
+        service = get_test_case_service(db)
+        result = await service.rollback_case(case_id, version)
+        if not result:
+            raise HTTPException(status_code=404, detail="Case not found")
+        return {"code": 0, "data": result.model_dump()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
