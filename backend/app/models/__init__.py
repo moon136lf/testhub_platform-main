@@ -1,0 +1,31 @@
+"""
+Models module initialization
+"""
+
+from app.models.project import Project
+from app.models.test_case import TestPoint, TestCase, ScriptAsset, CaseVersion
+from app.models.element import PageRepository, ElementRepository, FetchHistory, ChangeDetection, SelfHealCache
+from app.models.execution import ExecutionRecord, AICallLog
+from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
+from app.models.test_rule import TestRule
+from app.models.generation import GenerationSession, HallucinationConfig
+
+__all__ = [
+    "Project",
+    "TestPoint",
+    "TestCase",
+    "ScriptAsset",
+    "CaseVersion",
+    "PageRepository",
+    "ElementRepository",
+    "FetchHistory",
+    "ChangeDetection",
+    "SelfHealCache",
+    "ExecutionRecord",
+    "AICallLog",
+    "KnowledgeDocument",
+    "KnowledgeChunk",
+    "GenerationSession",
+    "HallucinationConfig",
+    "TestRule",
+]

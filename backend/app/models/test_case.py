@@ -125,3 +125,30 @@ class ScriptAsset(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class CaseVersion(Base):
+    """Test case version history (snapshot on each update)."""
+    __tablename__ = "case_version"
+    __table_args__ = (
+        Index("idx_case_version_case", "case_id"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    case_id = Column(UUID(as_uuid=True), ForeignKey("test_case.id", ondelete="CASCADE"), nullable=False)
+    version = Column(Integer, nullable=False)
+    snapshot = Column(JSONB, nullable=False, comment="用例变更前完整快照")
+    diff_summary = Column(Text, comment="与上一版变化字段摘要")
+    changed_by = Column(String(50))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "case_id": str(self.case_id),
+            "version": self.version,
+            "snapshot": self.snapshot,
+            "diff_summary": self.diff_summary,
+            "changed_by": self.changed_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
