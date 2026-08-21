@@ -1,0 +1,63 @@
+"""W2 schema alignment tests."""
+import pytest
+from pydantic import ValidationError
+from app.schemas.test_case import (
+    StepSchema, CaseCreateRequest, CaseFilterParams,
+    CASE_TYPES, AUTOMATION_STATUSES, REVIEW_STATUSES, FEASIBILITY_LEVELS,
+)
+
+
+class TestEnumConstants:
+    def test_case_types_canonical(self):
+        assert CASE_TYPES == ("functional", "interface_case")
+
+    def test_automation_statuses_canonical(self):
+        assert AUTOMATION_STATUSES == ("pending", "automated", "partial_automated")
+
+    def test_review_statuses_canonical(self):
+        assert REVIEW_STATUSES == ("pending", "passed", "needs_revision")
+
+    def test_feasibility_levels_canonical(self):
+        assert FEASIBILITY_LEVELS == ("full", "partial", "manual")
+
+
+class TestStepSchema:
+    def test_step_field_name_is_step_not_seq(self):
+        s = StepSchema(step=1, action="点击登录", expected="跳转首页")
+        assert s.step == 1
+        with pytest.raises(ValidationError):
+            StepSchema(seq=1, action="x", expected="y")  # seq no longer valid
+
+    def test_action_max_length_200(self):
+        with pytest.raises(ValidationError):
+            StepSchema(step=1, action="x" * 201, expected="y")
+
+    def test_expected_max_length_200(self):
+        with pytest.raises(ValidationError):
+            StepSchema(step=1, action="x", expected="y" * 201)
+
+
+class TestCaseCreateEnumRejection:
+    def _base(self):
+        return dict(
+            project_id="00000000-0000-0000-0000-000000000001",
+            name="t", priority="P1", case_type="functional",
+            steps=[{"step": 1, "action": "a", "expected": "e"}],
+            expected_result="r",
+        )
+
+    def test_reject_old_case_type(self):
+        with pytest.raises(ValidationError):
+            CaseCreateRequest(**{**self._base(), "case_type": "performance"})
+
+    def test_accept_interface_case(self):
+        c = CaseCreateRequest(**{**self._base(), "case_type": "interface_case"})
+        assert c.case_type == "interface_case"
+
+    def test_reject_cannot_automate(self):
+        with pytest.raises(ValidationError):
+            CaseCreateRequest(**{**self._base(), "automation_status": "cannot_automate"})
+
+    def test_accept_partial_automated(self):
+        c = CaseCreateRequest(**{**self._base(), "automation_status": "partial_automated"})
+        assert c.automation_status == "partial_automated"
