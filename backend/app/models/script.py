@@ -1,5 +1,5 @@
 """Script conversion session model."""
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, Numeric
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, Numeric, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
@@ -12,7 +12,7 @@ class ConvertSession(Base):
     __tablename__ = "convert_session"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id = Column(UUID(as_uuid=True), index=True, nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("project.id", ondelete="CASCADE"), index=True, nullable=False)
     case_ids = Column(JSONB, nullable=False, comment="本次转换用例 ID 列表")
     ai_optimize = Column(Boolean, default=False, comment="未命中时是否调 AI 生成定位器")
     status = Column(String(20), default="active", comment="active/done/failed")

@@ -14,8 +14,9 @@ class TestScriptAssetColumns:
         assert "ai_diagnosis" in cols
 
     def test_has_unique_project_name(self):
-        constraints = [str(c) for c in ScriptAsset.__table__.constraints]
-        assert any("project_id" in c and "name" in c for c in constraints)
+        from sqlalchemy import UniqueConstraint
+        uqs = [c for c in ScriptAsset.__table__.constraints if isinstance(c, UniqueConstraint)]
+        assert any(c.name == "uq_script_asset_project_name" for c in uqs)
 
 
 class TestConvertSessionColumns:
