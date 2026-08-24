@@ -68,6 +68,13 @@ class TestCase(Base):
     created_by = Column(String(50))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # W5: review & refinement
+    review_status = Column(String(20), default="pending", comment="pending/passed/needs_revision")
+    review_comment = Column(Text, comment="评审意见")
+    feasibility_level = Column(String(20), comment="full/partial/manual")
+    cannot_automate_reason = Column(String(200), comment="不可自动化原因")
+    refinement_report = Column(JSONB, comment="精修报告 JSON")
+    refined_at = Column(DateTime(timezone=True), comment="最后精修时间")
     is_deleted = Column(Boolean, default=False)
 
     def to_dict(self):
@@ -88,6 +95,12 @@ class TestCase(Base):
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "review_status": self.review_status,
+            "review_comment": self.review_comment,
+            "feasibility_level": self.feasibility_level,
+            "cannot_automate_reason": self.cannot_automate_reason,
+            "refinement_report": self.refinement_report,
+            "refined_at": self.refined_at.isoformat() if self.refined_at else None,
             "is_deleted": self.is_deleted
         }
 

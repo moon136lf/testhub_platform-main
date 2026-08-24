@@ -168,6 +168,12 @@ class TestGetCaseDetail:
         mock_case.created_at = datetime.now()
         mock_case.updated_at = datetime.now()
         mock_case.is_deleted = False
+        mock_case.review_status = "pending"
+        mock_case.review_comment = None
+        mock_case.feasibility_level = None
+        mock_case.cannot_automate_reason = None
+        mock_case.refinement_report = None
+        mock_case.refined_at = None
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = mock_case
@@ -255,6 +261,12 @@ class TestUpdateCase:
         mock_case.created_at = datetime.now()
         mock_case.updated_at = datetime.now()
         mock_case.is_deleted = False
+        mock_case.review_status = "pending"
+        mock_case.review_comment = None
+        mock_case.feasibility_level = None
+        mock_case.cannot_automate_reason = None
+        mock_case.refinement_report = None
+        mock_case.refined_at = None
 
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = mock_case

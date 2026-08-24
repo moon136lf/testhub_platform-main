@@ -60,6 +60,12 @@ class TestCaseService:
             created_at=case.created_at.isoformat() if case.created_at else "",
             updated_at=case.updated_at.isoformat() if case.updated_at else "",
             is_deleted=case.is_deleted,
+            review_status=getattr(case, "review_status", "pending") or "pending",
+            review_comment=getattr(case, "review_comment", None),
+            feasibility_level=getattr(case, "feasibility_level", None),
+            cannot_automate_reason=getattr(case, "cannot_automate_reason", None),
+            refinement_report=getattr(case, "refinement_report", None),
+            refined_at=case.refined_at.isoformat() if getattr(case, "refined_at", None) else None,
         )
 
     def _build_query_filters(self, filters: CaseFilterParams) -> List:
@@ -320,6 +326,16 @@ class TestCaseService:
             if request.hallucination_status is not None:
                 case.hallucination_status = request.hallucination_status
 
+            # W5: review & refinement fields
+            if request.review_status is not None:
+                case.review_status = request.review_status
+            if request.review_comment is not None:
+                case.review_comment = request.review_comment
+            if request.feasibility_level is not None:
+                case.feasibility_level = request.feasibility_level
+            if request.cannot_automate_reason is not None:
+                case.cannot_automate_reason = request.cannot_automate_reason
+
             # W3: write snapshot of pre-change state with diff summary
             new_snapshot = self._snapshot_dict(case)
             try:
@@ -405,16 +421,72 @@ class TestCaseService:
             logger.error(f"Rollback failed: {e}")
             raise
 
+    async def refine_case(self, case_id: str) -> Optional[dict]:
+        """Run synchronous E2E refinement, persist the report + feasibility fields.
+
+        Returns the refinement report dict, or None if the case is not found.
+        """
+        from app.services.case_refiner import CaseRefiner
+
+        try:
+            q = select(TestCase).where(
+                TestCase.id == UUID(case_id), TestCase.is_deleted.is_(False)
+            )
+            case = (await self.db.execute(q)).scalar_one_or_none()
+            if not case:
+                return None
+
+            case_dict = {
+                "name": case.name, "priority": case.priority, "case_type": case.case_type,
+                "precondition": case.precondition or "", "steps": case.steps or [],
+                "expected_result": case.expected_result,
+            }
+            refiner = CaseRefiner()
+            report = refiner.refine_sync(case_dict, page_elements=None)
+            case.refinement_report = report
+            case.feasibility_level = report.get("feasibility_level")
+            case.cannot_automate_reason = report.get("cannot_automate_reason")
+            case.refined_at = datetime.utcnow()
+            await self.db.commit()
+            return report
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Refine failed: {e}")
+            raise
+
+    async def apply_suggestions(self, case_id: str, suggestion_ids=None) -> Optional[CaseDetailResponse]:
+        """Apply refinement suggestions (all, or by id) and persist updated steps.
+
+        Returns the updated case detail, or None if the case / report is missing.
+        """
+        try:
+            q = select(TestCase).where(
+                TestCase.id == UUID(case_id), TestCase.is_deleted.is_(False)
+            )
+            case = (await self.db.execute(q)).scalar_one_or_none()
+            if not case or not case.refinement_report:
+                return None
+
+            report = case.refinement_report
+            refined = report.get("refined_case") or {}
+            # apply refined steps if present
+            if "steps" in refined:
+                case.steps = refined["steps"]
+                case.version += 1
+            # mark suggestions applied (all pending, or only the specified ids)
+            for s in report.get("suggestions", []):
+                if suggestion_ids is None or s.get("id") in suggestion_ids:
+                    s["status"] = "applied"
+            case.refinement_report = report
+            await self.db.commit()
+            await self.db.refresh(case)
+            return self._to_detail(case)
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Apply suggestions failed: {e}")
+            raise
+
     async def delete_case(self, case_id: str) -> bool:
-        """
-        Soft delete a test case (set is_deleted flag)
-
-        Args:
-            case_id: Test case ID
-
-        Returns:
-            True if deleted, False if not found
-        """
         try:
             query = select(TestCase).where(
                 and_(

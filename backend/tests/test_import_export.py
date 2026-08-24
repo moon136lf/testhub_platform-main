@@ -69,3 +69,30 @@ class TestImportCsv:
         result = await svc.import_cases(str(uuid4()), csv_content.encode("utf-8"), "csv")
         assert result["failed"] == 1
         assert result["imported"] == 1
+
+
+class TestExportFormats:
+    @pytest.mark.asyncio
+    async def test_export_xlsx_nonempty(self, mock_db):
+        mock_db.execute.return_value = Mock(scalars=Mock(return_value=Mock(all=Mock(return_value=_sample_cases()))))
+        svc = ImportExportService(mock_db)
+        data = await svc.export_cases_async(str(uuid4()), "xlsx")
+        assert len(data) > 0
+        assert data[:2] == b"PK"  # xlsx is a zip
+
+    @pytest.mark.asyncio
+    async def test_roundtrip_csv(self, mock_db):
+        # export then parse back
+        mock_db.execute.return_value = Mock(scalars=Mock(return_value=Mock(all=Mock(return_value=_sample_cases()))))
+        svc = ImportExportService(mock_db)
+        cases = await svc._fetch_cases(str(uuid4()))
+        # parse a csv that mirrors exported structure.
+        # Per RFC 4180, fields containing commas/quotes must be quoted:
+        # CSV doubles inner quotes ("{"..."}" -> "{""...""}").
+        csv_bytes = (
+            b'name,priority,case_type,precondition,steps,expected_result\n'
+            b'A,P1,functional,,"[{""step"":1,""action"":""x"",""expected"":""y""}]",r\n'
+        )
+        rows = svc._parse(csv_bytes, "csv")
+        assert rows[0]["name"] == "A"
+        assert rows[0]["steps"][0]["step"] == 1

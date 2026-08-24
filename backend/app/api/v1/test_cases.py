@@ -2,12 +2,14 @@
 Test Case API endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.core.database import get_db
 from app.services.test_case_service import get_test_case_service, TestCaseService
+from app.services.import_export_service import ImportExportService
 from app.schemas.test_case import (
     CaseCreateRequest,
     CaseUpdateRequest,
@@ -21,8 +23,60 @@ from app.schemas.test_case import (
     HALLUCINATION_STATUSES,
     _pattern,
 )
+from app.schemas.refinement import ApplySuggestionsRequest
 
 router = APIRouter()
+
+
+def _get_io_service(db: AsyncSession) -> ImportExportService:
+    return ImportExportService(db)
+
+
+@router.get("/export")
+async def export_test_cases(
+    project_id: str = Query(...),
+    format: str = Query("json", pattern="^(xlsx|json|xmind)$"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export test cases of a project to xlsx / json / xmind."""
+    try:
+        svc = _get_io_service(db)
+        data = await svc.export_cases_async(project_id, format)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+    ext = {"xlsx": "xlsx", "json": "json", "xmind": "xmind"}[format]
+    mime = {
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "json": "application/json",
+        "xmind": "application/x-xmind",
+    }[format]
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Content-Disposition": f"attachment; filename=test_cases.{ext}"},
+    )
+
+
+@router.post("/import")
+async def import_test_cases(
+    project_id: str = Query(...),
+    format: str = Query("csv", pattern="^(xlsx|csv|md)$"),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import test cases from an uploaded xlsx / csv / md file."""
+    try:
+        file_bytes = await file.read()
+        svc = _get_io_service(db)
+        result = await svc.import_cases(project_id, file_bytes, format)
+        return {"code": 0, "data": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/", response_model=CaseListResponse)
@@ -229,3 +283,94 @@ async def rollback_case(case_id: str, version: int = Query(..., ge=1), db: Async
         return {"code": 0, "data": result.model_dump()}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{case_id}/refine")
+async def refine_case(case_id: str, db: AsyncSession = Depends(get_db)):
+    """Trigger (synchronous) E2E refinement, persist the report + feasibility fields."""
+    try:
+        svc = get_test_case_service(db)
+        report = await svc.refine_case(case_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="Case not found")
+        return {"code": 0, "data": report}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/{case_id}/refinement-report")
+async def get_refinement_report(case_id: str, db: AsyncSession = Depends(get_db)):
+    """Fetch the latest persisted refinement report for a case."""
+    try:
+        svc = get_test_case_service(db)
+        detail = await svc.get_case_detail(case_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail="Case not found")
+        return {"code": 0, "data": getattr(detail, "refinement_report", None)}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post("/{case_id}/apply-suggestions")
+async def apply_suggestions(
+    case_id: str,
+    body: ApplySuggestionsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply refinement suggestions (all or by id) and persist the updated steps."""
+    try:
+        svc = get_test_case_service(db)
+        result = await svc.apply_suggestions(case_id, body.suggestion_ids)
+        if not result:
+            raise HTTPException(status_code=404, detail="Case or refinement report not found")
+        return {"code": 0, "data": result.model_dump()}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.patch("/{case_id}/review")
+async def update_review(
+    case_id: str,
+    request: CaseUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update review-only fields (status / comment / feasibility / reason).
+
+    Other mutable fields are cleared so the underlying update_case cannot touch them.
+    """
+    # Neutralize non-review fields so only review fields can be set here.
+    request.name = None
+    request.steps = None
+    request.priority = None
+    request.case_type = None
+    request.automation_status = None
+    request.precondition = None
+    request.expected_result = None
+    request.is_finalized = None
+    request.hallucination_status = None
+    request.point_id = None
+
+    try:
+        svc = get_test_case_service(db)
+        result = await svc.update_case(case_id, request)
+        if not result:
+            raise HTTPException(status_code=404, detail="Case not found")
+        return {"code": 0, "data": result.model_dump()}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

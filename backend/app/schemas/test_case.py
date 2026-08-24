@@ -91,6 +91,11 @@ class CaseUpdateRequest(BaseModel):
     expected_result: Optional[str] = Field(None, min_length=1, max_length=200, description="Overall expected result")
     is_finalized: Optional[bool] = Field(None, description="Finalized status")
     hallucination_status: Optional[str] = Field(None, pattern=_pattern(HALLUCINATION_STATUSES))
+    # W5: review & refinement fields
+    review_status: Optional[str] = Field(None, pattern=_pattern(REVIEW_STATUSES))
+    review_comment: Optional[str] = Field(None, max_length=500, description="评审意见")
+    feasibility_level: Optional[str] = Field(None, pattern=_pattern(FEASIBILITY_LEVELS))
+    cannot_automate_reason: Optional[str] = Field(None, max_length=200, description="不可自动化原因")
 
     @field_validator('steps')
     @classmethod
@@ -119,7 +124,7 @@ class CaseUpdateRequest(BaseModel):
 class BatchOperationRequest(BaseModel):
     """Schema for batch operations on test cases"""
     case_ids: List[str] = Field(..., min_length=1, description="List of test case IDs")
-    action: str = Field(..., pattern="^(delete|finalize|unfinalize|update_priority|update_automation_status|mark_hallucination)$")
+    action: str = Field(..., pattern="^(delete|finalize|unfinalize|update_priority|update_automation_status|mark_hallucination|update_review)$")
     params: Optional[Dict[str, Any]] = Field(None, description="Additional parameters for the action")
 
     @model_validator(mode='after')
@@ -145,6 +150,12 @@ class BatchOperationRequest(BaseModel):
 
         if action == "mark_hallucination" and params.get("hallucination_status") not in list(HALLUCINATION_STATUSES):
             raise ValueError(f"hallucination_status must be one of: {', '.join(HALLUCINATION_STATUSES)}")
+
+        if action == "update_review":
+            if params.get("review_status") is not None and params.get("review_status") not in REVIEW_STATUSES:
+                raise ValueError("review_status must be one of: " + ", ".join(REVIEW_STATUSES))
+            if params.get("feasibility_level") is not None and params.get("feasibility_level") not in FEASIBILITY_LEVELS:
+                raise ValueError("feasibility_level must be one of: " + ", ".join(FEASIBILITY_LEVELS))
 
         return self
 
@@ -191,6 +202,13 @@ class CaseDetailResponse(BaseModel):
     created_at: str
     updated_at: str
     is_deleted: bool
+    # W5: review & refinement
+    review_status: str = "pending"
+    review_comment: Optional[str] = None
+    feasibility_level: Optional[str] = None
+    cannot_automate_reason: Optional[str] = None
+    refinement_report: Optional[Dict[str, Any]] = None
+    refined_at: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

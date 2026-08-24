@@ -48,6 +48,13 @@ def _make_case(**kw):
     case.created_by = kw.get("created_by", "u")
     case.is_deleted = False
     case.created_at = case.updated_at = None
+    # W5 review/refinement fields (concrete values so _to_detail validation passes)
+    case.review_status = kw.get("review_status", "pending")
+    case.review_comment = kw.get("review_comment", None)
+    case.feasibility_level = kw.get("feasibility_level", None)
+    case.cannot_automate_reason = kw.get("cannot_automate_reason", None)
+    case.refinement_report = kw.get("refinement_report", None)
+    case.refined_at = kw.get("refined_at", None)
     return case
 
 
