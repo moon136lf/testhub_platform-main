@@ -3,9 +3,9 @@ Element Service - Business Logic
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from app.models.element import PageRepository, ElementRepository
-from typing import List, Dict
+from typing import List, Dict, Optional
 import uuid
 import logging
 
@@ -14,6 +14,25 @@ logger = logging.getLogger(__name__)
 
 class ElementService:
     """元素管理服务"""
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def find_by_name(self, project_id: str, element_name: str) -> Optional[ElementRepository]:
+        """按项目+元素名/文本查找元素 (供转脚本定位匹配用, TRANS-01)。"""
+        if not element_name:
+            return None
+        result = await self.db.execute(
+            select(ElementRepository).where(
+                ElementRepository.project_id == uuid.UUID(project_id),
+                ElementRepository.status == "active",
+                or_(
+                    ElementRepository.element_name == element_name,
+                    ElementRepository.element_text == element_name,
+                ),
+            )
+        )
+        return result.scalar_one_or_none()
 
     @staticmethod
     async def create_page(
@@ -240,3 +259,46 @@ class ElementService:
             element.status = "deleted"
             await db.commit()
             logger.info(f"Deleted element: {element_id}")
+
+
+class ElementLocatorLookup:
+    """ElementRepository -> pipeline ElementLookupProto 适配器。
+    locator_strategies JSONB -> Playwright 定位器字符串。"""
+
+    def __init__(self, element_service: ElementService):
+        self._svc = element_service
+
+    async def find(self, project_id: str, target: str) -> Optional[str]:
+        el = await self._svc.find_by_name(project_id, target)
+        if not el:
+            return None
+        strategies = el.locator_strategies or []
+        if isinstance(strategies, dict):
+            strategies = strategies.get("strategies", [])
+        return _strategy_to_playwright(strategies)
+
+
+def _strategy_to_playwright(strategies: list) -> Optional[str]:
+    """定位策略优先级 -> Playwright 定位器 (skill 3.1)。"""
+    priority = {"role": 0, "text": 1, "label": 2, "placeholder": 3, "css": 4}
+    best = None
+    best_rank = 99
+    for s in strategies:
+        stype = s.get("type", "")
+        rank = priority.get(stype, 99)
+        if rank < best_rank:
+            best, best_rank = s, rank
+    if not best:
+        return None
+    t, v = best.get("type"), best.get("value", "")
+    if t == "role":
+        return f'page.get_by_role("button", name="{v}")' if "button" in v.lower() else f'page.get_by_role("{v}")'
+    if t == "text":
+        return f'page.get_by_text("{v}")'
+    if t == "label":
+        return f'page.get_by_label("{v}")'
+    if t == "placeholder":
+        return f'page.get_by_placeholder("{v}")'
+    if t == "css":
+        return f'page.locator("{v}")'
+    return None
