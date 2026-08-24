@@ -60,11 +60,8 @@
           style="width: 150px"
           @change="handleFilterChange"
         >
-          <el-option label="功能测试" value="functional" />
-          <el-option label="接口测试" value="api" />
-          <el-option label="性能测试" value="performance" />
-          <el-option label="安全测试" value="security" />
-          <el-option label="兼容测试" value="compatibility" />
+          <el-option label="功能用例" value="functional" />
+          <el-option label="接口用例" value="interface_case" />
         </el-select>
       </el-form-item>
 
@@ -76,9 +73,10 @@
           style="width: 150px"
           @change="handleFilterChange"
         >
-          <el-option label="未自动化" value="none" />
-          <el-option label="部分自动化" value="partial" />
-          <el-option label="已自动化" value="full" />
+          <el-option label="未转化" value="pending" />
+          <el-option label="已转脚本" value="converted" />
+          <el-option label="部分自动化" value="partial_automated" />
+          <el-option label="已自动化" value="automated" />
         </el-select>
       </el-form-item>
 

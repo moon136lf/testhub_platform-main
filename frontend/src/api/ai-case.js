@@ -29,12 +29,22 @@ export const aiCaseAPI = {
     return response.data
   },
 
-  async identifyTestPoints(projectId, prdContent, ruleIds = [], knowledgeIds = []) {
-    const response = await axios.post(`${API_BASE}/test-points/identify`, {
+  /**
+   * Step 4: AI 识别测试点（W6 4 规则开关）
+   * @param {string} projectId
+   * @param {string} documentContent PRD 文本
+   * @param {object} rules { automation_thinking, boundary_value, scenario_analysis, equivalence_partition }
+   * @param {string[]} ruleIds
+   * @param {string[]} knowledgeIds
+   */
+  async identifyTestPoints(projectId, documentContent, rules = {}, ruleIds = [], knowledgeIds = []) {
+    const response = await axios.post(`${API_BASE}/identify-points`, {
+      session_id: _genSessionId(),
       project_id: projectId,
-      prd_content: prdContent,
+      document_content: documentContent,
       rule_ids: ruleIds,
-      knowledge_ids: knowledgeIds
+      knowledge_ids: knowledgeIds,
+      rules
     })
     return response.data
   },
@@ -51,11 +61,11 @@ export const aiCaseAPI = {
   },
 
   async generateTestCases(projectId, testPointIds, generationMode = 'comprehensive', enableHallucinationCheck = true) {
-    const response = await axios.post(`${API_BASE}/test-cases/generate`, {
+    const response = await axios.post(`${API_BASE}/generate-cases`, {
+      session_id: _genSessionId(),
       project_id: projectId,
-      test_point_ids: testPointIds,
-      generation_mode: generationMode,
-      enable_hallucination_check: enableHallucinationCheck
+      point_ids: testPointIds,
+      hallucination_strategy: enableHallucinationCheck ? 'moderate' : 'permissive'
     })
     return response.data
   },
@@ -112,5 +122,37 @@ export const aiCaseAPI = {
       penalty_score: penaltyScore
     })
     return response.data
+  },
+
+  /**
+   * W6 SSE 订阅（文字直播/进度/Token）
+   * @param {string} sessionId
+   * @param {(msg: object) => void} onMessage 每条 SSE 消息回调
+   * @param {(err: Event) => void} [onError]
+   * @returns {EventSource}
+   */
+  subscribeSSE(sessionId, onMessage, onError) {
+    const es = new EventSource(`/api/sse/stream/${sessionId}`)
+    es.onmessage = (e) => {
+      try {
+        onMessage(JSON.parse(e.data))
+      } catch (err) {
+        // ignore malformed frames
+      }
+    }
+    es.onerror = onError || (() => {})
+    return es
   }
+}
+
+function _genSessionId() {
+  // 前端生成会话ID（uuid v4 形态，后端校验 UUID 格式）
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
 }

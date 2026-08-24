@@ -6,6 +6,18 @@
           <span>用例管理</span>
           <div class="header-actions">
             <el-button type="primary" :icon="Plus" @click="showCreateDialog">新建用例</el-button>
+            <el-dropdown split-button type="success" @click="handleExport('xlsx')" @command="handleExport">
+              导出
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="xlsx">Excel (.xlsx)</el-dropdown-item>
+                  <el-dropdown-item command="json">JSON (.json)</el-dropdown-item>
+                  <el-dropdown-item command="xmind">XMind (.xmind)</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <el-button :icon="Upload" @click="triggerImport">导入</el-button>
+            <input ref="importInput" type="file" accept=".csv,.xlsx,.md" style="display:none" @change="handleImport" />
             <el-button
               type="danger"
               :icon="Delete"
@@ -71,6 +83,13 @@
           <template #default="{ row }">
             <el-tag v-if="row.hallucination_status === 'detected'" type="warning">存在幻觉</el-tag>
             <el-tag v-else type="success">正常</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="review_status" label="评审状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="reviewTagType(row.review_status)">
+              {{ reviewStatusLabel(row.review_status) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -192,11 +211,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, View, Edit, Delete, Check } from '@element-plus/icons-vue'
+import { Plus, View, Edit, Delete, Check, Upload } from '@element-plus/icons-vue'
 import CaseFilter from '@/components/testCase/CaseFilter.vue'
 import CaseForm from '@/components/testCase/CaseForm.vue'
 import { testCaseAPI } from '@/api/testCase.js'
 import { projectAPI } from '@/api/project.js'
+import axios from '@/api/axios.js'
 
 const router = useRouter()
 
@@ -209,6 +229,11 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const filters = ref({})
+const importInput = ref(null)
+
+const REVIEW_STATUS_MAP = { pending: '待评审', passed: '已通过', needs_revision: '需修改' }
+const reviewStatusLabel = (s) => REVIEW_STATUS_MAP[s] || '待评审'
+const reviewTagType = (s) => ({ passed: 'success', needs_revision: 'warning', pending: 'info' }[s] || 'info')
 
 const dialogVisible = ref(false)
 const viewDialogVisible = ref(false)
@@ -218,17 +243,15 @@ const currentCase = ref({})
 const viewingCase = ref(null)
 
 const caseTypeMap = {
-  functional: '功能测试',
-  api: '接口测试',
-  performance: '性能测试',
-  security: '安全测试',
-  compatibility: '兼容测试'
+  functional: '功能用例',
+  interface_case: '接口用例'
 }
 
 const automationStatusMap = {
-  none: '未自动化',
-  partial: '部分自动化',
-  full: '已自动化'
+  pending: '未转化',
+  converted: '已转脚本',
+  partial_automated: '部分自动化',
+  automated: '已自动化'
 }
 
 const getPriorityType = (priority) => {
@@ -251,9 +274,10 @@ const getAutomationStatusLabel = (status) => {
 
 const getAutomationStatusType = (status) => {
   const typeMap = {
-    none: 'info',
-    partial: 'warning',
-    full: 'success'
+    pending: 'info',
+    converted: 'warning',
+    partial_automated: 'warning',
+    automated: 'success'
   }
   return typeMap[status] || 'info'
 }
@@ -404,6 +428,54 @@ const handleBatchFinalize = async () => {
     if (error !== 'cancel') {
       ElMessage.error('批量定稿失败: ' + error.message)
     }
+  }
+}
+
+// ---- W4 导入导出 ----
+const handleExport = async (format) => {
+  const projectId = filters.value.project_id || (projects.value[0] && projects.value[0].id)
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  try {
+    const res = await testCaseAPI.exportCases(projectId, format)
+    const url = window.URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `test_cases.${format}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    ElMessage.error('导出失败: ' + (error.message || error))
+  }
+}
+
+const triggerImport = () => {
+  importInput.value?.click()
+}
+
+const handleImport = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  const projectId = filters.value.project_id || (projects.value[0] && projects.value[0].id)
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    e.target.value = ''
+    return
+  }
+  const format = file.name.split('.').pop().toLowerCase()
+  try {
+    const res = await testCaseAPI.importCases(projectId, file, format)
+    const data = res.data || res
+    ElMessage.success(`导入成功 ${data.imported} 条，失败 ${data.failed} 条`)
+    fetchCases()
+  } catch (error) {
+    ElMessage.error('导入失败: ' + (error.message || error))
+  } finally {
+    e.target.value = ''
   }
 }
 

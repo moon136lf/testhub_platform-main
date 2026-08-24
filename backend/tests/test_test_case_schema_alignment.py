@@ -12,7 +12,8 @@ class TestEnumConstants:
         assert CASE_TYPES == ("functional", "interface_case")
 
     def test_automation_statuses_canonical(self):
-        assert AUTOMATION_STATUSES == ("pending", "automated", "partial_automated")
+        # #4: 'converted' = 已转脚本 (CASE-MGMT-04 流转链: 定稿→已转脚本→已自动化)
+        assert AUTOMATION_STATUSES == ("pending", "converted", "automated", "partial_automated")
 
     def test_review_statuses_canonical(self):
         assert REVIEW_STATUSES == ("pending", "passed", "needs_revision")

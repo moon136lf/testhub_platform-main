@@ -51,3 +51,9 @@ END$$;
 -- 6. indexes
 CREATE INDEX IF NOT EXISTS idx_test_case_project ON test_case(project_id);
 CREATE INDEX IF NOT EXISTS idx_test_case_automation ON test_case(automation_status);
+
+-- 7. #4: automation_status enum extended with 'converted' (已转脚本).
+--    Column is VARCHAR (no DB-level CHECK constraint in original DDL), so no
+--    ALTER needed for the enum itself — just documented here for operators.
+--    Canonical values now: pending / converted / automated / partial_automated
+--    (CASE-MGMT-04: 定稿→已转脚本→脚本运行通过→已自动化)

@@ -1,10 +1,10 @@
 <template>
   <el-form ref="formRef" :model="formData" :rules="rules" label-width="120px">
-    <el-form-item label="用例名称" prop="title">
+    <el-form-item label="用例名称" prop="name">
       <el-input
-        v-model="formData.title"
+        v-model="formData.name"
         placeholder="请输入用例名称"
-        maxlength="200"
+        maxlength="100"
         show-word-limit
         clearable
       />
@@ -49,17 +49,23 @@
 
     <el-form-item label="用例类型" prop="case_type">
       <el-select v-model="formData.case_type" placeholder="请选择用例类型">
-        <el-option label="功能测试" value="functional" />
-        <el-option label="接口测试" value="api" />
-        <el-option label="性能测试" value="performance" />
-        <el-option label="安全测试" value="security" />
-        <el-option label="兼容测试" value="compatibility" />
+        <el-option label="功能用例" value="functional" />
+        <el-option label="接口用例" value="interface_case" />
       </el-select>
     </el-form-item>
 
-    <el-form-item label="前置条件" prop="preconditions">
+    <el-form-item label="自动化状态" prop="automation_status">
+      <el-select v-model="formData.automation_status" placeholder="请选择自动化状态">
+        <el-option label="未转化" value="pending" />
+        <el-option label="已转脚本" value="converted" />
+        <el-option label="部分自动化" value="partial_automated" />
+        <el-option label="已自动化" value="automated" />
+      </el-select>
+    </el-form-item>
+
+    <el-form-item label="前置条件" prop="precondition">
       <el-input
-        v-model="formData.preconditions"
+        v-model="formData.precondition"
         type="textarea"
         placeholder="请输入前置条件（可选）"
         maxlength="500"
@@ -68,12 +74,12 @@
       />
     </el-form-item>
 
-    <el-form-item label="后置条件" prop="postconditions">
+    <el-form-item label="预期结果" prop="expected_result">
       <el-input
-        v-model="formData.postconditions"
+        v-model="formData.expected_result"
         type="textarea"
-        placeholder="请输入后置条件（可选）"
-        maxlength="500"
+        placeholder="请输入最终预期结果（须可断言：URL/文本/状态）"
+        maxlength="200"
         show-word-limit
         :rows="2"
       />
@@ -138,21 +144,22 @@ const submitting = ref(false)
 const commonTags = ref(['冒烟测试', '回归测试', '验收测试', '核心流程', '边界测试'])
 
 const formData = ref({
-  title: '',
+  name: '',
   project_id: '',
   description: '',
   priority: 'P2',
   case_type: 'functional',
-  preconditions: '',
-  postconditions: '',
+  automation_status: 'pending',
+  precondition: '',
   tags: [],
-  steps: []
+  steps: [],
+  expected_result: ''
 })
 
 const rules = {
-  title: [
+  name: [
     { required: true, message: '请输入用例名称', trigger: 'blur' },
-    { min: 2, max: 200, message: '长度在 2 到 200 个字符', trigger: 'blur' }
+    { min: 2, max: 100, message: '长度在 2 到 100 个字符', trigger: 'blur' }
   ],
   project_id: [
     { required: true, message: '请选择项目', trigger: 'change' }
@@ -162,6 +169,10 @@ const rules = {
   ],
   case_type: [
     { required: true, message: '请选择用例类型', trigger: 'change' }
+  ],
+  expected_result: [
+    { required: true, message: '请输入预期结果', trigger: 'blur' },
+    { max: 200, message: '不超过 200 个字符', trigger: 'blur' }
   ],
   steps: [
     {
@@ -217,15 +228,16 @@ const handleCancel = () => {
 const resetForm = () => {
   formRef.value?.resetFields()
   formData.value = {
-    title: '',
+    name: '',
     project_id: '',
     description: '',
     priority: 'P2',
     case_type: 'functional',
-    preconditions: '',
-    postconditions: '',
+    automation_status: 'pending',
+    precondition: '',
     tags: [],
-    steps: []
+    steps: [],
+    expected_result: ''
   }
 }
 

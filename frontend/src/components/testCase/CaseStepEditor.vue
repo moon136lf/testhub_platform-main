@@ -23,11 +23,11 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="预期结果" min-width="200">
+      <el-table-column label="操作目标" min-width="160">
         <template #default="{ row }">
           <el-input
-            v-model="row.expected"
-            placeholder="请输入预期结果"
+            v-model="row.target"
+            placeholder="目标元素（可选）"
             clearable
             @input="emitChange"
           />
@@ -39,6 +39,17 @@
           <el-input
             v-model="row.data"
             placeholder="测试数据（可选）"
+            clearable
+            @input="emitChange"
+          />
+        </template>
+      </el-table-column>
+
+      <el-table-column label="预期结果" min-width="200">
+        <template #default="{ row }">
+          <el-input
+            v-model="row.expected"
+            placeholder="请输入预期结果"
             clearable
             @input="emitChange"
           />
@@ -101,26 +112,26 @@ watch(() => props.modelValue, (newVal) => {
 }, { deep: true })
 
 const emitChange = () => {
+  // W2: step 字段统一为 step（非 step_number），每次变更重排序号
+  steps.value.forEach((s, idx) => {
+    s.step = idx + 1
+  })
   emit('update:modelValue', steps.value)
 }
 
 const addStep = () => {
-  const newStepNumber = steps.value.length + 1
   steps.value.push({
-    step_number: newStepNumber,
+    step: steps.value.length + 1,
     action: '',
-    expected: '',
-    data: ''
+    target: '',
+    data: '',
+    expected: ''
   })
   emitChange()
 }
 
 const deleteStep = (index) => {
   steps.value.splice(index, 1)
-  // 重新编号
-  steps.value.forEach((step, idx) => {
-    step.step_number = idx + 1
-  })
   emitChange()
 }
 

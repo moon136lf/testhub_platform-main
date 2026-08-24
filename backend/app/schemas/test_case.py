@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 
 # ===== Enum canonical values (source of truth) =====
 CASE_TYPES = ("functional", "interface_case")
-AUTOMATION_STATUSES = ("pending", "automated", "partial_automated")
+AUTOMATION_STATUSES = ("pending", "converted", "automated", "partial_automated")
 # REVIEW_STATUSES / FEASIBILITY_LEVELS 用于后续 W5 评审/精修字段
 REVIEW_STATUSES = ("pending", "passed", "needs_revision")
 FEASIBILITY_LEVELS = ("full", "partial", "manual")

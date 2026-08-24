@@ -55,7 +55,7 @@
           </template>
           <el-descriptions :column="2" border>
             <el-descriptions-item label="用例名称" :span="2">
-              <strong>{{ caseData.title }}</strong>
+              <strong>{{ caseData.name }}</strong>
             </el-descriptions-item>
             <el-descriptions-item label="所属项目">
               {{ caseData.project_name || '-' }}
@@ -77,9 +77,12 @@
               </el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="定稿状态">
-              <el-tag :type="caseData.finalized ? 'success' : 'info'" size="large">
-                {{ caseData.finalized ? '已定稿' : '草稿' }}
+              <el-tag :type="caseData.is_finalized ? 'success' : 'info'" size="large">
+                {{ caseData.is_finalized ? '已定稿' : '草稿' }}
               </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="版本">
+              <el-tag size="large">v{{ caseData.version }}</el-tag>
             </el-descriptions-item>
           </el-descriptions>
         </el-card>
@@ -90,29 +93,135 @@
             <h3>详细信息</h3>
           </template>
           <el-descriptions :column="1" border>
-            <el-descriptions-item label="用例描述">
-              <div class="text-content">{{ caseData.description || '无' }}</div>
-            </el-descriptions-item>
             <el-descriptions-item label="前置条件">
-              <div class="text-content">{{ caseData.preconditions || '无' }}</div>
-            </el-descriptions-item>
-            <el-descriptions-item label="后置条件">
-              <div class="text-content">{{ caseData.postconditions || '无' }}</div>
-            </el-descriptions-item>
-            <el-descriptions-item label="标签">
-              <div v-if="caseData.tags && caseData.tags.length > 0">
-                <el-tag
-                  v-for="tag in caseData.tags"
-                  :key="tag"
-                  style="margin-right: 8px"
-                  size="large"
-                >
-                  {{ tag }}
-                </el-tag>
-              </div>
-              <span v-else class="empty-text">无标签</span>
+              <div class="text-content">{{ caseData.precondition || '无' }}</div>
             </el-descriptions-item>
           </el-descriptions>
+        </el-card>
+
+        <!-- W5: 评审与精修卡片 -->
+        <el-card class="info-card" shadow="never">
+          <template #header>
+            <div class="refine-header">
+              <h3>评审与精修</h3>
+              <div>
+                <el-button type="primary" size="small" :loading="refining" @click="handleRefine">
+                  触发精修
+                </el-button>
+                <el-button
+                  v-if="refinementReport && refinementReport.refined_case && refinementReport.refined_case.steps"
+                  type="success" size="small" :loading="applying" @click="handleApplyAll"
+                >
+                  应用全部建议
+                </el-button>
+              </div>
+            </div>
+          </template>
+
+          <el-descriptions :column="2" border style="margin-bottom: 12px">
+            <el-descriptions-item label="评审状态">
+              <el-tag :type="reviewTagType(caseData.review_status)">
+                {{ reviewStatusLabel(caseData.review_status) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="可行性">
+              <el-tag v-if="caseData.feasibility_level" :type="feasibilityTagType(caseData.feasibility_level)">
+                {{ feasibilityLabel(caseData.feasibility_level) }}
+              </el-tag>
+              <span v-else class="empty-text">未评估</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="不可自动化原因" :span="2">
+              {{ caseData.cannot_automate_reason || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="评审意见" :span="2">
+              {{ caseData.review_comment || '—' }}
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <!-- 评审表单 -->
+          <el-form :model="reviewForm" inline size="small" style="margin-bottom: 12px">
+            <el-form-item label="评审状态">
+              <el-select v-model="reviewForm.review_status" style="width: 140px">
+                <el-option label="待评审" value="pending" />
+                <el-option label="已通过" value="passed" />
+                <el-option label="需修改" value="needs_revision" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="可行性">
+              <el-select v-model="reviewForm.feasibility_level" clearable style="width: 140px">
+                <el-option label="完全自动化" value="full" />
+                <el-option label="部分自动化" value="partial" />
+                <el-option label="需手工执行" value="manual" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="评审意见">
+              <el-input v-model="reviewForm.review_comment" placeholder="评审意见" style="width: 220px" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="handleSaveReview">保存评审</el-button>
+            </el-form-item>
+          </el-form>
+
+          <!-- 精修报告 -->
+          <div v-if="refinementReport" class="refine-report">
+            <div class="refine-score">
+              精修评分：<strong>{{ refinementReport.score }}</strong> / 100
+            </div>
+            <el-table :data="refinementReport.suggestions || []" border stripe size="small">
+              <el-table-column prop="id" label="编号" width="70" />
+              <el-table-column prop="dimension" label="维度" width="130" />
+              <el-table-column prop="severity" label="级别" width="90">
+                <template #default="{ row }">
+                  <el-tag :type="severityTagType(row.severity)" size="small">{{ row.severity }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="issue" label="问题" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="suggestion" label="建议" min-width="200" show-overflow-tooltip />
+              <el-table-column prop="status" label="状态" width="90">
+                <template #default="{ row }">
+                  <el-tag :type="row.status === 'applied' ? 'success' : 'info'" size="small">
+                    {{ row.status }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div v-if="refinementReport.normativity" class="refine-norm">
+              规范度：步骤完整 {{ refinementReport.normativity.steps_complete ? '✓' : '✗' }} ·
+              断言可执行 {{ refinementReport.normativity.assertion_executable ? '✓' : '✗' }} ·
+              前置完整 {{ refinementReport.normativity.precondition_complete ? '✓' : '✗' }}
+            </div>
+          </div>
+          <el-empty v-else description="尚未精修，点击「触发精修」生成报告" :image-size="60" />
+        </el-card>
+
+        <!-- W3: 版本历史卡片 -->
+        <el-card class="info-card" shadow="never">
+          <template #header>
+            <h3>版本历史</h3>
+          </template>
+          <el-timeline v-if="versions.length > 0">
+            <el-timeline-item
+              v-for="v in versions"
+              :key="v.id"
+              :timestamp="formatTime(v.created_at)"
+              placement="top"
+            >
+              <div class="version-item">
+                <strong>v{{ v.version }}</strong>
+                <span class="version-meta">修改人：{{ v.changed_by || '—' }}</span>
+                <div class="version-diff">{{ v.diff_summary || '无变更摘要' }}</div>
+                <el-button
+                  type="primary"
+                  link
+                  size="small"
+                  @click="handleRollback(v.version)"
+                >
+                  回滚到此版本
+                </el-button>
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+          <el-empty v-else description="暂无版本历史" :image-size="60" />
         </el-card>
 
         <!-- 测试步骤卡片 -->
@@ -126,14 +235,15 @@
             stripe
             style="width: 100%"
           >
-            <el-table-column prop="step_number" label="步骤" width="80" align="center" />
+            <el-table-column prop="step" label="步骤" width="80" align="center" />
             <el-table-column prop="action" label="操作" min-width="250" show-overflow-tooltip />
-            <el-table-column prop="expected" label="预期结果" min-width="250" show-overflow-tooltip />
+            <el-table-column prop="target" label="目标" min-width="160" show-overflow-tooltip />
             <el-table-column prop="data" label="测试数据" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">
                 {{ row.data || '-' }}
               </template>
             </el-table-column>
+            <el-table-column prop="expected" label="预期结果" min-width="250" show-overflow-tooltip />
           </el-table>
         </el-card>
 
@@ -177,7 +287,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Edit, Delete, Check, Close } from '@element-plus/icons-vue'
 import CaseForm from '@/components/testCase/CaseForm.vue'
 import { testCaseAPI } from '@/api/testCase.js'
@@ -194,19 +304,36 @@ const editData = ref({})
 const projects = ref([])
 const caseFormRef = ref(null)
 
+// W3/W5 状态
+const versions = ref([])
+const refinementReport = ref(null)
+const refining = ref(false)
+const applying = ref(false)
+const reviewForm = ref({
+  review_status: 'pending',
+  feasibility_level: null,
+  review_comment: ''
+})
+
 const caseTypeMap = {
-  functional: '功能测试',
-  api: '接口测试',
-  performance: '性能测试',
-  security: '安全测试',
-  compatibility: '兼容测试'
+  functional: '功能用例',
+  interface_case: '接口用例'
 }
 
 const automationStatusMap = {
-  none: '未自动化',
-  partial: '部分自动化',
-  full: '已自动化'
+  pending: '未转化',
+  converted: '已转脚本',
+  partial_automated: '部分自动化',
+  automated: '已自动化'
 }
+
+const reviewLabelMap = { pending: '待评审', passed: '已通过', needs_revision: '需修改' }
+const feasibilityLabelMap = { full: '完全自动化', partial: '部分自动化', manual: '需手工执行' }
+const reviewStatusLabel = (s) => reviewLabelMap[s] || '待评审'
+const reviewTagType = (s) => ({ passed: 'success', needs_revision: 'warning', pending: 'info' }[s] || 'info')
+const feasibilityLabel = (s) => feasibilityLabelMap[s] || s
+const feasibilityTagType = (s) => ({ full: 'success', partial: 'warning', manual: 'info' }[s] || 'info')
+const severityTagType = (s) => ({ high: 'danger', medium: 'warning', low: 'info' }[s] || 'info')
 
 const getPriorityType = (priority) => {
   const typeMap = {
@@ -228,9 +355,10 @@ const getAutomationStatusLabel = (status) => {
 
 const getAutomationStatusType = (status) => {
   const typeMap = {
-    none: 'info',
-    partial: 'warning',
-    full: 'success'
+    pending: 'info',
+    converted: 'warning',
+    partial_automated: 'warning',
+    automated: 'success'
   }
   return typeMap[status] || 'info'
 }
@@ -259,11 +387,29 @@ const loadCaseDetail = async () => {
   try {
     const response = await testCaseAPI.get(caseId)
     caseData.value = response
+    // W5: 初始化评审表单
+    reviewForm.value = {
+      review_status: response.review_status || 'pending',
+      feasibility_level: response.feasibility_level || null,
+      review_comment: response.review_comment || ''
+    }
+    refinementReport.value = response.refinement_report || null
+    // W3: 加载版本历史
+    loadVersions(caseId)
   } catch (error) {
     ElMessage.error('加载用例详情失败: ' + error.message)
     goBack()
   } finally {
     loading.value = false
+  }
+}
+
+const loadVersions = async (caseId) => {
+  try {
+    const res = await testCaseAPI.listVersions(caseId)
+    versions.value = (res && res.data) || res || []
+  } catch (error) {
+    versions.value = []
   }
 }
 
@@ -322,6 +468,73 @@ const handleDelete = async () => {
     goBack()
   } catch (error) {
     ElMessage.error('删除失败: ' + error.message)
+  }
+}
+
+// ---- W5 精修 ----
+const handleRefine = async () => {
+  refining.value = true
+  try {
+    const res = await testCaseAPI.refineCase(caseData.value.id)
+    const report = (res && res.data) || res
+    refinementReport.value = report
+    // 同步可行性字段到 caseData
+    if (report) {
+      caseData.value.feasibility_level = report.feasibility_level
+      caseData.value.cannot_automate_reason = report.cannot_automate_reason
+      caseData.value.refined_at = new Date().toISOString()
+    }
+    ElMessage.success(`精修完成，评分 ${report ? report.score : '-'}`)
+  } catch (error) {
+    ElMessage.error('精修失败: ' + (error.message || error))
+  } finally {
+    refining.value = false
+  }
+}
+
+const handleApplyAll = async () => {
+  applying.value = true
+  try {
+    const res = await testCaseAPI.applySuggestions(caseData.value.id, null)
+    const data = (res && res.data) || res
+    ElMessage.success('已应用全部精修建议')
+    await loadCaseDetail()
+  } catch (error) {
+    ElMessage.error('应用建议失败: ' + (error.message || error))
+  } finally {
+    applying.value = false
+  }
+}
+
+const handleSaveReview = async () => {
+  try {
+    await testCaseAPI.updateReview(caseData.value.id, {
+      review_status: reviewForm.value.review_status,
+      feasibility_level: reviewForm.value.feasibility_level,
+      review_comment: reviewForm.value.review_comment
+    })
+    ElMessage.success('评审已保存')
+    await loadCaseDetail()
+  } catch (error) {
+    ElMessage.error('保存评审失败: ' + (error.message || error))
+  }
+}
+
+// ---- W3 回滚 ----
+const handleRollback = async (version) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定回滚到 v${version} 吗？当前版本将被覆盖（版本号继续递增）。`,
+      '确认回滚',
+      { type: 'warning' }
+    )
+    await testCaseAPI.rollback(caseData.value.id, version)
+    ElMessage.success('回滚成功')
+    await loadCaseDetail()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('回滚失败: ' + (error.message || error))
+    }
   }
 }
 
@@ -389,6 +602,48 @@ onMounted(() => {
 .empty-text {
   color: #909399;
   font-style: italic;
+}
+
+.refine-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.refine-header h3 {
+  margin: 0;
+}
+
+.refine-report {
+  margin-top: 8px;
+}
+
+.refine-score {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #303133;
+}
+
+.refine-norm {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.version-item {
+  padding-left: 4px;
+}
+
+.version-meta {
+  margin-left: 12px;
+  color: #909399;
+  font-size: 12px;
+}
+
+.version-diff {
+  margin: 6px 0;
+  color: #606266;
+  font-size: 13px;
 }
 
 .edit-mode {

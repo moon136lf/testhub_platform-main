@@ -6,8 +6,10 @@ import axios from './axios'
 export const testCaseAPI = {
   /**
    * 获取测试用例列表
-   * @param {Object} params - { project_id?, title?, priority?, status?, tags?, skip?, limit? }
-   * @returns {Promise<Object>} { items: Array, total: number }
+   * @param {Object} params - { project_id, point_id?, priority?, case_type?, automation_status?,
+   *                            is_finalized?, hallucination_status?, review_status?, keyword?,
+   *                            page?, page_size? }
+   * @returns {Promise<Object>} { total, page, page_size, items: Array }
    */
   async list(params = {}) {
     const response = await axios.get('/test-cases/', { params })
@@ -16,8 +18,6 @@ export const testCaseAPI = {
 
   /**
    * 获取测试用例详情
-   * @param {string} caseId - 用例ID
-   * @returns {Promise<Object>}
    */
   async get(caseId) {
     const response = await axios.get(`/test-cases/${caseId}`)
@@ -26,8 +26,8 @@ export const testCaseAPI = {
 
   /**
    * 创建测试用例
-   * @param {Object} data - { project_id, title, description?, priority, tags?, preconditions?, steps }
-   * @returns {Promise<Object>}
+   * @param {Object} data - { project_id, name, priority, case_type, automation_status?,
+   *                           precondition?, steps, expected_result, created_by? }
    */
   async create(data) {
     const response = await axios.post('/test-cases/', data)
@@ -36,44 +36,87 @@ export const testCaseAPI = {
 
   /**
    * 更新测试用例
-   * @param {string} caseId - 用例ID
-   * @param {Object} data - { title?, description?, priority?, status?, tags?, preconditions?, steps? }
-   * @returns {Promise<Object>}
    */
   async update(caseId, data) {
     const response = await axios.put(`/test-cases/${caseId}`, data)
     return response.data
   },
 
-  /**
-   * 删除测试用例
-   * @param {string} caseId - 用例ID
-   * @returns {Promise<Object>}
-   */
   async delete(caseId) {
     const response = await axios.delete(`/test-cases/${caseId}`)
     return response.data
   },
 
   /**
-   * 批量操作测试用例
-   * @param {Object} data - { operation: 'delete' | 'update_status' | 'update_priority' | 'add_tags' | 'remove_tags', case_ids: string[], update_data?: Object }
-   * @returns {Promise<Object>} { success_count: number, failed_count: number, results: Array }
+   * 批量操作：delete|finalize|unfinalize|update_priority|update_automation_status|mark_hallucination|update_review
    */
   async batchOperation(data) {
     const response = await axios.post('/test-cases/batch', data)
     return response.data
   },
 
-  /**
-   * 获取测试用例统计信息
-   * @param {string} projectId - 项目ID
-   * @returns {Promise<Object>} { total_cases, by_priority, by_status, by_tags }
-   */
   async getStats(projectId) {
     const response = await axios.get('/test-cases/stats', {
       params: { project_id: projectId }
     })
+    return response.data
+  },
+
+  // ---- W3 版本历史 ----
+  async listVersions(caseId) {
+    const response = await axios.get(`/test-cases/${caseId}/versions`)
+    return response.data
+  },
+
+  async getVersion(caseId, version) {
+    const response = await axios.get(`/test-cases/${caseId}/versions/${version}`)
+    return response.data
+  },
+
+  async rollback(caseId, version) {
+    const response = await axios.post(`/test-cases/${caseId}/rollback`, null, {
+      params: { version }
+    })
+    return response.data
+  },
+
+  // ---- W4 导入导出 ----
+  async exportCases(projectId, format) {
+    return axios.get('/test-cases/export', {
+      params: { project_id: projectId, format },
+      responseType: 'blob'
+    })
+  },
+
+  async importCases(projectId, file, format) {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await axios.post('/test-cases/import', form, {
+      params: { project_id: projectId, format }
+    })
+    return response.data
+  },
+
+  // ---- W5 评审 / 精修 ----
+  async refineCase(caseId) {
+    const response = await axios.post(`/test-cases/${caseId}/refine`)
+    return response.data
+  },
+
+  async getRefinementReport(caseId) {
+    const response = await axios.get(`/test-cases/${caseId}/refinement-report`)
+    return response.data
+  },
+
+  async applySuggestions(caseId, suggestionIds = null) {
+    const response = await axios.post(`/test-cases/${caseId}/apply-suggestions`, {
+      suggestion_ids: suggestionIds
+    })
+    return response.data
+  },
+
+  async updateReview(caseId, data) {
+    const response = await axios.patch(`/test-cases/${caseId}/review`, data)
     return response.data
   }
 }
