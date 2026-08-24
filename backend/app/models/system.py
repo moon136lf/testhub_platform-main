@@ -23,7 +23,9 @@ class SystemSetting(Base):
     key = Column(String(100), nullable=False)
     value = Column(Text)
     value_encrypted = Column(Text)
-    value_type = Column(String(20), default="string")  # string/int/float/bool/json
+    value_type = Column(Enum("string", "int", "float", "bool", "json",
+                             name="system_setting_value_type", native_enum=False),
+                        default="string")  # string/int/float/bool/json
     is_secret = Column(Boolean, default=False)
     description = Column(String(500))
     updated_by = Column(String(50))
@@ -73,7 +75,7 @@ class TestEnv(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    def to_dict(self, reveal_secret: bool = False) -> dict:
+    def to_dict(self) -> dict:
         return {
             "id": str(self.id), "name": self.name, "url": self.url,
             "env_type": self.env_type, "status": self.status,
