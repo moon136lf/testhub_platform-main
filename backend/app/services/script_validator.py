@@ -22,7 +22,7 @@ class ValidationReport:
 
 # click/fill/select 前接 .first/.nth/.last (skill 3.2)
 # 注意: .first/.nth/.last 出现在 .click/.fill/.select 之前, 如 .first.click()
-_INDEX_LOCATOR_RE = re.compile(r'\.(first|nth\(\d+\)|last)\.(click|fill|select)\(')
+_INDEX_LOCATOR_RE = re.compile(r'\.(first|nth\(\d+\)|last)\.(click|fill|select(?:_option)?)\(')
 # 永真断言 (skill 3.3): 只验证 is_visible / to_be_visible 不验证业务结果
 _VISIBLE_ASSERT_RE = re.compile(r'assert\s+.*\.is_visible\(\)|expect\(.*\)\.to_be_visible\(\)')
 # 硬编码长等待 (skill 3.4): wait_for_timeout > 500ms
