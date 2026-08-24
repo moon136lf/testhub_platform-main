@@ -109,11 +109,23 @@ class ScriptAsset(Base):
     """Script asset table"""
 
     __tablename__ = "script_asset"
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_script_asset_project_name"),
+        Index("idx_script_asset_project", "project_id"),
+        Index("idx_script_asset_case", "case_id"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     case_id = Column(UUID(as_uuid=True), ForeignKey("test_case.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
     version = Column(Integer, default=1)
+    # #4: script library fields (req 3.6.3.3 / 3.6.5)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False, comment="脚本名称（继承用例名）")
+    description = Column(String(500), comment="脚本说明")
+    step_mapping = Column(JSONB, comment="skill Step4 步骤对照表")
+    locator_source = Column(String(20), default="none_draft", comment="element_library/ai_generated/mixed/none_draft")
+    ai_diagnosis = Column(JSONB, comment="调试修复诊断卡")
     status = Column(String(20), default="generated")
     category = Column(String(20), default="uncategorized")
     module = Column(String(50))
@@ -129,6 +141,12 @@ class ScriptAsset(Base):
             "case_id": str(self.case_id),
             "content": self.content,
             "version": self.version,
+            "project_id": str(self.project_id),
+            "name": self.name,
+            "description": self.description,
+            "step_mapping": self.step_mapping,
+            "locator_source": self.locator_source,
+            "ai_diagnosis": self.ai_diagnosis,
             "status": self.status,
             "category": self.category,
             "module": self.module,

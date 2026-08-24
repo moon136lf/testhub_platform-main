@@ -4,6 +4,7 @@ Models module initialization
 
 from app.models.project import Project
 from app.models.test_case import TestPoint, TestCase, ScriptAsset, CaseVersion
+from app.models.script import ConvertSession
 from app.models.element import PageRepository, ElementRepository, FetchHistory, ChangeDetection, SelfHealCache
 from app.models.execution import ExecutionRecord, AICallLog
 from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
@@ -16,6 +17,7 @@ __all__ = [
     "TestCase",
     "ScriptAsset",
     "CaseVersion",
+    "ConvertSession",
     "PageRepository",
     "ElementRepository",
     "FetchHistory",
