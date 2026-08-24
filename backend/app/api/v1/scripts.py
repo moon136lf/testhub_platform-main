@@ -59,7 +59,7 @@ async def convert_scripts(request: ConvertRequest, db: AsyncSession = Depends(ge
         "message": "Script conversion started",
         "data": {
             "session_id": session_id,
-            "sse_url": f"/api/stream/{session_id}",
+            "sse_url": f"/api/sse/stream/{session_id}",
         },
     }
 
@@ -73,8 +73,8 @@ async def list_scripts(
     db: AsyncSession = Depends(get_db),
 ):
     """脚本列表。"""
+    stmt = select(ScriptAsset)
     try:
-        stmt = select(ScriptAsset)
         if project_id:
             stmt = stmt.where(ScriptAsset.project_id == uuid.UUID(project_id))
         if case_id:
@@ -83,6 +83,7 @@ async def list_scripts(
         raise HTTPException(status_code=400, detail="Invalid UUID format")
 
     stmt = stmt.order_by(ScriptAsset.created_at.desc())
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
     scripts = result.scalars().all()
     return {"code": 0, "data": [s.to_dict() for s in scripts]}

@@ -73,7 +73,7 @@ class TestConvertScriptsEndpoint:
         assert response["code"] == 0
         assert "session_id" in response["data"]
         assert "sse_url" in response["data"]
-        assert response["data"]["sse_url"].startswith("/api/stream/")
+        assert response["data"]["sse_url"].startswith("/api/sse/stream/")
         mock_task.delay.assert_called_once()
         # task.delay must be called with the request's project/case ids + ai_optimize
         _, kwargs = mock_task.delay.call_args
@@ -186,6 +186,40 @@ class TestListScriptsEndpoint:
 
         assert response["code"] == 0
         assert response["data"] == []
+
+    @pytest.mark.asyncio
+    async def test_list_applies_pagination_offset_limit(self, mock_db):
+        """page=2, page_size=1 -> stmt must carry limit + offset(1)."""
+        from app.api.v1.scripts import list_scripts
+
+        mock_result = MagicMock()
+        mock_result.scalars = MagicMock(
+            return_value=MagicMock(all=MagicMock(return_value=[]))
+        )
+        mock_db.execute.return_value = mock_result
+
+        response = await list_scripts(None, None, page=2, page_size=1, db=mock_db)
+
+        assert response["code"] == 0
+        mock_db.execute.assert_awaited_once()
+        stmt = mock_db.execute.await_args.args[0]
+        # Compile to inspect clauses + bound params without a DB.
+        compiled = stmt.compile()
+        rendered = str(compiled).lower()
+        assert "limit" in rendered
+        assert "offset" in rendered
+        # page=2, page_size=1 -> offset = (page-1)*page_size = 1; limit = page_size = 1
+        params = compiled.construct_params()
+        assert 1 in params.values()  # offset = 1 and limit = 1
+
+    @pytest.mark.asyncio
+    async def test_list_invalid_filter_uuid(self, mock_db):
+        from app.api.v1.scripts import list_scripts
+
+        with pytest.raises(HTTPException) as exc_info:
+            await list_scripts("not-a-uuid", None, 1, 20, mock_db)
+
+        assert exc_info.value.status_code == 400
 
 
 class TestGetScriptEndpoint:
