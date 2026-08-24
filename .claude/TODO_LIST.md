@@ -16,50 +16,42 @@
    - SSE实时推送
    - 批量入库
 
----
+2. **AI智能用例生成** (P0 完成) - 2026-08-24
+   - PRD文档解析（.docx/.pdf/.txt/.md）
+   - AI测试点识别（千问/GLM 可插拔）
+   - 4规则开关（automation_thinking 强制 + 边界值/场景法/等价类）
+   - 禁用词注入（观察/查看/验证/检查/确认）
+   - type_label 5枚举（正常流程/异常流程/边界值/等价类/场景法）
+   - SSE 4 stage 收敛（parse_doc/identify_point/generate_case/detect_hallucination）
+   - Token 累计推送
+   - 幻觉检测
+   - 7步前端 + 文字直播 SSE 订阅
+   - 测试点按 page_name 分组勾选 + 类型筛选
 
-### 🔄 待完成模块
-
-#### 2. AI智能用例生成 (0%) - 当前目标
-**状态**：待开始  
-**预估时间**：4-5 小时  
-**依赖**：元素库 ✅
-
-**核心功能**：
-- [ ] PRD文档解析（.docx/.pdf/.txt/.md）
-- [ ] 文档内容提取和预处理
-- [ ] AI测试点识别（千问/GLM集成）
-- [ ] 测试用例自动生成
-- [ ] 幻觉检测机制
-- [ ] SSE实时进度推送
-- [ ] 测试点勾选界面
-- [ ] 批量生成用例
-
-**关键技术点**：
-- 大模型API集成
-- Prompt工程
-- Token消耗管理
-- 流式输出处理
+3. **用例管理** (P0 完成) - 2026-08-24
+   - 用例CRUD + 列表 + 详情/编辑
+   - 枚举/步骤结构全栈统一（JSONB + UNIQUE + 索引）
+   - 版本历史（快照/diff/回滚，version 不回退）
+   - 导入导出（xlsx/json/xmind 导出 + xlsx/csv/md 导入）
+   - 用例评审 5 字段（review_status/comment/feasibility_level/cannot_automate_reason/refinement_report）
+   - E2E 精修引擎（规则+LLM 混合，5 维度，同步）
+   - 批量操作（delete/finalize/update_review 等）
 
 ---
 
-#### 3. 用例管理 (0%)
-**状态**：待开始  
-**预估时间**：3-4 小时  
-**依赖**：AI智能用例生成
-
-**核心功能**：
-- [ ] 用例CRUD API
-- [ ] 用例列表展示
-- [ ] 用例详情查看/编辑
-- [ ] 用例分类和标签
-- [ ] 用例搜索和过滤
-- [ ] 版本管理
-- [ ] 批量操作
+### ✅ P0 缺口补全（W1-W6）- 2026-08-24
+依据 `docs/GAP_ANALYSIS_2026-08-20.md`，修复 3 阻断 bug + 补齐缺口：
+- W1 is_deleted / 批量定稿 action 修复
+- W2 枚举/步骤/JSONB/UNIQUE/索引 + 幂等迁移
+- W3 CaseVersion model + 快照/回滚 API + 前端版本历史面板
+- W4 ImportExport service + API + 前端导入导出
+- W5 评审字段 + CaseRefiner 引擎 + apply-suggestions + 前端评审/精修 UI
+- W6 GenerationRules + 禁用词 + 5 type_label + Token 累计 + 4 stage + 前端7步重写
+- 迁移脚本：align_test_case_schema / add_case_version_table / add_review_refinement_fields / align_test_point_status
 
 ---
 
-#### 4. 用例转自动化脚本 (0%)
+### 🔄 待完成模块（下一步）
 **状态**：待开始  
 **预估时间**：4-5 小时  
 **依赖**：用例管理、元素库
@@ -174,16 +166,15 @@
 
 ## 📊 总体进度
 
-- **已完成**：1/11 模块 (9%)
-- **总预估时间**：35-42 小时
-- **已用时间**：3.5 小时
+- **已完成**：3/11 模块（元素库 / AI生成 / 用例管理，P0 缺口已补全）
+- **待开始**：8 个模块（#4 转脚本 / #5 UI执行 / #6 报告 / #7 评审完整页 / #8 回归 / #9 白盒 / #10 系统设置 / #11 仪表盘）
 
 ---
 
 ## 🎯 当前任务
 
-**正在开发**：AI智能用例生成模块  
-**下一步**：执行 brainstorming 流程，设计AI用例生成的架构
+**下一步**：#4 用例转自动化脚本（已有 spec：`docs/superpowers/specs/2026-08-20-case-to-script-design.md`，规则参考 `testcase-to-script-skill` 记忆）
+**集成策略（用户确认 2026-08-24）**：先完成全部模块开发（结构骨架 + 接口契约 + 单测），最后统一接入大模型；数据库迁移在真实联调前一次性执行，再真实测试。AI 模块当前用可插拔占位（ai_gateway 已抽象），不在开发期阻塞。
 
 ---
 
@@ -197,4 +188,4 @@
 
 ---
 
-**最后更新**：2026-08-18 14:50
+**最后更新**：2026-08-24

@@ -5,6 +5,51 @@
 
 ---
 
+## 快照 #2 — 2026-08-24（第 2 次快照）
+
+**当前分支**：master（工作树干净，无未提交改动）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+48defb8 feat(ui): CaseGenerate 7-step + SSE, Cases import/export/review cols, CaseDetail version/refine panels, CaseForm/Filter enum align (W5/W6)
+93eb7c7 spec(case-to-script): align with requirement verification (14 fixes)
+6f6bebe feat(ai_case): GenerationRules + forbidden words + 5 type_labels + token accrual + 4 stages (W6)
+b8d4bd2 spec(case-to-script): module #4 design doc
+517fb6b feat(review): review/refine fields, CaseRefiner engine, import/export API, refinement API (W4/W5)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）与变更检测/自愈缓存/Redis 键缺口仍未提交修复。
+2. **AI智能用例生成** — 持续修：W6 提交 GenerationRules+禁用词+5 type_labels+token 累计+4 stages，W6 前端 7 步+SSE 已提交；前端 SSE/规则开关/禁用词/Token 旧缺口大部分已补。
+3. **用例管理** — W1~W4 + W4/W5（review/refine 字段、CaseRefiner 引擎、导入导出 API、版本历史）已提交；新增 `converted` 自动化状态枚举已全栈落地（48defb8）。
+4. **用例转自动化脚本** — ⏳ brainstorming 完成 + spec 已对齐需求（93eb7c7，14 项修订）+ `converted` 枚举预备联动；待进入 writing-plans。
+5. **UI自动化测试执行** — ⬜ 未开始（#4 运行职责归此）。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分（CaseRefiner 引擎已随 #3 提交）。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始（token_quota/ai_model_config CRUD 归此，#4 作消费方）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #1）
+- **moontest-superpowers 技能更新**：新增 §三「出 spec 前强制需求核对」流程（2 块范围：需求文档页面/字段/规则 + 详细设计架构/流程/机制/异常），禁止项加「未核对就提交 spec」。
+- **模块 #4 spec 需求核对**：派 3 并行子代理对照需求文档（页面/字段/规则/API/流程）+ 详细设计（DDL/Redis/SSE/Token/自愈）逐项核对，产出 14 项差异（5 P0 + 5 P1 + 4 P2）。
+- **spec 修订并提交**（93eb7c7）：P0 改对齐（ScriptAsset +name/description/project_id+UNIQUE、诊断卡存输入上下文、automation_status 联动、移除运行参数、stage≠scope 术语）；P1 定归属（regression_set/token_quota/diagnostics-apply 等归 #5/#6/#10）；P2 登未决（last_event_id 续传、tokens_estimated_total、<10s/单用例）。
+- **`converted` 枚举全栈落地**（48defb8）：schemas+迁移注释+前端下拉/标签+测试断言，65 测试全绿。为 #4 转脚本成功后 TestCase.automation_status='converted' 联动做准备。
+- ⚠️ 注意：commit 48defb8 把工作区预先存在的未提交前端改动（ai-case.js/testCase.js/CaseStepEditor/CaseGenerate 的 W5/W6 进度，约 969 行）一并提交了。
+
+### 下一步建议
+1. 进入 **writing-plans**：把 #4 spec（5 步流水线 + 数据模型 + API + 调试修复）拆成可执行子任务计划。
+2. （可选）若用户希望拆分 48defb8 混合提交，需 reset 后重做（较麻烦）。
+3. #1 元素库 P0（batch_import 字段映射）仍未修，迟早要补。
+
+---
+
+---
+
 ## 快照 #1 — 2026-08-24（第 1 次快照）
 
 **当前分支**：master
