@@ -1,12 +1,16 @@
 """Script pipeline unit tests (mock LLM)."""
 import asyncio
 import pytest
+from typing import Optional
 from app.services.script_pipeline import (
     step0_normalize,
     step1_to_actions,
     step2_to_assertions,
+    step3_match_locators,
     ActionIntent,
+    ActionWithLocator,
     AssertionPlan,
+    ElementLookupProto,
     LLMGatewayProto,
     NormalizeError,
     NormalizedCase,
@@ -100,3 +104,41 @@ class TestStep2ToAssertions:
         # row_visible of a button = tautological per blacklist -> forced invalid
         asserts = asyncio_run(step2_to_assertions(self._case(), gw))
         assert asserts[0].is_valid is False
+
+
+class FakeElementLookup:
+    """内存元素库, page.element_name -> locator 字符串。"""
+    def __init__(self, mapping: dict):
+        self.mapping = mapping
+
+    async def find(self, project_id: str, target: str) -> Optional[str]:
+        # target 形如 "LoginPage.username" 或 "用户名"
+        return self.mapping.get(target)
+
+
+class TestStep3MatchLocators:
+    def _actions(self):
+        return [ActionIntent(step=1, action="fill", target="用户名", value="admin")]
+
+    def test_all_matched(self):
+        lk = FakeElementLookup({"用户名": "page.get_by_label('用户名')"})
+        result = asyncio_run(step3_match_locators(self._actions(), "p1", lk, ai_optimize=False, gateway=None))
+        assert result[0].locator == "page.get_by_label('用户名')"
+        assert result[0].locator_status == "matched"
+        assert result[0].locator_source == "element_library"
+
+    def test_none_matched_draft(self):
+        lk = FakeElementLookup({})
+        result = asyncio_run(step3_match_locators(self._actions(), "p1", lk, ai_optimize=False, gateway=None))
+        assert result[0].locator_status == "none_draft"
+        assert result[0].locator is None
+        assert result[0].locator_source == "none_draft"
+
+    def test_partial_mixed(self):
+        lk = FakeElementLookup({"用户名": "page.get_by_label('用户名')"})
+        actions = [
+            ActionIntent(step=1, action="fill", target="用户名", value="admin"),
+            ActionIntent(step=2, action="click", target="登录按钮"),
+        ]
+        result = asyncio_run(step3_match_locators(actions, "p1", lk, ai_optimize=False, gateway=None))
+        assert result[0].locator_source == "mixed"

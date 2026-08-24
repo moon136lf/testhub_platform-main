@@ -156,3 +156,73 @@ async def step2_to_assertions(case: NormalizedCase, gateway: LLMGatewayProto) ->
             is_valid=is_valid,
         ))
     return plans
+
+
+class ElementLookupProto(Protocol):
+    """元素库协议: find(project_id, target) -> locator 字符串或 None。"""
+    async def find(self, project_id: str, target: str) -> Optional[str]: ...
+
+
+@dataclass
+class ActionWithLocator:
+    step: int
+    action: str
+    target: Optional[str]
+    value: Optional[str]
+    locator: Optional[str] = None
+    locator_status: str = "none_draft"  # matched / pending_confirm / none_draft
+    locator_source: str = "none_draft"  # element_library / ai_generated / mixed / none_draft
+
+
+STEP3_AI_PROMPT = """你是定位器生成器。为 UI 元素生成 Playwright 定位器, 优先 get_by_role > get_by_text > get_by_label > get_by_placeholder > css。
+只输出一个定位器字符串(如 page.get_by_role("button", name="登录")), 不要解释。
+元素描述: {target}"""
+
+
+async def _ai_generate_locator(target: str, gateway: LLMGatewayProto) -> str:
+    resp = await gateway.chat([{"role": "user", "content": STEP3_AI_PROMPT.format(target=target)}])
+    return resp["content"].strip()
+
+
+async def step3_match_locators(
+    actions: List[ActionIntent],
+    project_id: str,
+    lookup: ElementLookupProto,
+    ai_optimize: bool,
+    gateway: Optional[LLMGatewayProto],
+) -> List[ActionWithLocator]:
+    """Step3: 动作意图 + 元素库 → 绑 locator (TRANS-01)。命中用库, 未命中 AI 生成或 draft。"""
+    results: List[ActionWithLocator] = []
+    matched = 0
+    ai_used = False
+    for a in actions:
+        loc = await lookup.find(project_id, a.target) if a.target else None
+        if loc:
+            status = "matched"
+            matched += 1
+        elif ai_optimize and gateway is not None and a.target:
+            loc = await _ai_generate_locator(a.target, gateway)
+            status = "pending_confirm"
+            ai_used = True
+            matched += 1
+        else:
+            loc = None
+            status = "none_draft"
+        results.append(ActionWithLocator(
+            step=a.step, action=a.action, target=a.target, value=a.value,
+            locator=loc, locator_status=status,
+        ))
+    total = len(results)
+    if matched == 0:
+        source = "none_draft"
+    elif ai_used and matched < total:
+        source = "mixed"
+    elif ai_used:
+        source = "ai_generated"
+    elif matched < total:
+        source = "mixed"
+    else:
+        source = "element_library"
+    for r in results:
+        r.locator_source = source
+    return results
