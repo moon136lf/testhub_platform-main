@@ -35,3 +35,19 @@ class TestDiagnoseService:
             failed_step=1))
         assert card["can_fix"] is False
         assert card["revised_step"] is None
+
+
+class FakeRegenGateway:
+    async def chat(self, messages, **kw):
+        return {"content": "  fixed code  ", "tokens": 30}
+
+
+class TestDiagnoseRegen:
+    def test_can_fix_regenerates_step(self):
+        svc = ScriptDiagnoseService(gateway=FakeRegenGateway())
+        card = asyncio.run(svc.diagnose(
+            error_type="locate_failed", error_msg="Element not found",
+            script_fragment="page.click('#x')", failed_step=2))
+        assert card["can_fix"] is True
+        assert card["revised_step"] == "fixed code"  # stripped
+        assert card["suggestion"] == "已重生成步骤 2 代码"

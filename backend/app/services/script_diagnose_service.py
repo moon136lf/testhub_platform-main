@@ -24,20 +24,25 @@ def classify_failure(error_type: Optional[str], error_msg: str,
     return _card("ambiguous", False, "信息不足，建议补DOM/截图", failed_step, error_type, error_msg)
 
 
-def _card(category, can_fix, reason, failed_step, error_type, error_msg, **extra):
-    d = {"category": category, "can_fix": can_fix, "reason": reason,
-         "failed_step": failed_step, "error_type": error_type, "error_msg": error_msg,
-         "suggestion": ""}
-    d.update(extra)
-    return d
+def _card(category, can_fix, reason, failed_step, error_type, error_msg):
+    return {"category": category, "can_fix": can_fix, "reason": reason,
+            "failed_step": failed_step, "error_type": error_type,
+            "error_msg": error_msg, "suggestion": ""}
 
 
 class ScriptDiagnoseService:
     def __init__(self, gateway):
         self.gateway = gateway
 
-    async def diagnose(self, error_type, error_msg, script_fragment,
-                       failed_step=None, screenshot_url=None, dom_snapshot=None):
+    async def diagnose(
+        self,
+        error_type: Optional[str],
+        error_msg: str,
+        script_fragment: str,
+        failed_step: Optional[int] = None,
+        screenshot_url: Optional[str] = None,
+        dom_snapshot: Optional[str] = None,
+    ) -> dict:
         card = classify_failure(error_type, error_msg, failed_step)
         card["screenshot_url"] = screenshot_url
         if card["can_fix"] and self.gateway is not None and failed_step:
