@@ -4,7 +4,9 @@ import pytest
 from app.services.script_pipeline import (
     step0_normalize,
     step1_to_actions,
+    step2_to_assertions,
     ActionIntent,
+    AssertionPlan,
     LLMGatewayProto,
     NormalizeError,
     NormalizedCase,
@@ -77,3 +79,24 @@ class TestStep1ToActions:
         gw = FakeGateway('[{"step":1,"action":"bogus","target":"x"}]')
         with pytest.raises(ValueError):
             asyncio_run(step1_to_actions(self._case(), gw))
+
+
+class TestStep2ToAssertions:
+    def _case(self):
+        return NormalizedCase(
+            case_id="c1", title="登录",
+            steps=[{"step": 1, "action": "点击登录", "expected": "跳转首页"}],
+            expected_result="成功进入首页",
+        )
+
+    def test_parses_assertions(self):
+        gw = FakeGateway('[{"step":1,"assertion_type":"status_changed","target":"页面","expected":"首页","is_valid":true}]')
+        asserts = asyncio_run(step2_to_assertions(self._case(), gw))
+        assert asserts[0].assertion_type == "status_changed"
+        assert asserts[0].is_valid is True
+
+    def test_tautological_assertion_marked_invalid(self):
+        gw = FakeGateway('[{"step":1,"assertion_type":"row_visible","target":"按钮","expected":"可见","is_valid":true}]')
+        # row_visible of a button = tautological per blacklist -> forced invalid
+        asserts = asyncio_run(step2_to_assertions(self._case(), gw))
+        assert asserts[0].is_valid is False
