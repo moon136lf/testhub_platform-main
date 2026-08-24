@@ -226,3 +226,78 @@ async def step3_match_locators(
     for r in results:
         r.locator_source = source
     return results
+
+
+@dataclass
+class StepMappingEntry:
+    step: int
+    case_req: str
+    impl: str
+    status: str  # ok / blocked
+
+
+@dataclass
+class GenerateResult:
+    script: str
+    step_mapping: List[Dict[str, Any]]
+    locator_source: str
+
+
+STEP4_PROMPT = """生成 Python + Playwright + pytest 测试函数。规则:
+- 定位器优先级: get_by_role > get_by_text > get_by_label > get_by_placeholder > css
+- 禁止 click/fill 用 .first/.nth/.last
+- 禁止永真断言(只验证按钮可见)
+- 等待优先 expect 自带 > wait_for_response > wait_for(state) > wait_for_load_state(networkidle) > wait_for_timeout(<=500ms 仅动画)
+- 无定位器的步骤用注释占位: # TODO: 待确认定位器
+只输出代码, 不要 markdown 围栏。
+
+用例标题: {title}
+动作与定位器:
+{actions}
+断言:
+{asserts}"""
+
+
+def _fmt_actions(actions: List[ActionWithLocator]) -> str:
+    lines = []
+    for a in actions:
+        loc = a.locator or "(待确认)"
+        lines.append(f"{a.step}. {a.action} {a.target or ''} 值={a.value or ''} locator={loc}")
+    return "\n".join(lines)
+
+
+def _fmt_asserts(asserts: List[AssertionPlan]) -> str:
+    return "\n".join(f"{a.step}. {a.assertion_type} {a.target or ''} 期望={a.expected or ''}" for a in asserts)
+
+
+def _build_step_mapping(actions: List[ActionWithLocator], script: str) -> List[Dict[str, Any]]:
+    mapping = []
+    for a in actions:
+        impl = a.locator or ""
+        status = "ok" if (a.locator and a.locator in script) else "blocked"
+        mapping.append({
+            "step": a.step,
+            "case_req": f"{a.action} {a.target or ''}",
+            "impl": impl,
+            "status": status,
+        })
+    return mapping
+
+
+async def step4_generate_code(
+    case: NormalizedCase,
+    actions: List[ActionWithLocator],
+    asserts: List[AssertionPlan],
+    gateway: LLMGatewayProto,
+) -> GenerateResult:
+    """Step4: 代码生成 + 步骤对照表 (LLM 拼装)。"""
+    prompt = STEP4_PROMPT.format(
+        title=case.title,
+        actions=_fmt_actions(actions),
+        asserts=_fmt_asserts(asserts),
+    )
+    resp = await gateway.chat([{"role": "user", "content": prompt}])
+    script = resp["content"].strip()
+    step_mapping = _build_step_mapping(actions, script)
+    source = actions[0].locator_source if actions else "none_draft"
+    return GenerateResult(script=script, step_mapping=step_mapping, locator_source=source)

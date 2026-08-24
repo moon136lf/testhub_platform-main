@@ -7,11 +7,13 @@ from app.services.script_pipeline import (
     step1_to_actions,
     step2_to_assertions,
     step3_match_locators,
+    step4_generate_code,
     ActionIntent,
     ActionWithLocator,
     AssertionPlan,
     ElementLookupProto,
     LLMGatewayProto,
+    GenerateResult,
     NormalizeError,
     NormalizedCase,
 )
@@ -142,3 +144,32 @@ class TestStep3MatchLocators:
         ]
         result = asyncio_run(step3_match_locators(actions, "p1", lk, ai_optimize=False, gateway=None))
         assert result[0].locator_source == "mixed"
+
+
+class TestStep4GenerateCode:
+    def _inputs(self):
+        actions = [ActionWithLocator(step=1, action="fill", target="用户名",
+                                     value="admin", locator='page.get_by_label("用户名")',
+                                     locator_status="matched")]
+        asserts = [AssertionPlan(step=1, assertion_type="status_changed",
+                                 target="页面", expected="首页", is_valid=True)]
+        case = NormalizedCase(case_id="c1", title="登录", steps=[], expected_result="进入首页")
+        return case, actions, asserts
+
+    def test_generates_script_and_mapping(self):
+        gw = FakeGateway('import pytest\n\ndef test_login(page):\n    page.get_by_label("用户名").fill("admin")\n')
+        case, actions, asserts = self._inputs()
+        result = asyncio_run(step4_generate_code(case, actions, asserts, gw))
+        assert isinstance(result, GenerateResult)
+        assert "def test_login" in result.script
+        assert len(result.step_mapping) == 1
+        assert result.step_mapping[0]["status"] == "ok"
+
+    def test_missing_locator_blocks_step(self):
+        gw = FakeGateway('def test_x(page):\n    pass\n')
+        case, actions, asserts = self._inputs()
+        actions[0].locator = None
+        actions[0].locator_status = "none_draft"
+        result = asyncio_run(step4_generate_code(case, actions, asserts, gw))
+        assert result.step_mapping[0]["status"] == "blocked"
+
