@@ -264,3 +264,196 @@ class TestGetScriptEndpoint:
             await get_script("not-a-uuid", mock_db)
 
         assert exc_info.value.status_code == 400
+
+
+class TestConfirmScriptEndpoint:
+    """Test PUT /api/v1/scripts/{script_id}/confirm (TRANS-02)"""
+
+    @pytest.mark.asyncio
+    async def test_confirm_sets_status_to_confirmed(self, mock_db):
+        """Asset found -> status set to confirmed, committed, return shape."""
+        from app.api.v1.scripts import confirm_script
+
+        mock_asset = MagicMock()
+        mock_asset.status = "generated"
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_asset)
+        mock_db.execute.return_value = mock_result
+
+        sid = str(uuid4())
+        response = await confirm_script(sid, mock_db)
+
+        assert response["code"] == 0
+        assert response["message"] == "Script confirmed"
+        assert response["data"]["script_id"] == sid
+        assert response["data"]["status"] == "confirmed"
+        assert mock_asset.status == "confirmed"
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_confirm_not_found(self, mock_db):
+        """Asset missing -> 404."""
+        from app.api.v1.scripts import confirm_script
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db.execute.return_value = mock_result
+
+        with pytest.raises(HTTPException) as exc_info:
+            await confirm_script(str(uuid4()), mock_db)
+
+        assert exc_info.value.status_code == 404
+        assert "Script not found" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_confirm_invalid_uuid(self, mock_db):
+        """Invalid UUID -> 400."""
+        from app.api.v1.scripts import confirm_script
+
+        with pytest.raises(HTTPException) as exc_info:
+            await confirm_script("not-a-uuid", mock_db)
+
+        assert exc_info.value.status_code == 400
+
+
+class TestDiagnoseScriptEndpoint:
+    """Test POST /api/v1/scripts/{script_id}/diagnose"""
+
+    @pytest.mark.asyncio
+    async def test_diagnose_can_fix_returns_card_and_revised_script(self, mock_db, monkeypatch):
+        """can_fix=True with revised_step -> diagnosis card + revised_script + version bump."""
+        from app.api.v1 import scripts as scripts_api
+        from app.api.v1.scripts import diagnose_script
+        from app.schemas.script import DiagnoseRequest
+
+        # Fake diagnose service that returns a can_fix card
+        class FakeDiag:
+            async def diagnose(self, **kw):
+                return {
+                    "category": "script_problem",
+                    "can_fix": True,
+                    "reason": "x",
+                    "failed_step": kw.get("failed_step"),
+                    "error_type": kw.get("error_type"),
+                    "error_msg": kw.get("error_msg"),
+                    "screenshot_url": None,
+                    "revised_step": "new code",
+                    "suggestion": "已重生成",
+                }
+
+        monkeypatch.setattr(scripts_api, "ScriptDiagnoseService", lambda gateway: FakeDiag())
+        monkeypatch.setattr(scripts_api, "AIGateway", lambda: None)
+
+        mock_asset = MagicMock()
+        mock_asset.content = "original content"
+        mock_asset.version = 1
+        mock_asset.ai_diagnosis = None
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_asset)
+        mock_db.execute.return_value = mock_result
+
+        request = DiagnoseRequest(
+            error_type="locate_failed",
+            error_msg="not found",
+            script_fragment="page.click('#x')",
+            failed_step=1,
+        )
+        response = await diagnose_script(str(uuid4()), request, mock_db)
+
+        assert response["code"] == 0
+        card = response["data"]["diagnosis_card"]
+        assert card["can_fix"] is True
+        assert card["revised_step"] == "new code"
+        assert response["data"]["revised_script"] is not None
+        assert "original content" in response["data"]["revised_script"]
+        assert "new code" in response["data"]["revised_script"]
+        # version bumped + ai_diagnosis set on the asset
+        assert mock_asset.version == 2
+        assert mock_asset.ai_diagnosis == card
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_diagnose_cannot_fix_returns_card_no_revised_script(self, mock_db, monkeypatch):
+        """can_fix=False -> diagnosis card returned, revised_script None, no commit."""
+        from app.api.v1 import scripts as scripts_api
+        from app.api.v1.scripts import diagnose_script
+        from app.schemas.script import DiagnoseRequest
+
+        class FakeDiag:
+            async def diagnose(self, **kw):
+                return {
+                    "category": "page_bug",
+                    "can_fix": False,
+                    "reason": "断言值不符",
+                    "failed_step": kw.get("failed_step"),
+                    "error_type": kw.get("error_type"),
+                    "error_msg": kw.get("error_msg"),
+                    "screenshot_url": None,
+                    "revised_step": None,
+                    "suggestion": "标 xfail",
+                }
+
+        monkeypatch.setattr(scripts_api, "ScriptDiagnoseService", lambda gateway: FakeDiag())
+        monkeypatch.setattr(scripts_api, "AIGateway", lambda: None)
+
+        mock_asset = MagicMock()
+        mock_asset.content = "original"
+        mock_asset.version = 1
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_asset)
+        mock_db.execute.return_value = mock_result
+
+        request = DiagnoseRequest(
+            error_type="assertion_failed",
+            error_msg="value mismatch",
+            script_fragment="expect(page.locator('#x')).to_have_text('A')",
+            failed_step=2,
+        )
+        response = await diagnose_script(str(uuid4()), request, mock_db)
+
+        assert response["code"] == 0
+        assert response["data"]["diagnosis_card"]["can_fix"] is False
+        assert response["data"]["revised_script"] is None
+        # version NOT bumped, content NOT changed, no commit
+        assert mock_asset.version == 1
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_diagnose_not_found(self, mock_db, monkeypatch):
+        """Asset missing -> 404."""
+        from app.api.v1 import scripts as scripts_api
+        from app.api.v1.scripts import diagnose_script
+        from app.schemas.script import DiagnoseRequest
+
+        monkeypatch.setattr(scripts_api, "ScriptDiagnoseService", lambda gateway: MagicMock())
+        monkeypatch.setattr(scripts_api, "AIGateway", lambda: None)
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db.execute.return_value = mock_result
+
+        request = DiagnoseRequest(
+            error_type="locate_failed",
+            error_msg="not found",
+            script_fragment="page.click('#x')",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await diagnose_script(str(uuid4()), request, mock_db)
+
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_diagnose_invalid_uuid(self, mock_db):
+        """Invalid UUID -> 400."""
+        from app.api.v1.scripts import diagnose_script
+        from app.schemas.script import DiagnoseRequest
+
+        request = DiagnoseRequest(
+            error_type="locate_failed",
+            error_msg="not found",
+            script_fragment="page.click('#x')",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await diagnose_script("not-a-uuid", request, mock_db)
+
+        assert exc_info.value.status_code == 400

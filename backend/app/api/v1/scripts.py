@@ -4,6 +4,8 @@
 - POST /convert   触发批量转脚本 (异步 Celery 任务 + SSE 文字直播)
 - GET  /          脚本列表 (可选 project_id / case_id 过滤)
 - GET  /{id}      脚本详情
+- PUT  /{id}/confirm    TRANS-02 用户确认入库 (status->confirmed)
+- POST /{id}/diagnose   调试修复 (四分类归因 + 失败步骤重生成)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,7 +17,9 @@ import uuid
 from app.core.database import get_db
 from app.models.project import Project
 from app.models.test_case import TestCase, ScriptAsset
-from app.schemas.script import ConvertRequest
+from app.schemas.script import ConvertRequest, DiagnoseRequest
+from app.services.script_diagnose_service import ScriptDiagnoseService
+from app.services.ai_gateway import AIGateway
 from app.tasks.script_tasks import convert_scripts_task
 
 router = APIRouter()
@@ -102,3 +106,50 @@ async def get_script(script_id: str, db: AsyncSession = Depends(get_db)):
     if not asset:
         raise HTTPException(status_code=404, detail="Script not found")
     return {"code": 0, "data": asset.to_dict()}
+
+
+@router.put("/{script_id}/confirm")
+async def confirm_script(script_id: str, db: AsyncSession = Depends(get_db)):
+    """TRANS-02 用户确认入库: ScriptAsset.status->confirmed。"""
+    try:
+        sid = uuid.UUID(script_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+    result = await db.execute(select(ScriptAsset).where(ScriptAsset.id == sid))
+    asset = result.scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Script not found")
+    asset.status = "confirmed"
+    await db.commit()
+    return {"code": 0, "message": "Script confirmed",
+            "data": {"script_id": script_id, "status": "confirmed"}}
+
+
+@router.post("/{script_id}/diagnose")
+async def diagnose_script(script_id: str, request: DiagnoseRequest,
+                          db: AsyncSession = Depends(get_db)):
+    """调试修复: 四分类归因 + 失败步骤重生成。"""
+    try:
+        sid = uuid.UUID(script_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+    result = await db.execute(select(ScriptAsset).where(ScriptAsset.id == sid))
+    asset = result.scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Script not found")
+
+    svc = ScriptDiagnoseService(gateway=AIGateway())
+    card = await svc.diagnose(
+        error_type=request.error_type, error_msg=request.error_msg,
+        script_fragment=request.script_fragment, failed_step=request.failed_step,
+        screenshot_url=request.screenshot_url, dom_snapshot=request.dom_snapshot,
+    )
+    revised_script = None
+    if card.get("can_fix") and card.get("revised_step"):
+        revised_script = (asset.content or "") + "\n# --- 修复步骤 {} ---\n".format(
+            request.failed_step) + card["revised_step"]
+        asset.content = revised_script
+        asset.ai_diagnosis = card
+        asset.version = (asset.version or 1) + 1
+        await db.commit()
+    return {"code": 0, "data": {"diagnosis_card": card, "revised_script": revised_script}}
