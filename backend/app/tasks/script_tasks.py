@@ -7,7 +7,7 @@ from typing import List
 from app.tasks import celery_app
 from app.core.database import AsyncSessionLocal
 from app.core.sse import SSEStream
-from app.services.script_convert_service import ScriptConvertService, ConvertError
+from app.services.script_convert_service import ScriptConvertService
 from app.services.element_service import ElementLocatorLookup, ElementService
 from app.services.ai_gateway import AIGateway
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 async def convert_scripts_task_impl(session_id: str, cases: List[dict],
-                                    gateway, lookup, db) -> dict:
+                                    gateway, lookup, db, ai_optimize: bool = False) -> dict:
     """批量转换实现 (供直接调用测试)。"""
     sse = _SSEWrapper(SSEStream(session_id))
     svc = ScriptConvertService(db=db, gateway=gateway)
@@ -24,14 +24,14 @@ async def convert_scripts_task_impl(session_id: str, cases: List[dict],
     for i, case in enumerate(cases):
         progress = i / max(len(cases), 1)
         try:
-            asset = await svc.convert_one(case, sse, lookup=lookup, ai_optimize=False)
+            asset = await svc.convert_one(case, sse, lookup=lookup, ai_optimize=ai_optimize)
             await svc.persist(asset)
             generated += 1
-            tokens = getattr(gateway, "tokens", tokens)
-        except ConvertError as e:
-            logger.warning(f"case {case.get('id')} convert failed: {e}")
+        except Exception as e:
+            logger.warning(f"case {case.get('id')} convert failed: {type(e).__name__}: {e}")
             await sse.send_message(type="error", stage="convert_script",
-                                   content=f"用例失败: {e}", progress=progress)
+                                   content=f"用例 {case.get('id')} 失败: {e}", progress=progress)
+        tokens = getattr(gateway, "tokens", tokens)
     await db.commit()
     return {"status": "done", "generated_count": generated, "tokens_used": tokens}
 
@@ -70,7 +70,7 @@ def convert_scripts_task(self, session_id: str, case_ids: list, project_id: str,
             gateway = _CountingGateway(AIGateway())
             element_svc = ElementService(db)
             lookup = ElementLocatorLookup(element_svc)
-            summary = await convert_scripts_task_impl(session_id, cases, gateway, lookup, db)
+            summary = await convert_scripts_task_impl(session_id, cases, gateway, lookup, db, ai_optimize=ai_optimize)
             # 联动 automation_status -> converted (CASE-MGMT-04)
             await db.execute(
                 TestCase.__table__.update().where(

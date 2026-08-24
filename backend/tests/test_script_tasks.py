@@ -44,3 +44,34 @@ def test_task_runs_all_cases_and_writes_assets(monkeypatch):
     assert result["status"] == "done"
     assert result["tokens_used"] == 150
     assert result["generated_count"] == 1
+
+
+def test_bad_llm_case_does_not_abort_batch(monkeypatch):
+    from app.tasks import script_tasks
+
+    class _FakeSSE:
+        async def send_message(self, **kw):
+            pass
+    monkeypatch.setattr(script_tasks, "SSEStream", lambda sid: _FakeSSE())
+
+    cases = [{"id": "c1", "name": "x", "project_id": "p1",
+              "steps": [{"step": 1, "action": "a", "expected": "e"}],
+              "expected_result": "r"}]
+    gateway = MagicMock()
+    # step1 returns invalid JSON -> json.loads raises JSONDecodeError (a ValueError)
+    gateway.chat = AsyncMock(return_value={"content": "not valid json", "tokens": 5})
+    gateway.tokens = 5
+    lookup = MagicMock()
+    lookup.find = AsyncMock(return_value=None)
+    db = MagicMock()
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+    db.commit = AsyncMock()
+    db.execute = AsyncMock()
+    db.scalar_one_or_none = MagicMock(return_value=None)
+
+    result = asyncio.run(script_tasks.convert_scripts_task_impl(
+        "s1", cases, gateway=gateway, lookup=lookup, db=db))
+    assert result["status"] == "done"
+    assert result["generated_count"] == 0
+    assert result["tokens_used"] == 5
