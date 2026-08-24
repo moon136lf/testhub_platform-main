@@ -10,6 +10,7 @@ from app.models.execution import ExecutionRecord, AICallLog, ExecutionDetail
 from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.models.test_rule import TestRule
 from app.models.generation import GenerationSession, HallucinationConfig
+from app.models.system import SystemSetting, TestEnv, TokenQuota, OperationLog
 
 __all__ = [
     "Project",
@@ -31,4 +32,8 @@ __all__ = [
     "GenerationSession",
     "HallucinationConfig",
     "TestRule",
+    "SystemSetting",
+    "TestEnv",
+    "TokenQuota",
+    "OperationLog",
 ]
