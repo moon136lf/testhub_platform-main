@@ -2,10 +2,25 @@
 Generation session schemas
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
+
+
+class GenerationRules(BaseModel):
+    """4 generation rule switches. automation_thinking is forced on (CASE-04)."""
+    automation_thinking: bool = True
+    boundary_value: bool = True
+    scenario_analysis: bool = True
+    equivalence_partition: bool = True
+
+    @model_validator(mode='after')
+    def _force_automation_thinking(self):
+        # automation_thinking 是强制规则，不可关闭
+        if not self.automation_thinking:
+            self.automation_thinking = True
+        return self
 
 
 class GenerationSessionBase(BaseModel):

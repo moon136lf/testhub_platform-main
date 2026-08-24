@@ -22,6 +22,7 @@ from app.models.project import Project
 from app.models.test_case import TestPoint, TestCase
 from app.models.test_rule import TestRule
 from app.core.sse import SSEStream
+from app.schemas.generation import GenerationRules
 
 router = APIRouter()
 
@@ -76,6 +77,9 @@ class IdentifyPointsRequest(BaseModel):
     document_content: str = Field(..., description="PRD text content")
     rule_ids: List[str] = Field(default=[], description="Selected test rule IDs")
     knowledge_ids: List[str] = Field(default=[], description="Selected knowledge document IDs")
+    rules: Optional[GenerationRules] = Field(
+        default=None, description="4 generation rule switches (automation_thinking forced on)"
+    )
 
 
 class TestPointUpdate(BaseModel):
@@ -84,7 +88,7 @@ class TestPointUpdate(BaseModel):
     page_name: Optional[str] = Field(None, max_length=50)
     type_label: Optional[str] = Field(None, max_length=20)
     description: Optional[str] = Field(None, max_length=500)
-    status: Optional[str] = Field(None, pattern="^(pending|approved|rejected)$")
+    status: Optional[str] = Field(None, pattern="^(pending|selected|generated)$")
 
 
 class TestPointCreate(BaseModel):
@@ -310,7 +314,8 @@ async def identify_points(
         project_id=request.project_id,
         doc_content=request.document_content,
         rule_ids=request.rule_ids,
-        knowledge_ids=request.knowledge_ids
+        knowledge_ids=request.knowledge_ids,
+        rules=request.rules.model_dump() if request.rules else None
     )
 
     return {
@@ -327,7 +332,7 @@ async def identify_points(
 @router.get("/test-points")
 async def get_test_points(
     project_id: str = Query(..., description="Project ID"),
-    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected"),
+    status: Optional[str] = Query(None, description="Filter by status: pending, selected, generated"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
     db: AsyncSession = Depends(get_db)

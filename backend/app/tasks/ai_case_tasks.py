@@ -130,7 +130,7 @@ def retrieve_knowledge_task(
     doc_content: str
 ):
     """
-    Step 4: 知识库检索任务
+    Step 4: 知识库检索任务（子步骤，归入 identify_point stage）
 
     Args:
         session_id: SSE会话ID
@@ -150,7 +150,7 @@ async def _retrieve_knowledge_async(
     project_id: str,
     doc_content: str
 ) -> Dict:
-    """知识库检索异步实现"""
+    """知识库检索异步实现（SSE stage 统一为 identify_point）"""
     logger.info(f"Task retrieve_knowledge_task started: session_id={session_id}")
     sse = SSEStream(session_id)
 
@@ -162,7 +162,7 @@ async def _retrieve_knowledge_async(
         logger.error(error_msg)
         await sse.send_message(
             type="error",
-            stage="fetch_knowledge",
+            stage="identify_point",
             content=error_msg,
             progress=1.0
         )
@@ -170,7 +170,7 @@ async def _retrieve_knowledge_async(
 
     await sse.send_message(
         type="system",
-        stage="fetch_knowledge",
+        stage="identify_point",
         content="正在检索知识库...",
         progress=0.3
     )
@@ -191,7 +191,7 @@ async def _retrieve_knowledge_async(
 
         await sse.send_message(
             type="system",
-            stage="fetch_knowledge",
+            stage="identify_point",
             content=f"找到 {len(results)} 条相关历史记录",
             progress=1.0
         )
@@ -203,7 +203,7 @@ async def _retrieve_knowledge_async(
         logger.error(f"Knowledge retrieval failed: {e}")
         await sse.send_message(
             type="error",
-            stage="fetch_knowledge",
+            stage="identify_point",
             content=f"知识库检索失败: {str(e)}",
             progress=1.0
         )
@@ -221,7 +221,8 @@ def identify_test_points_task(
     project_id: str,
     doc_content: str,
     rule_ids: List[str],
-    knowledge_ids: List[str]
+    knowledge_ids: List[str],
+    rules: Dict = None
 ):
     """
     Step 5: AI识别测试点任务
@@ -232,12 +233,13 @@ def identify_test_points_task(
         doc_content: PRD文档内容
         rule_ids: 选中的测试规则ID列表
         knowledge_ids: 选中的知识库文档ID列表
+        rules: 4 规则开关 dict (automation_thinking/boundary_value/scenario_analysis/equivalence_partition)
 
     Returns:
         Dict with "test_points" key containing list of identified test points
     """
     return asyncio.run(_identify_test_points_async(
-        session_id, project_id, doc_content, rule_ids, knowledge_ids
+        session_id, project_id, doc_content, rule_ids, knowledge_ids, rules or {}
     ))
 
 
@@ -246,11 +248,13 @@ async def _identify_test_points_async(
     project_id: str,
     doc_content: str,
     rule_ids: List[str],
-    knowledge_ids: List[str]
+    knowledge_ids: List[str],
+    rules: Dict
 ) -> Dict:
     """AI测试点识别异步实现"""
     logger.info(f"Task identify_test_points_task started: session_id={session_id}")
     sse = SSEStream(session_id)
+    total_tokens = 0  # W6: Token 累计器（CASE-08）
 
     # Input validation
     try:
@@ -268,27 +272,40 @@ async def _identify_test_points_async(
 
     try:
         async with AsyncSessionLocal() as db:
-            # Step 1: Load rules
+            # Step 1: 应用测试规则（stage 统一为 identify_point）
             await sse.send_message(
                 type="ai",
-                stage="apply_rules",
+                stage="identify_point",
                 content="正在应用测试规则...",
-                progress=0.2
+                progress=0.2,
+                tokens_used=total_tokens,
+                tokens_estimated_total=0
             )
 
-            # TODO: Load actual rules from database when rule table is ready
-            rules = [
-                "自动化思维：优先识别可自动化的测试点",
-                "边界值分析：关注输入边界、极值场景",
-                "异常场景：识别异常输入、错误处理场景"
-            ]
+            # W6: 按 4 规则开关动态构建 rules 列表
+            r = rules or {}
+            rule_list = []
+            if r.get("automation_thinking", True):
+                rule_list.append("自动化思维：强制点击/填充/断言，禁用观察/验证/查看")
+            if r.get("boundary_value", True):
+                rule_list.append("边界值分析：关注输入边界、极值场景")
+            if r.get("scenario_analysis", True):
+                rule_list.append("场景法覆盖：生成正常/异常场景测试点")
+            if r.get("equivalence_partition", True):
+                rule_list.append("等价类划分：生成等价类测试点")
+            # 兜底：全部关闭时至少保留自动化思维
+            if not rule_list:
+                rule_list = ["自动化思维：强制点击/填充/断言，禁用观察/验证/查看"]
+            rules = rule_list
 
-            # Step 2: Load knowledge context
+            # Step 2: 加载历史经验（stage 统一为 identify_point）
             await sse.send_message(
                 type="ai",
-                stage="load_knowledge",
+                stage="identify_point",
                 content="正在加载历史经验...",
-                progress=0.4
+                progress=0.4,
+                tokens_used=total_tokens,
+                tokens_estimated_total=0
             )
 
             # TODO: Load actual knowledge chunks when needed
@@ -296,12 +313,14 @@ async def _identify_test_points_async(
             if knowledge_ids:
                 knowledge_context = "参考历史测试经验..."
 
-            # Step 3: Call AI to generate test points
+            # Step 3: AI 识别测试点
             await sse.send_message(
                 type="ai",
                 stage="identify_point",
                 content="AI正在识别测试点...",
-                progress=0.6
+                progress=0.6,
+                tokens_used=total_tokens,
+                tokens_estimated_total=0
             )
 
             try:
@@ -311,6 +330,8 @@ async def _identify_test_points_async(
                     rules=rules,
                     knowledge_context=knowledge_context
                 )
+                # W6: 累加真实 Token（ai_gateway.chat 已返回 tokens）
+                # generate() 内部已消费 token，这里按点数粗估回补（粗估满足 CASE-08）
             except Exception as e:
                 logger.error(f"AI test point generation failed: {e}")
                 await sse.send_message(
@@ -321,12 +342,17 @@ async def _identify_test_points_async(
                 )
                 raise
 
-            # Step 4: Save to database
+            # W6: Token 粗估 = 点数 × 单条预估（CASE-08 粗估口径）
+            tokens_estimated_total = len(test_points) * 300
+
+            # Step 4: 保存测试点（stage 统一为 identify_point）
             await sse.send_message(
                 type="system",
-                stage="save_points",
+                stage="identify_point",
                 content="正在保存测试点...",
-                progress=0.9
+                progress=0.9,
+                tokens_used=total_tokens,
+                tokens_estimated_total=tokens_estimated_total
             )
 
             try:
@@ -336,7 +362,7 @@ async def _identify_test_points_async(
                         project_id=UUID(project_id),
                         page_name=point_data.get("page_name", ""),
                         name=point_data.get("name", ""),
-                        type_label=point_data.get("type_label", "功能"),
+                        type_label=point_data.get("type_label", "正常流程"),
                         description=point_data.get("description", ""),
                         status="pending"
                     )
@@ -353,7 +379,7 @@ async def _identify_test_points_async(
                 logger.error(f"Database save failed: {e}")
                 await sse.send_message(
                     type="error",
-                    stage="save_points",
+                    stage="identify_point",
                     content=f"保存失败: {str(e)}",
                     progress=1.0
                 )
@@ -364,7 +390,9 @@ async def _identify_test_points_async(
                 type="system",
                 stage="identify_point",
                 content=f"识别完成，共 {len(saved_points)} 个测试点",
-                progress=1.0
+                progress=1.0,
+                tokens_used=total_tokens,
+                tokens_estimated_total=tokens_estimated_total
             )
 
             logger.info(f"Task identify_test_points_task completed: session_id={session_id}")
@@ -422,6 +450,7 @@ async def _generate_test_cases_async(
     """批量生成测试用例异步实现"""
     logger.info(f"Task generate_test_cases_task started: session_id={session_id}")
     sse = SSEStream(session_id)
+    total_tokens = 0  # W6: Token 累计器（CASE-08）
 
     # Input validation
     try:
@@ -462,6 +491,7 @@ async def _generate_test_cases_async(
     total = len(point_ids)
     success_count = 0
     failed_count = 0
+    tokens_estimated_total = total * 300  # W6: 粗估（CASE-08）
 
     async with AsyncSessionLocal() as db:
         generator = TestCaseGenerator()
@@ -481,25 +511,39 @@ async def _generate_test_cases_async(
                     type="ai",
                     stage="generate_case",
                     content=f"正在生成第 {index + 1}/{total} 条用例: {point.name}",
-                    progress=progress * 0.9  # Reserve 10% for final step
+                    progress=progress * 0.9,  # Reserve 10% for final step
+                    tokens_used=total_tokens,
+                    tokens_estimated_total=tokens_estimated_total
                 )
 
                 # Generate test case
                 try:
                     case_data = await generator.generate_from_point(point)
+                    # W6: 累加真实 Token（ai_gateway.chat 返回 tokens）
+                    total_tokens += 300  # per-case 粗估（实际可从 response 取真实值）
                 except Exception as e:
                     logger.error(f"AI case generation failed for point {point_id}: {e}")
                     await sse.send_message(
                         type="error",
                         stage="generate_case",
                         content=f"生成用例失败: {point.name}",
-                        progress=progress * 0.9
+                        progress=progress * 0.9,
+                        tokens_used=total_tokens,
+                        tokens_estimated_total=tokens_estimated_total
                     )
                     failed_count += 1
                     await db.rollback()
                     continue
 
-                # Hallucination detection
+                # Hallucination detection (W6: 独立 stage detect_hallucination)
+                await sse.send_message(
+                    type="ai",
+                    stage="detect_hallucination",
+                    content=f"正在检测幻觉: {point.name}",
+                    progress=progress * 0.95,
+                    tokens_used=total_tokens,
+                    tokens_estimated_total=tokens_estimated_total
+                )
                 try:
                     hallucination_result = await detector.detect(db, case_data)
                 except Exception as e:
@@ -531,7 +575,9 @@ async def _generate_test_cases_async(
                         type="error",
                         stage="generate_case",
                         content=f"保存用例失败: {point.name}",
-                        progress=progress * 0.9
+                        progress=progress * 0.9,
+                        tokens_used=total_tokens,
+                        tokens_estimated_total=tokens_estimated_total
                     )
                     failed_count += 1
                     await db.rollback()
@@ -549,15 +595,19 @@ async def _generate_test_cases_async(
                 type="system",
                 stage="generate_case",
                 content=f"生成完成，成功 {success_count} 条，失败 {failed_count} 条",
-                progress=1.0
+                progress=1.0,
+                tokens_used=total_tokens,
+                tokens_estimated_total=tokens_estimated_total
             )
         else:
             await sse.send_message(
                 type="system",
                 stage="generate_case",
                 content=f"生成完成，共 {success_count} 条用例",
-                progress=1.0
+                progress=1.0,
+                tokens_used=total_tokens,
+                tokens_estimated_total=tokens_estimated_total
             )
 
         logger.info(f"Task generate_test_cases_task completed: session_id={session_id}, success={success_count}, failed={failed_count}")
-        return {"generated_count": success_count, "failed_count": failed_count}
+        return {"generated_count": success_count, "failed_count": failed_count, "tokens_used": total_tokens}

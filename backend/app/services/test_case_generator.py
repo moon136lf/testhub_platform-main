@@ -36,11 +36,12 @@ class TestCaseGenerator:
 
 要求：
 1. 用例步骤必须详细、可执行、面向UI自动化
-2. 每个步骤包含：action（操作类型）、target（操作目标元素）、data（操作数据）
-3. action 可选值：navigate, click, input, select, verify, wait
-4. target 应该是具体的UI元素描述（如"登录按钮"、"用户名输入框"）
-5. expected_result 是最终预期结果
-6. priority 是 P0/P1/P2
+2. 每个步骤包含：action（操作类型）、target（操作目标元素）、data（操作数据）、expected（该步预期结果）
+3. action 可选值：navigate, click, input, select, check, assert, wait（禁止使用 verify）
+4. 禁用词：观察、查看、验证、检查、确认——不得出现在 action 或 expected 中；动作必须用可执行动词：点击、填充、选择、断言
+5. target 应该是具体的UI元素描述（如"登录按钮"、"用户名输入框"）
+6. expected_result 是最终预期结果（必须可断言：URL/文本/状态），不得为"系统正常处理""以实际为准"等模糊表述
+7. priority 是 P0/P1/P2
 
 返回JSON格式：
 {
@@ -48,11 +49,11 @@ class TestCaseGenerator:
   "priority": "P1",
   "precondition": "前置条件",
   "steps": [
-    {"action": "navigate", "target": "登录页面", "data": "https://example.com/login"},
-    {"action": "input", "target": "用户名输入框", "data": "testuser"},
-    {"action": "click", "target": "登录按钮", "data": ""}
+    {"action": "navigate", "target": "登录页面", "data": "https://example.com/login", "expected": "跳转到登录页"},
+    {"action": "input", "target": "用户名输入框", "data": "testuser", "expected": "输入框显示 testuser"},
+    {"action": "click", "target": "登录按钮", "data": "", "expected": "跳转到首页"}
   ],
-  "expected_result": "预期结果描述"
+  "expected_result": "登录成功后跳转到首页"
 }
 
 只返回JSON，不要其他说明文字。"""

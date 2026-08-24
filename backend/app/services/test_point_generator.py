@@ -38,7 +38,7 @@ class TestPointGenerator:
       "test_points": [
         {{
           "name": "测试点名称",
-          "type_label": "功能/UI/性能/安全",
+          "type_label": "正常流程",
           "description": "测试点描述"
         }}
       ]
@@ -48,7 +48,7 @@ class TestPointGenerator:
 
 注意：
 1. 每个测试点必须清晰、可执行
-2. type_label 只能是：功能、UI、性能、安全
+2. type_label 只能是：正常流程、异常流程、边界值、等价类、场景法
 3. 按页面分组输出
 4. 只返回JSON，不要其他说明文字
 """
@@ -124,7 +124,7 @@ class TestPointGenerator:
                     test_points.append({
                         "page_name": page_name,
                         "name": point.get("name", ""),
-                        "type_label": point.get("type_label", "功能"),
+                        "type_label": point.get("type_label", "正常流程"),
                         "description": point.get("description", "")
                     })
 
