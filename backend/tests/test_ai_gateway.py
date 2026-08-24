@@ -28,14 +28,23 @@ mock_settings.DEEPSEEK_API_URL = "https://test.com"
 mock_settings.CLAUDE_API_KEY = ""
 mock_settings.CLAUDE_API_URL = "https://test.com"
 
+import importlib.util
+
+# Save real config so the global sys.modules replacement below doesn't leak
+# into other test modules (e.g. test_security reads settings.JWT_SECRET_KEY).
+_real_config = sys.modules.get('app.core.config')
 sys.modules['app.core.config'] = MagicMock(settings=mock_settings)
 
-# Now load the actual ai_gateway module code by reading and executing it
-import importlib.util
 ai_gateway_path = backend_path / "app" / "services" / "ai_gateway.py"
 spec = importlib.util.spec_from_file_location("ai_gateway", ai_gateway_path)
 ai_gateway_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ai_gateway_module)
+
+# Restore the real config module so downstream tests see the genuine settings.
+if _real_config is not None:
+    sys.modules['app.core.config'] = _real_config
+else:
+    del sys.modules['app.core.config']
 
 # Import the classes from the loaded module
 AIProvider = ai_gateway_module.AIProvider
