@@ -2,7 +2,6 @@
 import time
 import logging
 from typing import Optional
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,6 +74,7 @@ class SystemSettingService:
         if updated_by:
             row.updated_by = updated_by
         await self.db.commit()
+        await self.db.refresh(row)
         # invalidate cache
         _settings_cache.pop((category, key), None)
         return row
