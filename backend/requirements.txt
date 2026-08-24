@@ -29,6 +29,8 @@ aiohttp==3.9.5
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.9
+# Symmetric encryption for secrets (system_setting / test_env) — app/core/security.py
+pycryptodome==3.23.0
 
 # Validation & Serialization
 pydantic==2.8.0
