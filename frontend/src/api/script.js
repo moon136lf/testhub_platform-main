@@ -32,6 +32,34 @@ export const scriptAPI = {
     return response.data
   },
 
+  async run(scriptId, config = {}) {
+    const response = await axios.post(`${API_BASE}/run`, {
+      script_id: scriptId,
+      config: { headless: config.headless ?? true, timeout: config.timeout ?? 60, max_failures: config.max_failures ?? 8 },
+    })
+    return response.data
+  },
+
+  async batchRun(scriptIds, config = {}) {
+    const response = await axios.post(`${API_BASE}/batch-run`, {
+      script_ids: scriptIds,
+      config: { headless: config.headless ?? true, timeout: config.timeout ?? 60, max_failures: config.max_failures ?? 8 },
+    })
+    return response.data
+  },
+
+  async quickRun(scriptContent, targetUrl, headless = true) {
+    const response = await axios.post(`${API_BASE}/quick-run`, {
+      script_content: scriptContent, target_url: targetUrl, headless,
+    })
+    return response.data
+  },
+
+  async stats(projectId) {
+    const response = await axios.get(`${API_BASE}/stats`, { params: { project_id: projectId } })
+    return response.data
+  },
+
   /**
    * SSE 订阅转脚本文字直播
    * @param {string} sessionId

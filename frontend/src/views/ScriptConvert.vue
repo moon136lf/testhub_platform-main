@@ -4,48 +4,150 @@
       <h2>用例转自动化脚本</h2>
       <el-form inline>
         <el-form-item label="项目">
-          <el-select v-model="form.projectId" placeholder="选择项目" style="width: 200px" @change="loadCases">
+          <el-select v-model="form.projectId" placeholder="选择项目" style="width: 200px" @change="onProjectChange">
             <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
-        </el-form-item>
-        <el-form-item label="用例">
-          <el-select v-model="form.caseIds" multiple filterable placeholder="多选用例" style="width: 360px">
-            <el-option v-for="c in finalizedCases" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="AI优化">
-          <el-switch v-model="form.aiOptimize" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :loading="converting" @click="handleConvert">批量转脚本</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
+    <!-- 统计卡片 (项目选定后显示) -->
+    <el-row v-if="form.projectId" :gutter="12" style="margin-top: 16px">
+      <el-col :span="4">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-label">总脚本数</div>
+          <div class="stat-value">{{ stats.total ?? 0 }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="4">
+        <el-card shadow="hover" class="stat-card stat-pass">
+          <div class="stat-label">通过</div>
+          <div class="stat-value">{{ stats.passed ?? 0 }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="4">
+        <el-card shadow="hover" class="stat-card stat-fail">
+          <div class="stat-label">失败</div>
+          <div class="stat-value">{{ stats.failed ?? 0 }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="4">
+        <el-card shadow="hover" class="stat-card stat-never">
+          <div class="stat-label">从未运行</div>
+          <div class="stat-value">{{ stats.never_run ?? 0 }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="4">
+        <el-card shadow="hover" class="stat-card stat-rate">
+          <div class="stat-label">通过率</div>
+          <div class="stat-value">{{ stats.pass_rate ?? 0 }}%</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- Tab 切换：转脚本 / 脚本库执行 / 快速运行 -->
+    <el-tabs v-model="activeTab" style="margin-top: 16px">
+      <!-- Tab1: 转脚本 (#4 既有) -->
+      <el-tab-pane label="转脚本" name="convert">
+        <el-card>
+          <el-form inline>
+            <el-form-item label="用例">
+              <el-select v-model="form.caseIds" multiple filterable placeholder="多选用例" style="width: 360px">
+                <el-option v-for="c in finalizedCases" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="AI优化">
+              <el-switch v-model="form.aiOptimize" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="converting" @click="handleConvert">批量转脚本</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-tab-pane>
+
+      <!-- Tab2: 脚本库执行 (新增) -->
+      <el-tab-pane label="脚本库执行" name="library">
+        <el-card>
+          <div class="lib-toolbar">
+            <el-select v-model="filter.category" placeholder="分类筛选" clearable style="width: 160px" @change="loadScripts">
+              <el-option label="未分类" value="uncategorized" />
+              <el-option label="登录" value="login" />
+              <el-option label="冒烟" value="smoke" />
+              <el-option label="回归" value="regression" />
+            </el-select>
+            <el-input v-model="filter.keyword" placeholder="关键词搜索脚本名" clearable style="width: 220px" @change="loadScripts" />
+            <el-button @click="loadScripts" :icon="Refresh">刷新</el-button>
+            <el-button type="warning" :disabled="!selected.length" :loading="batching" @click="handleBatchRun">
+              批量运行 ({{ selected.length }})
+            </el-button>
+            <span class="run-cfg-label">运行配置：</span>
+            <el-checkbox v-model="runConfig.headless">headless</el-checkbox>
+            <el-input-number v-model="runConfig.timeout" :min="10" :max="600" controls-position="right" style="width: 110px" />s
+            <el-input-number v-model="runConfig.max_failures" :min="1" :max="50" controls-position="right" style="width: 110px" />最大失败
+          </div>
+
+          <el-table :data="scripts" border style="margin-top: 12px" @selection-change="onSelectionChange">
+            <el-table-column type="selection" width="45" />
+            <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="category" label="分类" width="110" />
+            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="last_status" label="上次结果" width="100">
+              <template #default="{ row }">
+                <el-tag v-if="row.last_status === 'passed'" type="success" size="small">通过</el-tag>
+                <el-tag v-else-if="row.last_status === 'failed'" type="danger" size="small">失败</el-tag>
+                <el-tag v-else type="info" size="small">{{ row.last_status || 'never_run' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="run_count" label="运行次数" width="90" />
+            <el-table-column prop="locator_source" label="定位来源" width="130" />
+            <el-table-column label="操作" width="280">
+              <template #default="{ row }">
+                <el-button size="small" type="primary" :loading="runningId === row.id" @click="handleRun(row)">运行</el-button>
+                <el-button size="small" @click="viewScript(row)">查看</el-button>
+                <el-button size="small" type="success" :disabled="row.status === 'confirmed'" @click="confirmScript(row)">确认入库</el-button>
+                <el-button size="small" @click="openDiagnose(row)">调试修复</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
+      <!-- Tab3: 快速运行 (新增) -->
+      <el-tab-pane label="快速运行" name="quick">
+        <el-card>
+          <el-form label-width="100px">
+            <el-form-item label="被测URL">
+              <el-input v-model="quickForm.targetUrl" placeholder="http://localhost:8080/login" style="width: 420px" />
+            </el-form-item>
+            <el-form-item label="运行模式">
+              <el-radio-group v-model="quickForm.headless">
+                <el-radio :value="true">无头</el-radio>
+                <el-radio :value="false">有头</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="脚本内容">
+              <el-input v-model="quickForm.scriptContent" type="textarea" :rows="12"
+                placeholder="粘贴 Playwright 脚本内容..." style="font-family: monospace" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="quickRunning" @click="handleQuickRun">运行</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
+
+    <!-- 文字直播区 (转换/执行共用) -->
     <el-card style="margin-top: 16px">
-      <h3>转换过程文字直播</h3>
+      <h3>{{ liveTitle }}</h3>
+      <el-progress v-if="logs.length" :percentage="Math.round((progress || 0) * 100)"
+        :status="progress >= 1.0 ? 'success' : undefined" style="margin-bottom: 8px" />
       <div class="log-box">
         <div v-for="(msg, i) in logs" :key="i" class="log-line">
           [{{ msg.timestamp }}] {{ msg.content }}
         </div>
       </div>
-    </el-card>
-
-    <el-card style="margin-top: 16px">
-      <h3>脚本列表</h3>
-      <el-table :data="scripts" border>
-        <el-table-column prop="name" label="名称" />
-        <el-table-column prop="status" label="状态" width="100" />
-        <el-table-column prop="locator_source" label="定位来源" width="140" />
-        <el-table-column label="操作" width="200">
-          <template #default="{ row }">
-            <el-button size="small" @click="viewScript(row)">查看</el-button>
-            <el-button size="small" type="success" :disabled="row.status==='confirmed'"
-                       @click="confirmScript(row)">确认入库</el-button>
-            <el-button size="small" @click="openDiagnose(row)">调试修复</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
     </el-card>
 
     <el-dialog v-model="diagVisible" title="调试修复" width="700px">
@@ -85,8 +187,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { scriptAPI } from '@/api/script'
 import { projectAPI } from '@/api/project'
 import { testCaseAPI } from '@/api/testCase'
@@ -95,48 +198,129 @@ const projects = ref([])
 const finalizedCases = ref([])
 const scripts = ref([])
 const logs = ref([])
+const progress = ref(0)
 const converting = ref(false)
 const form = reactive({ projectId: '', caseIds: [], aiOptimize: false })
 
-const diagVisible = ref(false)
-const diagForm = reactive({ error_type: 'locate_failed', error_msg: '', script_fragment: '', failed_step: 1, screenshot_url: '' })
-const diagCard = ref(null)
-let currentScriptId = null
-
-onMounted(async () => {
-  const presp = await projectAPI.list()
-  projects.value = presp.items || presp.data || presp || []
+const activeTab = ref('convert')
+const liveTitle = computed(() => {
+  if (converting.value) return '转换过程文字直播'
+  if (runningId.value || batching.value || quickRunning.value) return '执行过程文字直播'
+  return '文字直播'
 })
+
+// ---- 统计卡片 ----
+const stats = ref({})
+const loadStats = async () => {
+  if (!form.projectId) { stats.value = {}; return }
+  try {
+    const resp = await scriptAPI.stats(form.projectId)
+    stats.value = resp.data || {}
+  } catch { stats.value = {} }
+}
+
+// ---- 脚本库执行 ----
+const filter = reactive({ category: '', keyword: '' })
+const selected = ref([])
+const runningId = ref(null)
+const batching = ref(false)
+const quickRunning = ref(false)
+const runConfig = reactive({ headless: true, timeout: 60, max_failures: 8 })
+
+const onSelectionChange = (rows) => { selected.value = rows }
+
+const onProjectChange = () => {
+  loadCases()
+  loadScripts()
+  loadStats()
+}
 
 const loadCases = async () => {
   if (!form.projectId) return
   const resp = await testCaseAPI.list({ project_id: form.projectId, is_finalized: true })
   finalizedCases.value = resp.items || resp.data?.items || resp || []
 }
+
+const loadScripts = async () => {
+  if (!form.projectId) { scripts.value = []; return }
+  try {
+    const resp = await scriptAPI.list({
+      project_id: form.projectId,
+      category: filter.category || undefined,
+      keyword: filter.keyword || undefined,
+    })
+    scripts.value = resp.data || []
+  } catch (e) { ElMessage.error('脚本列表加载失败'); scripts.value = [] }
+}
+
+// SSE 订阅统一处理：progress >= 1.0 判完成 → 刷新统计/列表
+let currentES = null
+const startSSE = (sessionId, { onDone, onError }) => {
+  logs.value = []; progress.value = 0
+  const es = scriptAPI.subscribe(sessionId, (msg) => {
+    logs.value.push(msg)
+    if (typeof msg.progress === 'number') progress.value = msg.progress
+    if (msg.progress >= 1.0) {
+      es.close(); loadStats(); loadScripts(); onDone?.()
+    }
+  }, (err) => { onError?.(err) })
+  currentES = es
+}
+
 const handleConvert = async () => {
   if (!form.projectId || !form.caseIds.length) {
     ElMessage.warning('请选择项目和用例'); return
   }
-  converting.value = true; logs.value = []
+  converting.value = true
   try {
     const resp = await scriptAPI.convert(form.projectId, form.caseIds, form.aiOptimize)
-    const es = scriptAPI.subscribe(resp.data.session_id, (msg) => {
-      logs.value.push(msg)
-      if (msg.progress >= 1.0) {
-        es.close(); loadScripts(); converting.value = false
-      }
-    })
+    startSSE(resp.data.session_id, { onDone: () => { converting.value = false } })
   } catch (e) { ElMessage.error('转换失败'); converting.value = false }
 }
-const loadScripts = async () => {
-  const resp = await scriptAPI.list({ project_id: form.projectId })
-  scripts.value = resp.data || []
+
+const handleRun = async (row) => {
+  runningId.value = row.id
+  try {
+    const resp = await scriptAPI.run(row.id, { ...runConfig })
+    startSSE(resp.data.session_id, { onDone: () => { runningId.value = null } })
+  } catch (e) { ElMessage.error('运行失败'); runningId.value = null }
 }
+
+const handleBatchRun = async () => {
+  if (!selected.value.length) { ElMessage.warning('请勾选脚本'); return }
+  batching.value = true
+  try {
+    const ids = selected.value.map(s => s.id)
+    const resp = await scriptAPI.batchRun(ids, { ...runConfig })
+    startSSE(resp.data.session_id, { onDone: () => { batching.value = false } })
+  } catch (e) { ElMessage.error('批量运行失败'); batching.value = false }
+}
+
+// ---- 快速运行 ----
+const quickForm = reactive({ scriptContent: '', targetUrl: '', headless: true })
+const handleQuickRun = async () => {
+  if (!quickForm.scriptContent || !quickForm.targetUrl) {
+    ElMessage.warning('请填写脚本内容和被测URL'); return
+  }
+  quickRunning.value = true
+  try {
+    const resp = await scriptAPI.quickRun(quickForm.scriptContent, quickForm.targetUrl, quickForm.headless)
+    startSSE(resp.data.session_id, { onDone: () => { quickRunning.value = false } })
+  } catch (e) { ElMessage.error('快速运行失败'); quickRunning.value = false }
+}
+
 const viewScript = (row) => { window.open(`/api/v1/scripts/${row.id}`, '_blank') }
 const confirmScript = async (row) => {
   await scriptAPI.confirm(row.id)
   ElMessage.success('已确认入库'); loadScripts()
 }
+
+// ---- 调试修复 (#4 既有) ----
+const diagVisible = ref(false)
+const diagForm = reactive({ error_type: 'locate_failed', error_msg: '', script_fragment: '', failed_step: 1, screenshot_url: '' })
+const diagCard = ref(null)
+let currentScriptId = null
+
 const openDiagnose = (row) => {
   currentScriptId = row.id
   diagCard.value = null
@@ -147,9 +331,23 @@ const runDiagnose = async () => {
   diagCard.value = resp.data.diagnosis_card
   ElMessage.success('诊断完成')
 }
+
+onMounted(async () => {
+  const presp = await projectAPI.list()
+  projects.value = presp.items || presp.data || presp || []
+})
 </script>
 
 <style scoped>
+.stat-card { text-align: center; }
+.stat-label { color: #909399; font-size: 13px; }
+.stat-value { font-size: 26px; font-weight: 600; margin-top: 6px; }
+.stat-pass .stat-value { color: #67c23a; }
+.stat-fail .stat-value { color: #f56c6c; }
+.stat-never .stat-value { color: #909399; }
+.stat-rate .stat-value { color: #409eff; }
+.lib-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.run-cfg-label { color: #909399; font-size: 13px; margin-left: 8px; }
 .log-box { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; }
 .log-line { margin-bottom: 4px; }
 .diag-card { margin-top: 12px; padding: 12px; background: #f5f7fa; border-radius: 4px; }
