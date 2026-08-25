@@ -17,10 +17,13 @@ import uuid
 from app.core.database import get_db
 from app.models.project import Project
 from app.models.test_case import TestCase, ScriptAsset
-from app.schemas.script import ConvertRequest, DiagnoseRequest
+from app.schemas.script import (
+    ConvertRequest, DiagnoseRequest,
+    RunRequest, BatchRunRequest, QuickRunRequest,
+)
 from app.services.script_diagnose_service import ScriptDiagnoseService
 from app.services.ai_gateway import AIGateway
-from app.tasks.script_tasks import convert_scripts_task
+from app.tasks.script_tasks import convert_scripts_task, run_scripts_task
 
 router = APIRouter()
 
@@ -118,6 +121,50 @@ async def get_script_stats(project_id: str, db: AsyncSession = Depends(get_db)):
         "total": total, "passed": passed, "failed": failed,
         "never_run": never_run, "pass_rate": pass_rate,
     }}
+
+
+@router.post("/run")
+async def run_script(request: RunRequest, db: AsyncSession = Depends(get_db)):
+    """SCRIPT-03: 执行单个脚本, SSE 文字直播, 回写 script_asset."""
+    try:
+        sid = uuid.UUID(request.script_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+    result = await db.execute(select(ScriptAsset).where(ScriptAsset.id == sid))
+    asset = result.scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Script not found")
+    session_id = str(uuid.uuid4())
+    run_scripts_task.delay(
+        session_id=session_id, script_id=request.script_id,
+        config=request.config.model_dump(),
+    )
+    return {"code": 0, "message": "Execution started",
+            "data": {"session_id": session_id, "sse_url": f"/api/sse/stream/{session_id}"}}
+
+
+@router.post("/batch-run")
+async def batch_run_scripts(request: BatchRunRequest, db: AsyncSession = Depends(get_db)):
+    """SCRIPT-04: 批量执行, 汇总一条 execution_record."""
+    session_id = str(uuid.uuid4())
+    run_scripts_task.delay(
+        session_id=session_id, script_ids=request.script_ids,
+        config=request.config.model_dump(),
+    )
+    return {"code": 0, "message": "Batch execution started",
+            "data": {"session_id": session_id, "sse_url": f"/api/sse/stream/{session_id}"}}
+
+
+@router.post("/quick-run")
+async def quick_run_script(request: QuickRunRequest, db: AsyncSession = Depends(get_db)):
+    """SCRIPT-05: 快速运行粘贴脚本, 不入库, 写 execution_record(exec_type=quick_run)."""
+    session_id = str(uuid.uuid4())
+    run_scripts_task.delay(
+        session_id=session_id, script_content=request.script_content,
+        target_url=request.target_url, headless=request.headless,
+    )
+    return {"code": 0, "message": "Quick run started",
+            "data": {"session_id": session_id, "sse_url": f"/api/sse/stream/{session_id}"}}
 
 
 @router.get("/{script_id}")

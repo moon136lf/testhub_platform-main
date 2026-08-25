@@ -93,3 +93,91 @@ class _CountingGateway:
         resp = await self._gw.chat(messages, **kw)
         self.tokens += resp.get("tokens", 0)
         return resp
+
+
+@celery_app.task(bind=True, name="run_scripts_task")
+def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: list = None,
+                     config: dict = None, script_content: str = None,
+                     target_url: str = None, headless: bool = True):
+    """执行脚本任务: 建 execution_record → ScriptExecutor.execute → 写 detail → 更新 record → commit.
+
+    T6 遗留: ScriptExecutor.execute 未调 db.add(detail)/db.commit(), 这里补持久化。
+    """
+    import asyncio
+    from sqlalchemy import select as _sel
+    from app.models.execution import ExecutionRecord
+    from app.models.test_case import ScriptAsset
+    from app.services.script_executor import ScriptExecutor
+    from app.core.storage import storage_client
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            # config dict → 对象 (ScriptExecutor 用 getattr 取 headless/timeout/max_failures)
+            cfg = config or {}
+            config_obj = type("C", (), {
+                "headless": cfg.get("headless", headless),
+                "timeout": cfg.get("timeout", 60),
+                "max_failures": cfg.get("max_failures", 8),
+            })()
+            # 建 execution_record
+            exec_type = "batch" if script_ids else ("quick_run" if script_content else "single")
+            er = ExecutionRecord(
+                exec_id=f"exec-{session_id[:8]}", project_id=None,
+                exec_type=exec_type, status="running",
+                total_cases=len(script_ids) if script_ids else 1,
+            )
+            db.add(er)
+            await db.flush()
+            gateway = _CountingGateway(AIGateway())
+            element_svc = ElementService(db)
+            executor = ScriptExecutor(
+                db=db, gateway=gateway, storage=storage_client,
+                element_svc=element_svc,
+            )
+            sse = _SSEWrapper(SSEStream(session_id))
+            details = []
+            if script_content:
+                # quick-run: 临时 script_asset, 不入库 (不入 db.add, 仅用于 execute 读 step_mapping)
+                sa = ScriptAsset(
+                    case_id=None, project_id=None, name="quick-run",
+                    content=script_content, version=1, status="confirmed",
+                    category="uncategorized", step_mapping=[], locator_source="none_draft",
+                )
+                detail = await executor.execute(sa, config_obj, target_url, sse, er, page=None)
+                details.append(detail)
+            elif script_ids:
+                for sid in script_ids:
+                    r = await db.execute(
+                        _sel(ScriptAsset).where(ScriptAsset.id == uuid.UUID(sid))
+                    )
+                    sa = r.scalar_one_or_none()
+                    if sa:
+                        detail = await executor.execute(sa, config_obj, target_url, sse, er, page=None)
+                        details.append(detail)
+            else:
+                # 单个 run
+                r = await db.execute(
+                    _sel(ScriptAsset).where(ScriptAsset.id == uuid.UUID(script_id))
+                )
+                sa = r.scalar_one_or_none()
+                if sa:
+                    detail = await executor.execute(sa, config_obj, target_url, sse, er, page=None)
+                    details.append(detail)
+            # 持久化 detail (T6 遗留: execute 未 db.add, 这里补)
+            for d in details:
+                db.add(d)
+            # 更新 execution_record 汇总
+            passed = sum(1 for d in details if d.status == "pass")
+            failed = sum(1 for d in details if d.status == "fail")
+            total = len(details)
+            er.passed_count = passed
+            er.fail_count = failed
+            er.total_cases = total
+            er.pass_rate = round((passed / total * 100), 2) if total else 0
+            er.tokens_used = getattr(gateway, "tokens", 0)
+            er.status = "done"
+            await db.commit()
+            return {"session_id": session_id, "status": "done",
+                    "passed": passed, "failed": failed, "total": total}
+
+    return asyncio.run(_run())
