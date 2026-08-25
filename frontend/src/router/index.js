@@ -64,11 +64,37 @@ const router = createRouter({
           meta: { title: '用例详情' }
         },
         {
+        {
           path: 'scripts',
           name: 'ScriptConvert',
           component: () => import('@/views/ScriptConvert.vue'),
           meta: { title: '用例转脚本' }
-        }
+        },
+        {
+          path: 'settings/ai',
+          name: 'AISettings',
+          component: () => import('@/views/system/AISettings.vue'),
+          meta: { title: 'AI设置' }
+        },
+        {
+          path: 'settings/runtime',
+          name: 'RuntimeConfig',
+          component: () => import('@/views/system/RuntimeConfig.vue'),
+          meta: { title: '运行配置' }
+        },
+        {
+          path: 'settings/env',
+          name: 'EnvManagement',
+          component: () => import('@/views/system/EnvManagement.vue'),
+          meta: { title: '环境管理' }
+        },
+        // Task 12 will uncomment this route block once TokenDashboard.vue is created
+        // {
+        //   path: 'settings/tokens',
+        //   name: 'TokenDashboard',
+        //   component: () => import('@/views/system/TokenDashboard.vue'),
+        //   meta: { title: 'Token成本管理' }
+        // }
       ]
     }
   ]
