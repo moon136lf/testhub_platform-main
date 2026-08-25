@@ -6,6 +6,43 @@
 
 ---
 
+## 快照 #2 — 2026-08-25（T13 验证完成，待合回评估）
+
+**当前分支**：worktree-module10-system-settings（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+0b1589d chore: update TODO_LIST (#10 system settings P0 done, 4/11 modules) (W10)
+6672a94 docs: session archive W10 #1 (T1-T12 done)
+3bcd0fa feat(system): TokenDashboard + warning banner (W10)
+f534c20 feat(system): AISettings + RuntimeConfig + EnvManagement pages + routes (W10)
+13c4e00 feat(system): frontend API wrapper (W10)
+```
+
+### 13 task 进度
+- ✅ T1-T12（详见快照 #1）
+- ✅ T13 全量验证 + 收尾（后端 223 passed / 前端 build 通过 / 10 system 路由 / 9 迁移脚本齐 / TODO_LIST 更新 4/11）
+
+### 测试 / 构建
+- 后端：`223 passed, 14 warnings in 38.05s`（exit 0）
+- 前端：`npm run build` ✓ built（exit 0）
+- system 路由 10 个全齐（settings×3 + test-connection + runtime-config + envs×4 + operation-logs + tokens×3）
+
+### 本会话进展
+- **T13 验证完成**：用 verification-before-completion skill 跑全量证据——后端 223 passed、前端 build exit 0、10 system 路由、工作树干净、19 个 W10 提交全在 worktree 分支。
+- **TODO_LIST 更新**（0b1589d）：#10 标 P0 完成，总体进度 4/11。
+- **诚实边界重申**：测试全 mock；`log_ai_call` DB 写路径未覆盖；`operator` 参数 dead；worktree 未合回。
+
+### 下一步建议
+1. **合回 master 评估**（用户已问）：master 有开发任务在跑——需先确认 master 当前 HEAD 与 worktree 分叉点，评估冲突面。#10 仅共享 `ai_gateway.py`（保守加法），其余文件与 #4 无重叠；但 master 可能有 #5 等新提交动了同区域。
+2. 合回方式：worktree 分支 `git rebase master` 或 master `git merge worktree-...`——先 `git log master..HEAD --oneline` + `git log HEAD..master --oneline` 看双向差异，再定。
+3. 合回后 master 定时存档（每小时 :07）才会看到 #10。
+
+---
+
 ## 快照 #1 — 2026-08-25（T1-T12 全完成）
 
 **当前分支**：worktree-module10-system-settings（工作树干净）
