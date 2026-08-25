@@ -6,6 +6,42 @@
 
 ---
 
+## 快照 #3 — 2026-08-25（#10 完成挂起，待 master 空闲合回）
+
+**当前分支**：worktree-module10-system-settings（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+809eca1 docs: session archive W10 #2 (auto)
+0b1589d chore: update TODO_LIST (#10 system settings P0 done, 4/11 modules) (W10)
+6672a94 docs: session archive W10 #1 (T1-T12 done)
+3bcd0fa feat(system): TokenDashboard + warning banner (W10)
+f534c20 feat(system): AISettings + RuntimeConfig + EnvManagement pages + routes (W10)
+```
+
+### 13 task 进度
+- ✅ T1-T13 全完成（T13 验证：223 passed / build 通过 / 10 路由 / 9 迁移 / TODO 4/11）
+- worktree 保持现状，**等 master 其他会话开发完成后再合回**
+
+### 测试 / 构建
+- 后端：`223 passed, 14 warnings in 39.72s`（exit 0）
+
+### 本时段进展
+- **合回评估结论**：用户问"master 有开发任务在跑，合回有影响吗"。答：有影响但可控——#10 仅共享 `ai_gateway.py`（保守加法）+ 注册类文件（`api/__init__.py`/`router/index.js`/`App.vue`/`MainLayout.vue`），其余纯新建。冲突面极小，但若 master 另一会话正并发改 `ai_gateway.py` 或注册文件，merge 会撞未保存工作区。
+- **用户决策**：等其他会话开发完成再合并。#10 worktree 保持完成态挂起（19 提交、工作树干净、测试全绿）。
+- **合回预案**：master 空闲后跑 `git merge worktree-module10-system-settings`；预期冲突最多 `ai_gateway.py` 的 `chat` 几行 + 注册追加行，手动合很快。
+
+### 下一步建议
+1. 等 master 其他会话告一段落后合回（用户定时机）。
+2. 合回后 master 定时存档（每小时 :07）才会看到 #10；本 W10 存档文件随之并入 master。
+3. 下一个模块（如 #5 UI自动化执行）待用户决定。
+4. 注：每小时 :13 的自动存档 cron 是 session-only，当前会话退出即失效——若需跨会话持久可改 durable。
+
+---
+
 ## 快照 #2 — 2026-08-25（T13 验证完成，待合回评估）
 
 **当前分支**：worktree-module10-system-settings（工作树干净）
