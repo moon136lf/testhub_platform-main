@@ -1,7 +1,6 @@
 """Operation log service. Best-effort: logging failure must not break callers."""
 import logging
 from typing import Optional, Any
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 

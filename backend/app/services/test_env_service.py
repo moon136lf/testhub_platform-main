@@ -1,6 +1,7 @@
 """Test environment CRUD service."""
 import logging
 from typing import Optional, Dict, Any
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,7 @@ class TestEnvService:
         return [r.to_dict() for r in rows]
 
     async def get(self, env_id: str) -> Optional[dict]:
-        q = select(TestEnv).where(TestEnv.id == env_id)
+        q = select(TestEnv).where(TestEnv.id == UUID(env_id))
         row = (await self.db.execute(q)).scalar_one_or_none()
         return row.to_dict() if row else None
 
@@ -36,7 +37,7 @@ class TestEnvService:
         return env.to_dict()
 
     async def update(self, env_id: str, data: Dict[str, Any]) -> Optional[dict]:
-        q = select(TestEnv).where(TestEnv.id == env_id)
+        q = select(TestEnv).where(TestEnv.id == UUID(env_id))
         env = (await self.db.execute(q)).scalar_one_or_none()
         if not env:
             return None
@@ -48,7 +49,7 @@ class TestEnvService:
         return env.to_dict()
 
     async def delete(self, env_id: str) -> bool:
-        q = select(TestEnv).where(TestEnv.id == env_id)
+        q = select(TestEnv).where(TestEnv.id == UUID(env_id))
         env = (await self.db.execute(q)).scalar_one_or_none()
         if not env:
             return False

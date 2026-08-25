@@ -5,6 +5,8 @@ from uuid import uuid4
 
 from app.services.test_env_service import TestEnvService
 
+_UUID = str(uuid4())
+
 
 @pytest.fixture
 def mock_db():
@@ -45,7 +47,7 @@ class TestEnvCRUD:
         env.to_dict = Mock(return_value={"id": "1", "name": "new", "url": "http://y"})
         mock_db.execute.return_value = Mock(scalar_one_or_none=Mock(return_value=env))
         svc = TestEnvService(mock_db)
-        result = await svc.update("1", {"name": "new", "url": "http://y"})
+        result = await svc.update(_UUID, {"name": "new", "url": "http://y"})
         assert env.name == "new"
         assert env.url == "http://y"
         assert mock_db.commit.called
@@ -54,7 +56,7 @@ class TestEnvCRUD:
     async def test_update_missing_returns_none(self, mock_db):
         mock_db.execute.return_value = Mock(scalar_one_or_none=Mock(return_value=None))
         svc = TestEnvService(mock_db)
-        assert await svc.update("1", {"name": "x"}) is None
+        assert await svc.update(_UUID, {"name": "x"}) is None
 
     @pytest.mark.asyncio
     async def test_delete_soft(self, mock_db):
@@ -62,7 +64,7 @@ class TestEnvCRUD:
         env.status = "active"
         mock_db.execute.return_value = Mock(scalar_one_or_none=Mock(return_value=env))
         svc = TestEnvService(mock_db)
-        ok = await svc.delete("1")
+        ok = await svc.delete(_UUID)
         assert ok is True
         assert env.status == "inactive"
         assert mock_db.commit.called
