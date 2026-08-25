@@ -72,11 +72,13 @@ async def convert_scripts(request: ConvertRequest, db: AsyncSession = Depends(ge
 async def list_scripts(
     project_id: Optional[str] = None,
     case_id: Optional[str] = None,
+    category: Optional[str] = None,
+    keyword: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """脚本列表。"""
+    """脚本列表 (SCRIPT-02: 分类筛选 + 名称搜索)."""
     stmt = select(ScriptAsset)
     try:
         if project_id:
@@ -85,12 +87,37 @@ async def list_scripts(
             stmt = stmt.where(ScriptAsset.case_id == uuid.UUID(case_id))
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID format")
-
+    if category:
+        stmt = stmt.where(ScriptAsset.category == category)
+    if keyword:
+        stmt = stmt.where(ScriptAsset.name.ilike(f"%{keyword}%"))
     stmt = stmt.order_by(ScriptAsset.created_at.desc())
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
     scripts = result.scalars().all()
     return {"code": 0, "data": [s.to_dict() for s in scripts]}
+
+
+@router.get("/stats")
+async def get_script_stats(project_id: str, db: AsyncSession = Depends(get_db)):
+    """统计卡片: total/passed/failed/never_run/pass_rate (实时聚合, SCRIPT 统计)."""
+    try:
+        pid = uuid.UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+    result = await db.execute(
+        select(ScriptAsset).where(ScriptAsset.project_id == pid)
+    )
+    scripts = result.scalars().all()
+    total = len(scripts)
+    passed = sum(1 for s in scripts if s.last_status == "passed")
+    failed = sum(1 for s in scripts if s.last_status == "failed")
+    never_run = sum(1 for s in scripts if (s.run_count or 0) == 0)
+    pass_rate = round((passed / total * 100), 2) if total else 0
+    return {"code": 0, "data": {
+        "total": total, "passed": passed, "failed": failed,
+        "never_run": never_run, "pass_rate": pass_rate,
+    }}
 
 
 @router.get("/{script_id}")

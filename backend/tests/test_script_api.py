@@ -8,6 +8,7 @@ task — no ASGI client, no real DB, no dependency_overrides.
 
 import sys
 from pathlib import Path
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from uuid import uuid4
@@ -16,6 +17,10 @@ from fastapi import HTTPException
 # Add backend directory to path
 backend_path = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_path))
+
+
+def asyncio_run(coro):
+    return asyncio.run(coro)
 
 
 @pytest.fixture
@@ -182,7 +187,9 @@ class TestListScriptsEndpoint:
         )
         mock_db.execute.return_value = mock_result
 
-        response = await list_scripts(None, None, 1, 20, mock_db)
+        response = await list_scripts(
+            project_id=None, case_id=None, page=1, page_size=20, db=mock_db
+        )
 
         assert response["code"] == 0
         assert response["data"] == []
@@ -457,3 +464,61 @@ class TestDiagnoseScriptEndpoint:
             await diagnose_script("not-a-uuid", request, mock_db)
 
         assert exc_info.value.status_code == 400
+
+
+class TestScriptStats:
+    """Test GET /api/v1/scripts/stats (模块 #5a, Task 7)"""
+
+    def test_stats_aggregation(self, monkeypatch):
+        from app.api.v1.scripts import get_script_stats
+
+        class FakeSA:
+            def __init__(self, last_status, run_count):
+                self.last_status = last_status
+                self.run_count = run_count
+
+        scripts = [
+            FakeSA("passed", 1),
+            FakeSA("failed", 2),
+            FakeSA("never_run", 0),
+            FakeSA("never_run", 0),
+        ]
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = scripts
+        db.execute = AsyncMock(return_value=result)
+        stats = asyncio_run(
+            get_script_stats(
+                project_id="00000000-0000-0000-0000-000000000001", db=db
+            )
+        )
+        assert stats["code"] == 0
+        assert stats["data"]["total"] == 4
+        assert stats["data"]["passed"] == 1
+        assert stats["data"]["failed"] == 1
+        assert stats["data"]["never_run"] == 2
+        assert stats["data"]["pass_rate"] == 25.0  # 1/4*100
+
+
+class TestListCategoryKeyword:
+    """Test list_scripts category/keyword filter (SCRIPT-02, 模块 #5a Task 7)"""
+
+    def test_list_filters_by_category_and_keyword(self, monkeypatch):
+        from app.api.v1.scripts import list_scripts
+
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(return_value=result)
+        asyncio_run(
+            list_scripts(
+                project_id="00000000-0000-0000-0000-000000000001",
+                category="ui_smoke",
+                keyword="登录",
+                page=1,
+                page_size=20,
+                db=db,
+            )
+        )
+        # 验证 execute 被调用 (stmt 构建不报错即可)
+        db.execute.assert_awaited_once()
