@@ -17,6 +17,7 @@ def mock_db():
     db.execute = AsyncMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
+    db.add = Mock()
     return db
 
 
@@ -109,3 +110,34 @@ class TestQuotaUpsert:
         assert row.total_quota == 500000
         assert row.alert_threshold == 10  # unchanged
         assert not mock_db.add.called
+
+
+class TestGetUsage:
+    @pytest.mark.asyncio
+    async def test_usage_breakdown_with_none_fallbacks(self, mock_db):
+        """get_usage maps None stage/model -> 'unknown' and None date -> ''."""
+        from datetime import datetime, timezone
+        d = datetime(2026, 8, 25, tzinfo=timezone.utc)
+        # by_stage rows: (stage, sum) — one None stage
+        # by_model rows: (model, sum)
+        # daily rows: (date_trunc, sum) — one None date
+        stage_rows = [(None, 300), ("identify_point", 700)]
+        model_rows = [("glm-4", 1000)]
+        daily_rows = [(d, 1000), (None, 500)]
+        mock_db.execute.side_effect = [
+            Mock(all=Mock(return_value=stage_rows)),
+            Mock(all=Mock(return_value=model_rows)),
+            Mock(all=Mock(return_value=daily_rows)),
+        ]
+        svc = TokenService(mock_db)
+        usage = await svc.get_usage(str(uuid4()), days=7)
+        # None stage -> "unknown"
+        labels = {item.label: item.tokens for item in usage.by_stage}
+        assert labels["unknown"] == 300
+        assert labels["identify_point"] == 700
+        # model passthrough
+        assert {item.label: item.tokens for item in usage.by_model} == {"glm-4": 1000}
+        # None date -> "" ; valid date -> "2026-08-25"
+        daily = {entry["date"]: entry["tokens"] for entry in usage.daily}
+        assert daily["2026-08-25"] == 1000
+        assert daily[""] == 500

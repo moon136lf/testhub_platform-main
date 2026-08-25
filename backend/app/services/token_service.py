@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.system import TokenQuota, OperationLog
+from app.models.system import TokenQuota
 from app.models.execution import AICallLog
 from app.core.config import settings
 from app.schemas.system import TokenStatusResponse, TokenUsageItem, TokenUsageResponse
