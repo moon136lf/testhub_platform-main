@@ -76,6 +76,7 @@
           <el-menu-item index="/settings/ai">AI设置</el-menu-item>
           <el-menu-item index="/settings/runtime">运行配置</el-menu-item>
           <el-menu-item index="/settings/env">环境管理</el-menu-item>
+          <el-menu-item index="/settings/tokens">Token成本管理</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>

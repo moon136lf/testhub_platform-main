@@ -88,13 +88,12 @@ const router = createRouter({
           component: () => import('@/views/system/EnvManagement.vue'),
           meta: { title: '环境管理' }
         },
-        // Task 12 will uncomment this route block once TokenDashboard.vue is created
-        // {
-        //   path: 'settings/tokens',
-        //   name: 'TokenDashboard',
-        //   component: () => import('@/views/system/TokenDashboard.vue'),
-        //   meta: { title: 'Token成本管理' }
-        // }
+        {
+          path: 'settings/tokens',
+          name: 'TokenDashboard',
+          component: () => import('@/views/system/TokenDashboard.vue'),
+          meta: { title: 'Token成本管理' }
+        }
       ]
     }
   ]
