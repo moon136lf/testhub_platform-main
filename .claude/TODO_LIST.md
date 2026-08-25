@@ -137,17 +137,20 @@
 
 ---
 
-#### 10. 系统设置 (0%)
-**状态**：待开始  
+#### 10. 系统设置 (P0 完成) - 2026-08-25
+**状态**：✅ 骨架完成（worktree `worktree-module10-system-settings`，待合回 master）
 **预估时间**：2-3 小时  
 **依赖**：无（支撑性模块）
 
-**核心功能**：
-- [ ] AI模型配置
-- [ ] Token配额管理
-- [ ] 环境变量配置
-- [ ] 用户管理（可选）
-- [ ] 操作日志
+**核心功能（已落地）**：
+- [x] AI模型配置（provider key/URL/默认/fallback 存 DB 可热改 + 测试连接，`/system/settings`）
+- [x] Token配额管理（配额/阈值/状态聚合/预警 + `/system/tokens/*`，ai_call_log 埋点）
+- [x] 环境变量配置（被测环境 CRUD，`/system/envs`）
+- [x] 运行配置（自愈策略/阈值/TTL/超时/重试热改，`/system/runtime-config`）
+- [x] 操作日志（`/system/operation-logs`，best-effort helper）
+- [ ] ~~用户管理（可选，本期不做）~~
+
+**诚实边界**：所有测试 mock（无真实 DB/LLM），ai_gateway.log_ai_call 的 DB 写路径未覆盖（联调补）；`operator` 参数 dead（接受未用）。
 
 ---
 
@@ -166,14 +169,14 @@
 
 ## 📊 总体进度
 
-- **已完成**：3/11 模块（元素库 / AI生成 / 用例管理，P0 缺口已补全）
-- **待开始**：8 个模块（#4 转脚本 / #5 UI执行 / #6 报告 / #7 评审完整页 / #8 回归 / #9 白盒 / #10 系统设置 / #11 仪表盘）
+- **已完成**：4/11 模块（#1 元素库 / #2 AI生成 / #3 用例管理 / #4 转脚本 在 master；#10 系统设置 在 worktree 待合回）
+- **待开始**：#5 UI执行 / #6 报告 / #7 评审完整页 / #8 回归 / #9 白盒 / #11 仪表盘
 
 ---
 
 ## 🎯 当前任务
 
-**下一步**：#4 用例转自动化脚本（已有 spec：`docs/superpowers/specs/2026-08-20-case-to-script-design.md`，规则参考 `testcase-to-script-skill` 记忆）
+**#10 系统设置**：✅ 13 task 中 T1-T12 完成，T13（本会话进行中：全量验证+收尾）。worktree `worktree-module10-system-settings` 待合回 master（注意 ai_gateway.py 与 #4 合并）。
 **集成策略（用户确认 2026-08-24）**：先完成全部模块开发（结构骨架 + 接口契约 + 单测），最后统一接入大模型；数据库迁移在真实联调前一次性执行，再真实测试。AI 模块当前用可插拔占位（ai_gateway 已抽象），不在开发期阻塞。
 
 ---
