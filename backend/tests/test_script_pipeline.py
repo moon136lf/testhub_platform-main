@@ -173,3 +173,20 @@ class TestStep4GenerateCode:
         result = asyncio_run(step4_generate_code(case, actions, asserts, gw))
         assert result.step_mapping[0]["status"] == "blocked"
 
+    def test_step_mapping_has_element_and_action_fields(self):
+        gw = FakeGateway('def t(page):\n    page.get_by_label("用户名").fill("admin")\n')
+        case, actions, asserts = self._inputs()
+        result = asyncio_run(step4_generate_code(case, actions, asserts, gw))
+        entry = result.step_mapping[0]
+        assert entry["element_name"] == "用户名"
+        assert entry["action"] == "fill"
+        assert entry["value"] == "admin"
+        assert "page_name" in entry  # 可为 None，但 key 必须存在
+
+    def test_step_mapping_assertion_field(self):
+        gw = FakeGateway('def t(page):\n    page.get_by_label("用户名").fill("admin")\n')
+        case, actions, asserts = self._inputs()
+        result = asyncio_run(step4_generate_code(case, actions, asserts, gw))
+        # asserts[0] 是 status_changed，应映射到 step_mapping
+        assert "assertion" in result.step_mapping[0]
+

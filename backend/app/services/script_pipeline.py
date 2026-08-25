@@ -262,16 +262,28 @@ def _fmt_asserts(asserts: List[AssertionPlan]) -> str:
     return "\n".join(f"{a.step}. {a.assertion_type} {a.target or ''} 期望={a.expected or ''}" for a in asserts)
 
 
-def _build_step_mapping(actions: List[ActionWithLocator], script: str) -> List[Dict[str, Any]]:
+def _build_step_mapping(actions: List[ActionWithLocator], asserts: List[AssertionPlan], script: str) -> List[Dict[str, Any]]:
+    # 按 step 索引断言
+    assert_by_step = {a.step: a for a in asserts}
     mapping = []
     for a in actions:
         impl = a.locator or ""
         status = "ok" if (a.locator and a.locator in script) else "blocked"
+        ap = assert_by_step.get(a.step)
         mapping.append({
             "step": a.step,
             "case_req": f"{a.action} {a.target or ''}",
             "impl": impl,
             "status": status,
+            "element_name": a.target,
+            "page_name": getattr(a, "page_name", None),
+            "action": a.action,
+            "value": a.value,
+            "assertion": {
+                "type": ap.assertion_type,
+                "expected": ap.expected,
+                "is_valid": ap.is_valid,
+            } if ap else None,
         })
     return mapping
 
@@ -290,6 +302,6 @@ async def step4_generate_code(
     )
     resp = await gateway.chat([{"role": "user", "content": prompt}])
     script = resp["content"].strip()
-    step_mapping = _build_step_mapping(actions, script)
+    step_mapping = _build_step_mapping(actions, asserts, script)
     source = actions[0].locator_source if actions else "none_draft"
     return GenerateResult(script=script, step_mapping=step_mapping, locator_source=source)
