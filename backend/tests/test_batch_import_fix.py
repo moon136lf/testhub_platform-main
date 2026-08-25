@@ -1,11 +1,21 @@
 """
 测试 ElementService.batch_import_elements 的字段映射修复
 验证：修复后不再引用已删除的旧字段（alias/display_text/coord_x/coord_y/locator_chain）
+
+注：模块顶层 print 用 sys.stdout.reconfigure(encoding="utf-8") 确保 Windows GBK
+控制台不报 UnicodeEncodeError（emoji ✅/❌ 在 GBK 下不可编码）。
 """
 import sys
 import os
 import inspect
 from pathlib import Path
+
+# Windows GBK 控制台兼容：强制 stdout/stderr 用 utf-8
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, Exception):
+    pass
 
 # 添加 backend 目录到路径
 backend_path = Path(__file__).parent.parent
