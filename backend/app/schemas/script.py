@@ -1,5 +1,5 @@
 """Script conversion schemas."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 
 
@@ -72,3 +72,36 @@ class DiagnosisCard(BaseModel):
 class DiagnoseResponse(BaseModel):
     code: int = 0
     data: Dict[str, Any]
+
+
+SCRIPT_LAST_STATUSES = ("never_run", "passed", "failed", "affected")
+SCRIPT_CATEGORIES = ("uncategorized", "ui_smoke", "full_regression", "core_flow", "interface_auto")
+
+
+class RunConfig(BaseModel):
+    headless: bool = Field(True, description="有头/无头模式")
+    timeout: int = Field(60, ge=5, le=600, description="单测试超时秒")
+    max_failures: int = Field(8, ge=1, le=100, description="最大失败数")
+
+
+class RunRequest(BaseModel):
+    script_id: str = Field(..., description="脚本 ID (UUID)")
+    config: RunConfig = Field(default_factory=RunConfig)
+
+    @field_validator("script_id")
+    @classmethod
+    def _valid_uuid(cls, v):
+        import uuid
+        uuid.UUID(v)
+        return v
+
+
+class BatchRunRequest(BaseModel):
+    script_ids: List[str] = Field(..., min_length=1, description="脚本 ID 列表")
+    config: RunConfig = Field(default_factory=RunConfig)
+
+
+class QuickRunRequest(BaseModel):
+    script_content: str = Field(..., min_length=1, description="临时粘贴的 Playwright Python 脚本")
+    target_url: str = Field(..., description="被测 URL")
+    headless: bool = Field(True, description="运行模式")
