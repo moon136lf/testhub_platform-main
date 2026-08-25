@@ -2,8 +2,8 @@
 Execution related models
 """
 
-from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, JSON, Numeric
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, JSON, Numeric, Index
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
 
@@ -74,5 +74,50 @@ class AICallLog(Base):
             "tokens_cost": float(self.tokens_cost) if self.tokens_cost else 0,
             "stage": self.stage,
             "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ExecutionDetail(Base):
+    """执行明细表 - 每条用例/每步的执行记录 (§4 ER 图 1:N execution_record→execution_detail)"""
+    __tablename__ = "execution_detail"
+    __table_args__ = (
+        Index("idx_exec_detail_record", "execution_record_id"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    execution_record_id = Column(UUID(as_uuid=True), ForeignKey("execution_record.id", ondelete="CASCADE"), nullable=False)
+    script_id = Column(UUID(as_uuid=True), ForeignKey("script_asset.id", ondelete="SET NULL"))
+    case_id = Column(UUID(as_uuid=True), ForeignKey("test_case.id", ondelete="SET NULL"))
+    step = Column(Integer, comment="步骤序号，0=整体")
+    action = Column(String(50), comment="click/fill/select/.../overall")
+    status = Column(String(20), nullable=False, comment="pass/fail/skip/pending")
+    error_type = Column(String(30), comment="locate_failed/timeout/assertion_failed/script_error")
+    error_msg = Column(Text)
+    stack_trace = Column(Text)
+    screenshot_url = Column(Text, comment="失败截图 MinIO URL")
+    dom_snapshot = Column(Text, comment="失败时页面 DOM")
+    heal_status = Column(String(20), default="none", comment="none/healing/healed/failed (#5b 用)")
+    heal_log = Column(JSONB, comment="自愈日志数组 (#5b 用)")
+    duration_ms = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "execution_record_id": str(self.execution_record_id),
+            "script_id": str(self.script_id) if self.script_id else None,
+            "case_id": str(self.case_id) if self.case_id else None,
+            "step": self.step,
+            "action": self.action,
+            "status": self.status,
+            "error_type": self.error_type,
+            "error_msg": self.error_msg,
+            "stack_trace": self.stack_trace,
+            "screenshot_url": self.screenshot_url,
+            "dom_snapshot": self.dom_snapshot,
+            "heal_status": self.heal_status,
+            "heal_log": self.heal_log,
+            "duration_ms": self.duration_ms,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
