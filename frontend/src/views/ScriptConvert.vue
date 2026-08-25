@@ -105,13 +105,13 @@ let currentScriptId = null
 
 onMounted(async () => {
   const presp = await projectAPI.list()
-  projects.value = presp.data || presp
+  projects.value = presp.items || presp.data || presp || []
 })
 
 const loadCases = async () => {
   if (!form.projectId) return
   const resp = await testCaseAPI.list({ project_id: form.projectId, is_finalized: true })
-  finalizedCases.value = resp.data?.items || resp.data || []
+  finalizedCases.value = resp.items || resp.data?.items || resp || []
 }
 const handleConvert = async () => {
   if (!form.projectId || !form.caseIds.length) {
