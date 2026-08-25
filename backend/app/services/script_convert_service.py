@@ -1,8 +1,6 @@
 # backend/app/services/script_convert_service.py
 """转脚本编排: ConvertSession 生命周期 + 5 步调用 + SSE + Token。"""
 import logging
-from typing import Optional
-from datetime import datetime
 
 from app.services.script_pipeline import (
     step0_normalize, step1_to_actions, step2_to_assertions,

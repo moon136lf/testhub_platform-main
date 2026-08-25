@@ -70,3 +70,11 @@ playwright/.cache/
 tmp/
 temp/
 *.tmp
+
+# Test / coverage artifacts
+.coverage
+htmlcov/
+.coverage.*
+coverage.xml
+*.cover
+.pytest_cache/

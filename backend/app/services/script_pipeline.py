@@ -229,14 +229,6 @@ async def step3_match_locators(
 
 
 @dataclass
-class StepMappingEntry:
-    step: int
-    case_req: str
-    impl: str
-    status: str  # ok / blocked
-
-
-@dataclass
 class GenerateResult:
     script: str
     step_mapping: List[Dict[str, Any]]
