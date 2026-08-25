@@ -6,6 +6,42 @@
 
 ---
 
+## 快照 #4 — 2026-08-25（#10 挂起 + #6 spec 写完）
+
+**当前分支**：worktree-module10-system-settings（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+2d49284 spec(reports): #6 execution records & reports design (report center + export)
+b96de81 docs: session archive W10 #3 (auto)
+809eca1 docs: session archive W10 #2 (auto)
+0b1589d chore: update TODO_LIST (#10 system settings P0 done, 4/11 modules) (W10)
+6672a94 docs: session archive W10 #1 (T1-T12 done)
+```
+
+### 13 task 进度（#10）
+- ✅ T1-T13 全完成。#10 worktree 保持完成态挂起，等 master 空闲合回。
+- 🔄 额外：#6 spec 已写（2d49284，存本 worktree，随 #10 合回 master 时进入）
+
+### 测试 / 构建
+- 后端：`223 passed, 14 warnings in 37.34s`（exit 0）
+
+### 本时段进展
+- **#6 执行记录与报告 spec 写完**（2d49284）：报告中心 + 导出 HTML/PDF，不建表只读消费 #5a 的 execution_record/ExecutionDetail，6 个 `/reports/*` 端点，2 service + notifier stub（留钉钉/微信扩展口），weasyprint PDF（全 mock，联调真跑），不做分享/自动化率/推送。前置：#5a 完成。
+- **用户决策**：#6 实施计划等 #5a 完成再写；现在转写 #7 spec。
+- **#6 spec 存放**：写在 #10 worktree（纯 markdown，零代码冲突），随 #10 合回 master 时一并进入。
+
+### 下一步建议
+1. #10 等 master 空闲合回（其他会话完成）。
+2. #6 实施计划 + 实施等 #5a 完成（从最新 master 拉 module6 worktree）。
+3. **现在写 #7 spec**（用户已指示）——#7 用例评审与E2E精修（部分已随 #3 CaseRefiner 落地，本次补完整评审流程页+E2E报告）。
+4. 每小时 :13 自动存档 cron（session-only）。
+
+---
+
 ## 快照 #3 — 2026-08-25（#10 完成挂起，待 master 空闲合回）
 
 **当前分支**：worktree-module10-system-settings（工作树干净）
