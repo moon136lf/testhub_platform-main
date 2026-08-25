@@ -4,7 +4,7 @@ Test Point Generator Service - AI-based test point extraction from PRD documents
 
 import json
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from app.services.ai_gateway import ai_gateway
 
@@ -57,7 +57,8 @@ class TestPointGenerator:
         self,
         doc_content: str,
         rules: List[str],
-        knowledge_context: str
+        knowledge_context: str,
+        project_id: Optional[str] = None,
     ) -> List[Dict]:
         """
         从PRD文档中AI识别测试点
@@ -66,6 +67,7 @@ class TestPointGenerator:
             doc_content: PRD文档内容
             rules: 测试规则Prompt列表
             knowledge_context: 知识库上下文
+            project_id: 项目ID，传入则记录 token 用量到 ai_call_log（W10 埋点）
 
         Returns:
             测试点列表，每个元素包含: page_name, name, type_label, description
@@ -97,7 +99,11 @@ class TestPointGenerator:
             ]
 
             logger.info("Calling AI gateway with provider=glm-4")
-            response = await ai_gateway.chat(messages, provider="glm-4")
+            response = await ai_gateway.chat(
+                messages, provider="glm-4",
+                project_id=str(project_id) if project_id else None,
+                stage="identify_point",
+            )
 
             # Parse JSON response
             content = response["content"]

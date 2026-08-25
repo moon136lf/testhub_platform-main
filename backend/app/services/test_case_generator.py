@@ -74,7 +74,11 @@ class TestCaseGenerator:
             ]
 
             logger.info("Calling AI gateway with provider=glm-4")
-            response = await ai_gateway.chat(messages, provider="glm-4")
+            response = await ai_gateway.chat(
+                messages, provider="glm-4",
+                project_id=str(point.project_id) if hasattr(point, "project_id") and point.project_id else None,
+                stage="generate_case",
+            )
 
             # Parse JSON response
             content = response["content"]

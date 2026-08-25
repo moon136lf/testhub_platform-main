@@ -313,14 +313,20 @@ class AIGateway:
         self,
         messages: List[Dict],
         provider: Optional[str] = None,
+        *,
+        project_id: Optional[str] = None,
+        stage: Optional[str] = None,
+        operator: Optional[str] = None,
         **kwargs
     ) -> Dict:
-        """
-        聊天接口
+        """聊天接口。project_id 非空时记录 ai_call_log（W10 埋点）。
 
         Args:
             messages: 消息列表
             provider: 指定 provider，默认使用配置的默认 provider
+            project_id: 项目ID，传入则记录 token 用量到 ai_call_log
+            stage: 调用阶段（identify_point/generate_case/detect_hallucination/refine 等）
+            operator: 操作人（可选）
             **kwargs: 额外参数
 
         Returns:
@@ -331,7 +337,22 @@ class AIGateway:
         if provider_name not in self._providers:
             raise ValueError(f"Provider '{provider_name}' not available. Check API key configuration in settings.")
 
-        return await self._providers[provider_name].chat_completion(messages, **kwargs)
+        result = await self._providers[provider_name].chat_completion(messages, **kwargs)
+
+        # W10: best-effort token logging
+        if project_id:
+            try:
+                await log_ai_call(
+                    project_id=project_id,
+                    provider_name=provider_name,
+                    tokens=result.get("tokens", 0),
+                    stage=stage or "unknown",
+                    status="success",
+                )
+            except Exception as e:
+                logger.warning(f"AI call logging failed (non-blocking): {e}")
+
+        return result
 
     async def with_fallback(
         self,
@@ -401,3 +422,32 @@ class AIGateway:
 
 # Global instance
 ai_gateway = AIGateway()
+
+
+async def log_ai_call(project_id: str, provider_name: str, tokens: int,
+                      stage: str, status: str = "success"):
+    """Write an ai_call_log row. Best-effort: opens its own session, never raises.
+
+    Imports are deferred to call-time so that importing ``ai_gateway`` does not
+    require a configured database (keeps the module importable under mocked
+    config in unit tests and avoids pulling SQLAlchemy engine creation in at
+    import time).
+    """
+    try:
+        from uuid import UUID
+        from app.models.execution import AICallLog
+        from app.core.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            entry = AICallLog(
+                project_id=UUID(project_id),
+                model=provider_name,
+                tokens_used=tokens,
+                tokens_cost=0,
+                stage=stage,
+                status=status,
+            )
+            db.add(entry)
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"log_ai_call failed: {e}")
