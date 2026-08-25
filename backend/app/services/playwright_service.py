@@ -33,12 +33,17 @@ class PlaywrightService:
         self.playwright: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
 
-    async def start(self):
-        """启动 Playwright 和浏览器"""
+    async def start(self, headless: bool = True, timeout: int = 600):
+        """启动 Playwright 和浏览器
+
+        Args:
+            headless: 有头/无头模式 (元素抓取默认 True)
+            timeout: 默认导航超时秒
+        """
         try:
             self.playwright = await async_playwright().start()
             self.browser = await self.playwright.chromium.launch(
-                headless=True,
+                headless=headless,
                 args=[
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -46,7 +51,9 @@ class PlaywrightService:
                     '--disable-blink-features=AutomationControlled'
                 ]
             )
-            logger.info("Playwright browser started successfully")
+            # 设置默认超时
+            self.browser.set_default_timeout(timeout * 1000)
+            logger.info(f"Playwright browser started (headless={headless}, timeout={timeout}s)")
         except Exception as e:
             logger.error(f"Failed to start Playwright: {e}")
             raise
