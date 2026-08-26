@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; margin: 30px; color: #303133; }
+  h1 { color: #409eff; border-bottom: 2px solid #409eff; padding-bottom: 8px; }
+  .meta { color: #909399; font-size: 13px; margin-bottom: 20px; }
+  .cards { display: flex; gap: 16px; margin: 20px 0; }
+  .card { border: 1px solid #ebeef5; border-radius: 4px; padding: 16px; flex: 1; text-align: center; }
+  .card .num { font-size: 24px; font-weight: 600; }
+  .card .lbl { color: #909399; font-size: 12px; margin-top: 4px; }
+  .pass { color: #67c23a; } .fail { color: #f56c6c; } .rate { color: #409eff; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+  th, td { border: 1px solid #ebeef5; padding: 8px; text-align: left; }
+  th { background: #f5f7fa; }
+  .err { color: #f56c6c; font-family: monospace; font-size: 12px; }
+  .stack { background: #fafafa; padding: 8px; font-family: monospace; font-size: 11px; white-space: pre-wrap; }
+  img.screenshot { max-width: 300px; border: 1px solid #ebeef5; }
+  footer { margin-top: 30px; color: #c0c4cc; font-size: 11px; border-top: 1px solid #ebeef5; padding-top: 8px; }
+</style>
+</head>
+<body>
+<h1>MoonTest 执行报告</h1>
+<div class="meta">
+  执行ID：{{ record.exec_id }} | 类型：{{ record.exec_type }} | 环境：{{ env_info }} |
+  耗时：{{ duration_sec }}秒 | 时间：{{ record.started_at }}
+</div>
+
+<div class="cards">
+  <div class="card"><div class="num">{{ record.total_cases }}</div><div class="lbl">总用例</div></div>
+  <div class="card"><div class="num pass">{{ record.passed_count }}</div><div class="lbl">通过</div></div>
+  <div class="card"><div class="num fail">{{ record.fail_count }}</div><div class="lbl">失败</div></div>
+  <div class="card"><div class="num rate">{{ record.pass_rate }}%</div><div class="lbl">通过率</div></div>
+  <div class="card"><div class="num">{{ record.tokens_used }}</div><div class="lbl">Token消耗</div></div>
+</div>
+
+<h2>失败步骤明细</h2>
+{% if details %}
+<table>
+  <tr><th>步骤</th><th>动作</th><th>错误类型</th><th>错误信息</th><th>截图</th></tr>
+  {% for d in details %}
+  <tr>
+    <td>{{ d.step }}</td>
+    <td>{{ d.action }}</td>
+    <td class="err">{{ d.error_type or '-' }}</td>
+    <td class="err">{{ d.error_msg or '-' }}</td>
+    <td>{% if d.screenshot_url %}<img class="screenshot" src="{{ d.screenshot_url }}">{% else %}-{% endif %}</td>
+  </tr>
+  {% if d.stack_trace %}<tr><td colspan="5"><div class="stack">{{ d.stack_trace }}</div></td></tr>{% endif %}
+  {% endfor %}
+</table>
+{% else %}
+<p>无失败步骤</p>
+{% endif %}
+
+<footer>由 MoonTest 自动生成 | {{ generated_at }}</footer>
+</body>
+</html>
