@@ -6,6 +6,43 @@
 
 ---
 
+## 快照 #6 — 2026-08-26（#9 brainstorming 持续，回归用例规则已整合）
+
+**当前分支**：worktree-module10-system-settings（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+8e09982 docs: session archive W10 #5 (auto)
+378d1bb spec(review): #7 review center + batch refine + project report design
+62b6d50 docs: session archive W10 #4 (auto)
+2d49284 spec(reports): #6 execution records & reports design (report center + export)
+b96de81 docs: session archive W10 #3 (auto)
+```
+
+### 13 task 进度（#10）
+- ✅ T1-T13 全完成。#10 worktree 保持完成态挂起，等 master 空闲合回。
+- 🔄 额外：#6/#7/#9 spec 设计中（存本 worktree，随 #10 合回 master 时进入）
+
+### 测试 / 构建
+- 后端：`223 passed, 14 warnings in 36.08s`（exit 0）
+
+### 本时段进展
+- **#9 回归用例生成规则整合完成**（设计层面，未落 spec 文件）：
+  - 融入用户给的提示词模板（角色+输入+分析步骤+输出）+ 用例列规范7字段 + 5条生成规则（基于代码依赖/兼顾新旧路径/数据隔离幂等/断言精细化/异常容错覆盖）+ 接口/UI示例表。
+  - **强制自动化形式**：复用 #2 的 StepSchema（{step,action,target,data,expected}）+ 禁用词规则（禁止观察/查看/验证），生成用例直接进 #4转脚本+#5执行+#8回归集闭环。
+  - **参考模块2**：回归用例生成器复用 #2 的 prompt 框架，输入从 PRD 换成 code_issue+代码变更上下文。
+- **待落 spec**：#9 spec 第1段（2表 code_scan/code_issue + code_issue 加 source_commit 关联变更点）+ 回归用例生成专节。下一步重新呈现调整后的第1段。
+
+### 下一步建议
+1. #9 spec 继续设计（第1段数据层调整含 source_commit + 回归用例生成专节）。
+2. #10 等 master 空闲合回；#6 等 #5a；#7 等 #10 合回后实施。
+3. 每小时 :13 自动存档 cron（session-only）。
+
+---
+
 ## 快照 #5 — 2026-08-26（#9 spec 设计中 + 回归用例生成纳入）
 
 **当前分支**：worktree-module10-system-settings（工作树干净）
