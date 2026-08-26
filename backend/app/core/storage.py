@@ -138,6 +138,20 @@ class StorageClient:
         except S3Error:
             return False
 
+    def get_object_bytes(self, object_name: str) -> bytes:
+        """读取 MinIO 对象字节数据（用于报告导出/查看）。降级时从内存取，缺失返回空。"""
+        try:
+            if self.client is None:
+                return self._fallback_store.get(object_name, b"")
+            response = self.client.get_object(self.bucket_name, object_name)
+            data = b"".join(response.stream)
+            response.close()
+            response.release_conn()
+            return data
+        except S3Error as e:
+            logger.error(f"Failed to get object {object_name}: {e}")
+            raise Exception(f"Storage get failed: {str(e)}")
+
 
 # 全局实例
 storage_client = StorageClient()
