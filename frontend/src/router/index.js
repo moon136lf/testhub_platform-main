@@ -64,7 +64,6 @@ const router = createRouter({
           meta: { title: '用例详情' }
         },
         {
-        {
           path: 'scripts',
           name: 'ScriptConvert',
           component: () => import('@/views/ScriptConvert.vue'),
