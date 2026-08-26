@@ -3,9 +3,9 @@
 **版本**：v1.0
 **日期**：2026-08-25
 **作者**：Claude Code (Opus 4.8)
-**状态**：待审批（等 #5a 完成后实施）
+**状态**：spec 已核对 #5a 完成实情，前置满足，可实施
 **流程**：Superpowers（brainstorming → writing-plans → TDD → 编码 → verification）
-**范围依据**：需求 §5.2 执行记录与报告 + §8.2.7 execution_record + #5a 已建 ExecutionDetail
+**范围依据**：需求 §5.2 执行记录与报告 + §8.2.7 execution_record + #5a 已建 ExecutionDetail（master e33aa2e 已完成）
 
 ---
 
@@ -13,13 +13,18 @@
 
 #6「执行记录与报告」——把 #5a 产生的执行记录归拢整合，提供**报告中心**：执行记录列表（整合入口）+ 报告详情页（整合视图：统计+失败明细+截图+最简趋势）+ 导出 HTML/PDF。不做分享链接、不做自动化率指标、不做推送/冷存储（留 P1）。
 
-### 1.1 依赖（#5a 已落地）
+### 1.1 依赖（#5a 已落地 master e33aa2e）
 
-#6 **不新建表**，只读消费 #5a 两张表（master c30b103+ 已建）：
+#6 **不新建表**，只读消费 #5a 两张表（master e33aa2e 已完成）：
 - `execution_record`（§8.2.7 记录级）：exec_id/project_id/exec_type/status/total_cases/passed_count/fail_count/pass_rate/duration_ms/tokens_used/env_info/report_url/started_at/finished_at
 - `execution_detail`（#5a 明细级）：execution_record_id/script_id/case_id/step/action/status/error_type/error_msg/stack_trace/screenshot_url/dom_snapshot/heal_status/heal_log/duration_ms
 
 #6 是**读取层 + 报告生成层 + 前端展示**，不写执行逻辑。
+
+**#5a 执行 API 现状**（核对 master）：#5a 把执行相关端点挂在 `/scripts/*` 下（`/scripts/run`、`/scripts/batch-run`、`/scripts/quick-run`、`/scripts/stats`、`/scripts` 列表），**未用 `/executions` 前缀**。#6 用 `/reports` 前缀独立，两者不冲突。
+- `/scripts/stats`（#5a）= 脚本维度统计（last_status/run_count/category）
+- `/reports/stats`（#6）= 执行记录维度统计（通过率/失败数/趋势）
+- 互补不冲突。
 
 ### 1.2 已确认决策
 
@@ -121,12 +126,12 @@ class Notifier:
 | GET | /reports/{exec_id}/export?format=html\|pdf | 下载报告产物（字节流，attachment） |
 
 **设计**：
-- 前缀 `/reports` 而非 `/executions`——避开 #5a 的 `/executions/*`（run/quick-run/batch-run），语义对齐 §5.2
+- 前缀 `/reports` 独立——#5a 执行 API 在 `/scripts/*`（run/quick-run/batch-run/stats/list），#6 用 `/reports` 前缀不冲突，语义对齐 §5.2「执行记录与报告」
 - `generate` 用 POST（有副作用：写 MinIO + 回写 DB）
 - `export` 返回字节流，`Content-Disposition: attachment` 触发下载
 - 注册到 `api/__init__.py`
 
-**与 #5a 边界**：#5a `/executions/*` 触发执行+写记录；#6 `/reports/*` 读记录+生成/导出报告。共用表，router 独立互不改。
+**与 #5a 边界**：#5a `/scripts/*`（run/quick-run/batch-run/stats）触发执行+写记录；#6 `/reports/*` 读记录+生成/导出报告。共用 execution_record/execution_detail 表，router 独立互不改。`/scripts/stats`（脚本维度）vs `/reports/stats`（执行记录维度）互补。
 
 ---
 
@@ -189,7 +194,7 @@ weasyprint 在 Windows 依赖 GTK/Pango/cairo，装麻烦。策略：requirement
 ### 7.1 文件边界
 
 - #6 **只读** `execution_record` / `execution_detail` model（import 不改字段）
-- #6 **不碰** `services/script_executor.py`、`tasks/`、`api/v1/executions.py`（#5a 执行触发链路）
+- #6 **不碰** `services/script_executor.py`、`tasks/`、`api/v1/scripts.py`（#5a 执行触发链路，端点在 /scripts/*）
 - #6 **不碰** `models/execution.py`（#5a 在改，#6 只 import 用）
 - 共享文件：仅 `api/__init__.py`（注册 reports router，追加）+ `requirements.txt`（加 weasyprint/jinja2），均追加，git 易自动合并
 
@@ -215,7 +220,7 @@ weasyprint 在 Windows 依赖 GTK/Pango/cairo，装麻烦。策略：requirement
 | 项 | 结果 |
 |---|---|
 | 占位符扫描 | 无 TBD/TODO |
-| 内部一致性 | 不建表只读 #5a 两表、/reports 前缀避开 #5a、趋势仅通过率单一指标、notifier stub P1——全文一致 |
+| 内部一致性 | 不建表只读 #5a 两表、/reports 前缀独立（#5a 在 /scripts/*）、趋势仅通过率单一指标、notifier stub P1——全文一致 |
 | 范围检查 | 报告中心+导出，单 spec 可承载，约 1.5-2 天（等 #5a 完成） |
 | 歧义检查 | 已消除：不做自动化率（消除 a/b 定义纠结）、不做分享、推送留 stub |
 | 依赖前置 | 依赖 #5a 的 ExecutionDetail（master c30b103+ 已建），字段齐（screenshot_url/dom_snapshot/error_type/stack_trace）|
