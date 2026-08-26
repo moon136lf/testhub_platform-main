@@ -34,6 +34,27 @@ class ElementService:
         )
         return result.scalar_one_or_none()
 
+    async def writeback_healed_locator(self, element_id: str, healed_locator: dict) -> bool:
+        """TRANS-08: confidence>=3 自愈成功后回写 ElementRepository (source=healed)."""
+        if not element_id or not healed_locator:
+            return False
+        result = await self.db.execute(
+            select(ElementRepository).where(ElementRepository.element_id == element_id)
+        )
+        el = result.scalar_one_or_none()
+        if not el:
+            return False
+        # healed_locator 可能是 dict 或 list, 统一为 strategies 数组
+        if isinstance(healed_locator, dict):
+            strategies = healed_locator.get("strategies") or [healed_locator]
+        else:
+            strategies = healed_locator
+        el.locator_strategies = {"strategies": strategies}
+        el.source = "healed"
+        el.confidence = (el.confidence or 0) + 1
+        await self.db.flush()
+        return True
+
     @staticmethod
     async def create_page(
         db: AsyncSession,
