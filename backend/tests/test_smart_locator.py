@@ -208,3 +208,68 @@ class TestSmartLocatorLocateAndInteract:
 
         # 验证调用时加了 xpath= 前缀
         page.locator.assert_called_with("xpath=//button[1]")
+
+
+"""SmartLocator SelfHealEngine integration test (Task 4 / #5b)."""
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
+
+def asyncio_run(coro):
+    return asyncio.run(coro)
+
+
+class TestSelfHealIntegration:
+    def _element_data(self):
+        return {"element_id": "e1", "element_name": "用户名",
+                "locator_strategies": {"strategies": [{"type": "css", "value": "#missing", "score": 10}]},
+                "semantic_info": {"text": "用户名"}}
+
+    def test_locate_and_interact_triggers_self_heal_on_failure(self, monkeypatch):
+        """所有定位器失败 → 触发 SelfHealEngine.heal; 命中后执行操作并返回带 heal_log 的结果."""
+        page = MagicMock()
+        # 所有原始定位器失败 → 触发自愈
+        loc = MagicMock()
+        loc.wait_for = AsyncMock(side_effect=Exception("not found"))
+        # healed locator 验证 + 操作成功
+        healed_loc = MagicMock()
+        healed_loc.wait_for = AsyncMock()
+        healed_loc.fill = AsyncMock()
+        # 第一次 page.locator 走原始策略失败, 自愈命中后再走 healed_loc
+        page.locator = MagicMock(side_effect=[loc, healed_loc])
+        # mock SelfHealEngine (patch 源模块, 方法内 lazy import 取到 fake)
+        from app.services import self_heal_engine as she_mod
+        fake_engine = MagicMock()
+        fake_engine.heal = AsyncMock(return_value={
+            "success": True, "locator": "page.get_by_label(\"用户名\")",
+            "strategy": "semantic", "heal_log": [], "writeback": None,
+        })
+        monkeypatch.setattr(she_mod, "SelfHealEngine", lambda gw, cache: fake_engine)
+        sl = SmartLocator(self._element_data(), gateway=MagicMock())
+        result = asyncio_run(sl.locate_and_interact(page, "fill", value="admin"))
+        assert result["status"] == "success"
+        fake_engine.heal.assert_awaited_once()
+        assert result.get("heal_log") == []
+        assert result.get("writeback") is None
+
+    def test_self_heal_all_levels_fail_raises_element_not_found(self, monkeypatch):
+        """SelfHealEngine 全级失败 → 抛 ElementNotFoundError."""
+        page = MagicMock()
+        loc = MagicMock()
+        loc.wait_for = AsyncMock(side_effect=Exception("not found"))
+        page.locator = MagicMock(return_value=loc)
+        from app.services import self_heal_engine as she_mod
+        fake_engine = MagicMock()
+        fake_engine.heal = AsyncMock(return_value={
+            "success": False, "locator": None, "strategy": None,
+            "heal_log": [{"level": 1, "success": False}], "writeback": None,
+        })
+        monkeypatch.setattr(she_mod, "SelfHealEngine", lambda gw, cache: fake_engine)
+        sl = SmartLocator(self._element_data(), gateway=MagicMock())
+        with pytest.raises(ElementNotFoundError):
+            asyncio_run(sl.locate_and_interact(page, "click"))
+
+    def test_gateway_defaults_none_backwards_compatible(self):
+        """SmartLocator 不传 gateway 时 gateway=None (向后兼容)."""
+        sl = SmartLocator(self._element_data())
+        assert sl.gateway is None

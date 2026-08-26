@@ -27,11 +27,12 @@ class ElementNotFoundError(Exception):
 class SmartLocator:
     """智能定位器 - 支持降级和自愈"""
 
-    def __init__(self, element_data: Dict[str, Any]):
+    def __init__(self, element_data: Dict[str, Any], gateway=None):
         self.element_name = element_data.get("element_name", "unknown")
         self.element_id = element_data.get("element_id")
         self.locator_strategies = element_data["locator_strategies"]["strategies"]
         self.semantic_info = element_data.get("semantic_info")
+        self.gateway = gateway
 
     async def locate_and_interact(self, page, action: str, **kwargs) -> Dict[str, Any]:
         """
@@ -123,36 +124,44 @@ class SmartLocator:
     async def _self_heal_and_interact(
         self, page, action: str, **kwargs
     ) -> Dict[str, Any]:
-        """
-        使用语义信息自愈定位
+        """自愈定位 (Level1-3 via SelfHealEngine).
 
-        自愈流程（§8.2.8）：
-        1. 基于 semantic_info 构建候选定位器（text/aria/coords）
-        2. 逐个尝试
-        3. 成功：confidence +1（>=3 回写仓库），返回 success
-        4. 失败：confidence -1（连续 3 次删除缓存），抛异常
+        委托 SelfHealEngine 逐级尝试 semantic/dom_fuzz/ai_dom:
+        - 命中: 用 healed locator 执行操作, 返回带 heal_log/writeback 的结果
+        - 全失败: 记录失败, 抛 ElementNotFoundError
 
         TODO: 集成 playwright-healer 库做更智能的自愈
         """
-        healed_locator_value = await self._heal_by_semantic(page)
+        from app.services.self_heal_engine import SelfHealEngine
+        engine = SelfHealEngine(self.gateway, ElementCacheService)
+        result = await engine.heal(page, self._element_data_dict(), action, **kwargs)
 
-        if healed_locator_value is None:
-            # 自愈失败：记录失败
+        if not result["success"]:
             if self.element_id:
                 await ElementCacheService.record_heal_failure(self.element_id)
-            raise Exception("Self-healing failed: no matching element found by semantic info")
+            raise ElementNotFoundError(
+                f"Element '{self.element_name}' self-heal failed (Level1-3 all failed)"
+            )
 
-        # 自愈成功
-        if self.element_id:
-            healed_info = {"type": "healed", "value": healed_locator_value, "score": 50}
-            await ElementCacheService.record_heal_success(self.element_id, healed_info)
-
-        locator = page.locator(healed_locator_value)
+        # 命中: 用 healed locator 执行操作
+        locator = page.locator(result["locator"])
         await locator.wait_for(state="visible", timeout=5000)
-        return await self._perform_action(locator, action, **kwargs)
+        action_result = await self._perform_action(locator, action, **kwargs)
+        action_result["heal_log"] = result.get("heal_log", [])
+        action_result["writeback"] = result.get("writeback")
+        return action_result
+
+    def _element_data_dict(self) -> dict:
+        """重建 SmartLocator 构造所需的 element_data dict (供 SelfHealEngine 使用)."""
+        return {
+            "element_id": self.element_id,
+            "element_name": self.element_name,
+            "locator_strategies": {"strategies": self.locator_strategies},
+            "semantic_info": self.semantic_info,
+        }
 
     async def _heal_by_semantic(self, page) -> Optional[str]:
-        """基于语义信息构建候选定位器并尝试"""
+        """基于语义信息构建候选定位器并尝试 (Level1 逻辑, 供 SelfHealEngine 复用)."""
         if not self.semantic_info:
             return None
 

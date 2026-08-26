@@ -108,7 +108,7 @@ class TestScriptExecutorExecute:
         })
         import app.services.script_executor as exec_mod
         orig = getattr(exec_mod, "SmartLocator", None)
-        exec_mod.SmartLocator = lambda ed: FakeSmartLocator(ed, fail_on_step=fail_on_step)
+        exec_mod.SmartLocator = lambda ed, gateway=None: FakeSmartLocator(ed, fail_on_step=fail_on_step)
         db = FakeDB()
         from unittest.mock import MagicMock, AsyncMock
         storage = MagicMock(); storage.upload_bytes = AsyncMock(return_value="/static/x.png")
@@ -167,7 +167,7 @@ class TestScriptExecutorExecute:
         })
         import app.services.script_executor as exec_mod
         orig = getattr(exec_mod, "SmartLocator", None)
-        exec_mod.SmartLocator = lambda ed: FakeSmartLocator(ed)
+        exec_mod.SmartLocator = lambda ed, gateway=None: FakeSmartLocator(ed)
         db = FakeDB()
         storage = MagicMock(); storage.upload_bytes = AsyncMock(return_value="/static/x.png")
         gw = MagicMock(); gw.tokens = 0

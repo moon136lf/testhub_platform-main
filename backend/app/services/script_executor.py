@@ -189,7 +189,7 @@ class ScriptExecutor:
                     break
                 continue
             # 执行
-            locator = SmartLocator(_element_to_dict(element_data))
+            locator = SmartLocator(_element_to_dict(element_data), gateway=self.gateway)
             try:
                 await locator.locate_and_interact(page, action, value=sm.get("value"))
                 # 断言校验 (action 成功后): 若 assertion 存在且 is_valid → _check_assertion
