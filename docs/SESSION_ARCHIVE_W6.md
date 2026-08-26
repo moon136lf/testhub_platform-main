@@ -6,6 +6,31 @@
 
 ---
 
+## 快照 #2 — 2026-08-26（全部 task 完成，统一审查中）
+
+**进度**：#6 全部 11 task 实施完成，正做最后统一代码审查（用户指示：不每 task 审，最后一次性审）。
+
+**commit 链（plan → 完成）**：
+- c0b82e4 plan(reports): #6 11-task implementation plan
+- c14f696 docs: session archive W6 #1
+- 6ee5637 feat(reports): storage get_object_bytes (T1)
+- 2731933 feat(reports): schema + notifier + Jinja2 template + deps (组A: T2/T4/T5/T8)
+- bbdc1f9 feat(reports): ExecutionQueryService + ReportGenerator (组B+C: T3/T6)
+- 182efc4 feat(reports): reports API router (组D: T7)
+- 32c7124 feat(reports): ExecutionList + ReportDetail pages + routes (组E: T9/T10)
+- 15c92ed chore: update TODO_LIST (#6 done) (T11)
+
+**验证**：后端 341 passed（基线 321 → 341，无回归）；前端 build 通过；6 个 /reports/* 路由注册确认；迁移脚本未新增（#6 只读 #5a 两表）。
+
+**待办**：统一代码审查通过后 → 合回 master（finishing-a-development-branch）。
+
+**implementer 自报偏离（审查重点）**：
+1. weasyprint guarded import（PDF 失败非致命）— 合理
+2. get_trend 日期 mock 兼容 shim — 核对真实路径
+3. upload_bytes 返回值作 url 而非写死 key — 重点核 spec「key 回写 report_url」语义
+
+---
+
 ## 快照 #1 — 2026-08-26（#6 spec/plan 完成，T1 实施中）
 
 **当前分支**：worktree-module6-execution-reports（基于最新 master，含 #5a+#10）
