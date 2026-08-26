@@ -40,6 +40,7 @@
 | execution_detail 表 | 需求仅在 §4 ER 图出现字段，无 CREATE TABLE | #5a 自建 DDL | 需求遗漏，必须补 |
 | 自愈 Level | §11.1 四级 | #5a 仅接入 Level1（复用 SmartLocator），Level2-4 留 #5b | 范围分切片 |
 | AI 诊断 | §9.2.5 `/diagnostics/analyze` | 留 #5c | 独立 spec |
+| 快速运行执行记录 | §8 第6条原意写 execution_record(exec_type=quick_run) | T8 fixup 改 quick-run 不建 ExecutionRecord（避开 project_id NOT NULL），exec_type=quick_run 留 #6 报告聚合时补 | NOT NULL 约束迫使，避免 INSERT 失败 |
 
 ---
 
@@ -281,7 +282,7 @@ GET /api/v1/scripts?project_id=&category=&keyword=&page=&page_size=
 3. 失败采集（TRANS-04）：截图+DOM+堆栈 → MinIO → execution_detail.screenshot_url/dom_snapshot/stack_trace
 4. 错误四分类正确（locate_failed/timeout/assertion_failed/script_error）
 5. 批量运行：汇总一条 execution_record（SCRIPT-04）
-6. 快速运行：不入库 script_asset，写 execution_record(exec_type=quick_run)（SCRIPT-05）
+6. 快速运行：不入库 script_asset，写 execution_record(exec_type=quick_run)（SCRIPT-05）（quick-run 不建 ExecutionRecord，仅 SSE 直播，见 §1.4 偏差表）
 7. 统计卡片：实时聚合 total/passed/failed/never_run/pass_rate
 8. list 支持 category 筛选 + keyword 搜索（SCRIPT-02）
 9. 旧 step_mapping（无 element_name）兼容：步骤 skip 不崩

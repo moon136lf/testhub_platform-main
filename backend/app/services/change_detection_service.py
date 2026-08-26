@@ -230,13 +230,19 @@ class ChangeDetectionService:
         affected_scripts: List[Dict[str, Any]],
     ) -> ChangeDetection:
         """
-        ELEM-06: 标记变更影响的脚本
+        ELEM-06: 标记变更影响的脚本 (SCRIPT-07 联动)
 
         Args:
             db: 数据库会话
             detection_id: 变更检测记录ID
             affected_scripts: 受影响脚本列表 [{script_id, script_name, elements: [...]}]
+
+        SCRIPT-07: 同时回写 ScriptAsset.last_status='affected',
+        让脚本库高亮展示受变更影响的脚本。
         """
+        from app.models.test_case import ScriptAsset
+        from sqlalchemy import update
+
         result = await db.execute(
             select(ChangeDetection).where(ChangeDetection.id == detection_id)
         )
@@ -255,9 +261,26 @@ class ChangeDetectionService:
         else:
             detection.impact_level = "high"
 
+        # SCRIPT-07 联动: 批量回写 ScriptAsset.last_status='affected'
+        affected_ids = [
+            s.get("script_id") for s in affected_scripts if s.get("script_id")
+        ]
+        if affected_ids:
+            try:
+                await db.execute(
+                    update(ScriptAsset)
+                    .where(ScriptAsset.id.in_(affected_ids))
+                    .values(last_status="affected")
+                )
+            except Exception as e:
+                logger.warning(f"Failed to write back ScriptAsset.last_status=affected: {e}")
+
         await db.commit()
         await db.refresh(detection)
-        logger.info(f"Marked {len(affected_scripts)} affected scripts for detection {detection_id}")
+        logger.info(
+            f"Marked {len(affected_scripts)} affected scripts for detection {detection_id} "
+            f"(wrote back last_status=affected to {len(affected_ids)} script assets)"
+        )
         return detection
 
     @staticmethod

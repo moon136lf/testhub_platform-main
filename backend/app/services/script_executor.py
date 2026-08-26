@@ -8,13 +8,17 @@ import logging
 import time
 import traceback
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional
 
 from app.services.smart_locator import SmartLocator, ElementNotFoundError
 from app.models.test_case import ScriptAsset
 from app.models.execution import ExecutionRecord, ExecutionDetail
 
 logger = logging.getLogger(__name__)
+
+
+# 受支持且需验证的断言类型 (其余如 dialog_closed/ambiguous 暂不验证, 标 TODO)
+_ASSERTION_TYPES_REQUIRING_CHECK = ("toast_message", "field_value")
 
 
 def classify_error(error: Exception) -> str:
@@ -84,10 +88,61 @@ class ScriptExecutor:
         self.storage = storage
         self.element_svc = element_svc
 
+    async def _launch_browser(self, config, target_url: str):
+        """启动真实 Playwright 浏览器并导航到 target_url (#5a T真实化).
+
+        单测 monkeypatch 此方法返回 mock page, 不真实启动浏览器。
+        """
+        from app.services.playwright_service import PlaywrightService
+        ps = PlaywrightService()
+        await ps.start(
+            headless=getattr(config, "headless", True),
+            timeout=getattr(config, "timeout", 60),
+        )
+        page = await ps.browser.new_page()
+        if target_url:
+            await page.goto(target_url)
+        return page
+
+    async def _check_assertion(self, page, assertion: dict) -> None:
+        """断言校验 (TRANS assertion). page=None 时跳过 (mock 路径不验证).
+
+        #5a 最小实现: toast_message/field_value 做最小验证; 其他类型标 TODO 跳过。
+        验证失败抛 AssertionError → 由调用方归类为 assertion_failed。
+        """
+        if not assertion or not page:
+            return
+        if not assertion.get("is_valid", False):
+            return  # is_valid=False 不验证业务结果
+        atype = assertion.get("type")
+        expected = assertion.get("expected")
+        try:
+            if atype == "toast_message":
+                # 期望页面文本包含 expected
+                text = await page.text_content("body")
+                if expected and (text is None or expected not in text):
+                    raise AssertionError(
+                        f"toast_message 断言失败: 期望含 '{expected}', 实际文本不含"
+                    )
+            elif atype == "field_value":
+                # 期望某输入框值等于 expected (target 暂用 body 文本兜底)
+                # TODO: 按 assertion.target 定位具体输入框, 当前最小实现仅占位
+                return
+            else:
+                # status_changed/row_visible/dialog_closed/ambiguous: 暂不验证, 标 TODO
+                # 不抛错, 避免误报; 真实化阶段按 type 细化
+                return
+        except AssertionError:
+            raise
+        except Exception as e:
+            # 验证过程异常 (如 page 已关) 不应吞掉断言失败, 但也不应崩引擎
+            logger.warning(f"assertion check error (type={atype}): {e}")
+            return
+
     async def execute(self, script_asset: ScriptAsset, config, target_url: str,
                       sse, execution_record: Optional[ExecutionRecord] = None,
                       page=None) -> Optional[ExecutionDetail]:
-        """执行单个脚本, 返回整体 ExecutionDetail (step=0). page=None 时 mock 路径.
+        """执行单个脚本, 返回整体 ExecutionDetail (step=0). page=None 时自动 launch.
 
         execution_record=None 用于 quick-run: 不落 ExecutionDetail, 仅 SSE 直播.
         """
@@ -96,6 +151,15 @@ class ScriptExecutor:
         steps = [s for s in step_mapping if s.get("step", 0) > 0]
         await sse.send_message(type="system", stage="execute",
                                content=f"开始执行脚本：{script_asset.name}", progress=0.0)
+        # page=None 时启动真实浏览器 (单测 monkeypatch _launch_browser)
+        launched = False
+        if page is None:
+            try:
+                page = await self._launch_browser(config, target_url)
+                launched = True
+            except Exception as e:
+                logger.error(f"browser launch failed: {e}")
+                page = None
         failures = 0
         overall_status = "pass"
         last_failure = None
@@ -128,6 +192,10 @@ class ScriptExecutor:
             locator = SmartLocator(_element_to_dict(element_data))
             try:
                 await locator.locate_and_interact(page, action, value=sm.get("value"))
+                # 断言校验 (action 成功后): 若 assertion 存在且 is_valid → _check_assertion
+                assertion = sm.get("assertion")
+                if assertion:
+                    await self._check_assertion(page, assertion)
                 await sse.send_message(type="system", stage="execute",
                                        content=f"第 {step} 步：✅ 通过",
                                        progress=((i + 1) / max(len(steps), 1)) * 0.9)
@@ -140,6 +208,13 @@ class ScriptExecutor:
                                        progress=((i + 1) / max(len(steps), 1)) * 0.9)
                 if failures >= max_failures:
                     break
+
+        # 关闭自启的浏览器 (避免泄漏; 真实化阶段应统一管理生命周期)
+        if launched and page is not None:
+            try:
+                await page.close()
+            except Exception as e:
+                logger.warning(f"page close failed: {e}")
 
         # 回写 ScriptAsset
         script_asset.last_status = "passed" if overall_status == "pass" else "failed"

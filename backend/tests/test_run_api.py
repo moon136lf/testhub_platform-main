@@ -75,6 +75,11 @@ class TestBatchRunEndpoint:
         monkeypatch.setattr(scripts_api, "run_scripts_task",
                             type("M", (), {"delay": staticmethod(lambda **kw: fake_task)}))
         db = MagicMock()
+        # batch-run now validates script_ids existence -> mock a found script
+        script = MagicMock()
+        result = MagicMock()
+        result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[script])))
+        db.execute = AsyncMock(return_value=result)
         req = MagicMock()
         req.script_ids = ["00000000-0000-0000-0000-000000000002"]
         req.config.model_dump.return_value = {"headless": True, "timeout": 60, "max_failures": 8}

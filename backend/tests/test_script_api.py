@@ -522,3 +522,71 @@ class TestListCategoryKeyword:
         )
         # 验证 execute 被调用 (stmt 构建不报错即可)
         db.execute.assert_awaited_once()
+
+
+class TestBatchRunEndpoint:
+    """Test POST /api/v1/scripts/batch-run (模块 #5a Task 验收)"""
+
+    @pytest.mark.asyncio
+    async def test_batch_run_validates_script_ids_existence(self, monkeypatch):
+        """全部 script_ids 不存在 -> 400."""
+        from app.api.v1.scripts import batch_run_scripts
+        from app.schemas.script import BatchRunRequest, RunConfig
+
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        db.execute = AsyncMock(return_value=result)
+
+        request = BatchRunRequest(
+            script_ids=[str(uuid4()), str(uuid4())],
+            config=RunConfig(),
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await batch_run_scripts(request, db)
+        assert exc_info.value.status_code == 400
+        assert "无有效脚本" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_batch_run_invalid_uuid_rejected(self):
+        """script_ids 含非法 UUID -> 400."""
+        from app.api.v1.scripts import batch_run_scripts
+        from app.schemas.script import BatchRunRequest, RunConfig
+
+        db = MagicMock()
+        request = BatchRunRequest(
+            script_ids=["not-a-uuid"],
+            config=RunConfig(),
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await batch_run_scripts(request, db)
+        assert exc_info.value.status_code == 400
+        assert "Invalid UUID" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_batch_run_dispatches_when_some_exist(self):
+        """至少一个 script_id 有效 -> 派发 Celery 任务."""
+        from app.api.v1.scripts import batch_run_scripts
+        from app.schemas.script import BatchRunRequest, RunConfig
+
+        mock_asset = MagicMock()
+        result = MagicMock()
+        result.scalars = MagicMock(
+            return_value=MagicMock(all=MagicMock(return_value=[mock_asset]))
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+
+        valid_id = str(uuid4())
+        request = BatchRunRequest(
+            script_ids=[valid_id],
+            config=RunConfig(),
+        )
+        with patch("app.api.v1.scripts.run_scripts_task") as mock_task:
+            mock_task.delay = MagicMock()
+            response = await batch_run_scripts(request, db)
+        assert response["code"] == 0
+        assert "session_id" in response["data"]
+        mock_task.delay.assert_called_once()
+        _, kwargs = mock_task.delay.call_args
+        assert kwargs["script_ids"] == [valid_id]

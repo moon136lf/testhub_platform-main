@@ -5,6 +5,965 @@
 
 ---
 
+## 快照 #24 — 2026-08-26（第 24 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/app/services/change_detection_service.py`（#5a 全修：affected 联动）
+- `backend/app/services/script_executor.py`（#5a 全修：Playwright 启动 + assertion）
+- `backend/tests/test_change_detection_service.py`（#5a 全修：affected 测试）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+- 其余全修改动（scripts.py batch 校验 / script_pipeline / spec 偏差 / script_tasks case_id）可能在子代理进行中
+
+### 最近 5 条提交
+```
+1d69d46 fix(exec): ExecutionRecord.project_id from script_asset + quick-run skips detail (#5a T8 fixup)
+6e3551c feat(exec): frontend run/quick-run/batch-run UI + stats (#5a T9)
+175eb0f feat(exec): run/batch-run/quick-run endpoints + celery task (#5a T8)
+4ae613c feat(exec): stats endpoint + list category/keyword filter (#5a T7)
+a2b59bb feat(exec): ScriptExecutor step-wise execute + script_asset writeback (#5a T6)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 #5a 收尾全修进行中（子代理后台运行）：6 项 fix（affected 联动 / Playwright 启动+assertion / spec 偏差 / batch 校验 / import 清理 / case_id 写入）。已改 change_detection_service + script_executor + 测试，未提交。
+6-11. — ⬜ 未开始。
+
+### 本会话进展（自快照 #23）
+- **#5a 整体审查返回**：270 测试通过但发现 2 阻断（#14 affected 联动缺失 + 执行引擎未接真实 Playwright/未跑 assertion）+ 1 建议（#6 偏差补 spec）+ 3 非阻断（batch 校验/import/case_id）。用户定「全修」。
+- **全修子代理派发**：6 项一次性修。已见 change_detection_service.py + script_executor.py + test_change_detection_service.py 改动，未提交（子代理仍在跑）。
+- **诚实边界**：mock 测试为主，真实 Playwright 仍为占位（_launch_browser 真实启动留真实化阶段，mock 测试 monkeypatch）。
+
+### 下一步建议
+1. 全修子代理返回后跑全量验证（应 270+ 含新增测试）→ 再跑一次 spec §8 验收核对（14 条全绿）→ #5a 正式收尾。
+2. #5a 收尾后写 #6 spec → 用户开新会话 worktree 执行 #6。
+3. #10 + #6 worktree 最后一起合 master。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #23 — 2026-08-26（第 23 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+1d69d46 fix(exec): ExecutionRecord.project_id from script_asset + quick-run skips detail (#5a T8 fixup)
+6e3551c feat(exec): frontend run/quick-run/batch-run UI + stats (#5a T9)
+175eb0f feat(exec): run/batch-run/quick-run endpoints + celery task (#5a T8)
+4ae613c feat(exec): stats endpoint + list category/keyword filter (#5a T7)
+a2b59bb feat(exec): ScriptExecutor step-wise execute + script_asset writeback (#5a T6)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 #5a 实施完成：11 提交，270 后端测试通过，前端 build 成功。T10 整体合并审查子代理仍在后台运行（spec §8 验收 14 条 + 质量 + 跨任务一致性），尚未返回。
+6-11. — ⬜ 未开始。
+
+### 本会话进展（自快照 #22）
+- 无新提交。T10 整体审查子代理仍在后台运行，尚未返回最终结论。
+- 仅存档文件待提交。
+
+### 下一步建议
+1. 审查返回后给最终结论：Approved 则 #5a 收尾（更新 memory + 定下一步），需修改则派 fixup。
+2. #5a 完成后写 #6 spec → 用户开新会话 worktree 执行 #6。
+3. #10 + #6 worktree 最后一起合 master。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #22 — 2026-08-26（第 22 次快照）
+
+**当前分支**：master（工作树干净，仅存档文件待提交）
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+1d69d46 fix(exec): ExecutionRecord.project_id from script_asset + quick-run skips detail (#5a T8 fixup)
+6e3551c feat(exec): frontend run/quick-run/batch-run UI + stats (#5a T9)
+175eb0f feat(exec): run/batch-run/quick-run endpoints + celery task (#5a T8)
+4ae613c feat(exec): stats endpoint + list category/keyword filter (#5a T7)
+a2b59bb feat(exec): ScriptExecutor step-wise execute + script_asset writeback (#5a T6)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 #5a 实施完成（T1-T9 + T8 fixup）：11 提交，270 后端测试通过，前端 build 成功。T10 整体合并审查子代理运行中（spec §8 验收 14 条 + 质量 + 跨任务一致性）。
+6. **执行记录与报告** — ⬜ 未开始（#5a 定型后写 #6 spec，新会话 worktree 并行）。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — worktree 未合（3 加行冲突待解）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #21）
+- **T8 fixup 完成**（1d69d46）：ExecutionRecord.project_id 从 ScriptAsset 取（single/batch），quick-run 跳过 ExecutionDetail（executor er=None 返回 None）。36 测试。全量后端 270 测试通过。
+- **T10 整体合并审查派发**：spec §8 验收 14 条逐项核对 + 代码质量 + 跨任务一致性。重点核查 2 偏差：(1) #6 quick-run spec 说写 execution_record 但 fixup 改不建（NOT NULL 约束）；(2) #14 SCRIPT-07 affected 联动是否实现。
+- **诚实边界**：270 mock 测试全过，但 Celery 任务体+真实 Playwright+真实 DB 未验证——属既定策略。
+- **已知残留风险**（实现者标注）：single/batch 若所有 script_id 查不到资产，仍建 er(project_id=None) 触发 NOT NULL——端点层 /run 已 404 拦截单脚本，/batch-run 未校验存在性，概率低非阻断。
+
+### 下一步建议
+1. 整体审查返回后给最终结论：Approved 则 #5a 收尾（更新 memory + 定下一步），需修改则派 fixup。
+2. #5a 完成后写 #6 spec（基于 execution_record/detail 接口）→ 用户开新会话 worktree 执行 #6。
+3. #10 + #6 worktree 最后一起合 master（加行冲突手动解）。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #21 — 2026-08-26（第 21 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/app/services/script_executor.py`（T8 fixup：quick-run er=None 跳过 detail）
+- `backend/app/tasks/script_tasks.py`（T8 fixup：project_id 从 ScriptAsset 取）
+- `backend/tests/test_script_executor.py`（T8 fixup：加 quick-run er=None 测试）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+6e3551c feat(exec): frontend run/quick-run/batch-run UI + stats (#5a T9)
+175eb0f feat(exec): run/batch-run/quick-run endpoints + celery task (#5a T8)
+4ae613c feat(exec): stats endpoint + list category/keyword filter (#5a T7)
+a2b59bb feat(exec): ScriptExecutor step-wise execute + script_asset writeback (#5a T6)
+6511683 feat(exec): error classify + failure collect (#5a T5)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 #5a 实施中：T1-T9 完成（9/10），T10 验收中。全量 269 后端测试通过，#5a 专项 80 测试，前端 build 成功。T8 fixup（project_id NOT NULL 风险）进行中。
+6. **执行记录与报告** — ⬜ 未开始（#5a 定型后写 #6 spec，新会话 worktree 并行）。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — worktree 未合（3 加行冲突待解）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #20）
+- **T8 完成**（175eb0f）：run/batch-run/quick-run 端点 + run_scripts_task Celery（补 T6 持久化：db.add(detail)+更新 execution_record 汇总+commit）。26 测试。
+- **T9 完成**（6e3551c）：前端执行 UI——统计卡片+Tab(转脚本/脚本库执行/快速运行)+运行/批量/快速入口+SSE 文字直播+进度条，#4 转脚本保留。vite build 成功。
+- **T10 验收 + T8 fixup 派发**：验收发现 ExecutionRecord.project_id NOT NULL 生产风险（Celery 任务 project_id=None 会 INSERT 失败）。已派 fixup：single/batch 从 ScriptAsset 取 project_id，quick-run 跳过 ExecutionDetail 落库（executor.execute er=None 返回 None）。
+- **诚实边界**：mock 测试全过（269），但 Celery 任务体+真实 Playwright+真实 DB 未验证——属既定策略（全模块骨架后统一接大模型+真实测试）。
+
+### 下一步建议
+1. T8 fixup 返回后跑全量验证 → #5a 整体合并审查（spec §8 验收 14 条）。
+2. #5a 完成后写 #6 spec（基于 #5a execution_record/detail 接口）→ 用户开新会话 worktree 执行 #6。
+3. #10 + #6 worktree 最后一起合 master（加行冲突手动解）。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #20 — 2026-08-25（第 20 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/tests/test_run_api.py`（未跟踪，T8 实现子代理刚写，待提交）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+4ae613c feat(exec): stats endpoint + list category/keyword filter (#5a T7)
+a2b59bb feat(exec): ScriptExecutor step-wise execute + script_asset writeback (#5a T6)
+6511683 feat(exec): error classify + failure collect (#5a T5)
+173b9e4 feat(exec): playwright_service.start headless/timeout params (#5a T4)
+65d9173 feat(exec): step_mapping + element_name/page_name/action/value/assertion (#5a T3)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 #5a 实施中：T1-T7 完成（7/10），T8（端点+Celery）实现子代理运行中。后端执行引擎主干成型。
+6. **执行记录与报告** — ⬜ 未开始（用户提议 #6 在其他会话+独立 worktree 并行，#5a 定型后写 #6 spec）。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — worktree 未合（3 加行冲突待解）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #19）
+- **T7 完成**（4ae613c）：stats 端点（total/passed/failed/never_run/pass_rate 实时聚合，路由在 /{script_id} 之前防抢匹配）+ list 扩 category/keyword 筛选（SCRIPT-02）。20 测试。顺带修旧测试 test_list_no_filters 位置参数脆弱性。
+- **T8 派发**：run/batch-run/quick-run 端点 + run_scripts_task Celery 任务。重点标注 T6 遗留持久化补全（execute 未 db.add/commit → Celery 任务接住）+ storage_client 导出确认。
+- **并行开发讨论**：用户问 #6 能否在其他会话+独立 worktree 并行、最后与 #10 合 master。结论：可行，#6 只读 execution_record/detail 低冲突。建议 #5a 收尾后写 #6 spec。
+
+### 下一步建议
+1. T8 审查通过后继续 T9（前端执行 UI：统计卡片+运行/快速/批量入口+SSE）→ T10（验收）。
+2. T10 后 #5a 整体合并审查。
+3. #5a 完成后写 #6 spec → 用户开新会话 worktree 执行 #6。
+4. #10 + #6 worktree 最后一起合 master。
+5. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #19 — 2026-08-25（第 19 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+a2b59bb feat(exec): ScriptExecutor step-wise execute + script_asset writeback (#5a T6)
+6511683 feat(exec): error classify + failure collect (#5a T5)
+173b9e4 feat(exec): playwright_service.start headless/timeout params (#5a T4)
+65d9173 feat(exec): step_mapping + element_name/page_name/action/value/assertion (#5a T3)
+55be034 feat(exec): run/quickrun schemas + last_status/category enums (#5a T2)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 #5a 实施中：T1-T6 完成（6/10），T7 待派发。ScriptExecutor 核心逻辑就位（9 测试）。
+6. **执行记录与报告** — ⬜ 未开始（用户提议 #6 在其他会话+独立 worktree 并行开发，#5a 定型后写 #6 spec）。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — worktree 未合回（37 文件，3 个加行冲突待解）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #18）
+- **T6 完成**（a2b59bb）：ScriptExecutor 逐步执行 + 回写（last_status/run_count/last_run_at）+ ExecutionDetail(step=0) + SSE。9 测试。遗留：execute 未调 db.add/commit，T8 Celery 任务需接住持久化。
+- **并行开发讨论**：用户问 #5b/#6 能否在其他会话+独立分支并行、最后与 #10 一起合 master。结论：可行，但 #5b 改 script_executor.py（#5a 正写，高冲突）→ 建议等 #5a 定型；#6 只读 execution_record/detail（低冲突）→ 可行但需先有 spec。建议路径：#5a 收尾 → 写 #6/#5b spec → 新会话 worktree 执行。
+- **#10 合并评估完成**：worktree-module10 相对 master 改 37 文件，潜在冲突仅 3 个（api/__init__.py / models/__init__.py / router/index.js），都是加行，手动解即可。ai_gateway.py worktree 改 master 未改→不冲突。
+
+### 下一步建议
+1. 继续 #5a：T7（stats+list filter）→ T8（端点+Celery，需补 execute 的 db.add/commit）→ T9（前端）→ T10（验收）。
+2. #5a 全部完成 + 合并审查后，写 #6 spec（基于 #5a 定型的 execution_record/detail 接口）→ 用户开新会话 worktree 执行 #6。
+3. #10 + #6 worktree 最后一起合 master（加行冲突手动解）。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #18 — 2026-08-25（第 18 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+6511683 feat(exec): error classify + failure collect (#5a T5)
+173b9e4 feat(exec): playwright_service.start headless/timeout params (#5a T4)
+65d9173 feat(exec): step_mapping + element_name/page_name/action/value/assertion (#5a T3)
+55be034 feat(exec): run/quickrun schemas + last_status/category enums (#5a T2)
+c30b103 feat(exec): ExecutionDetail model + migration (#5a T1)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 #5a 实施中：T1-T5 完成（ExecutionDetail 模型/schemas/扩 step_mapping/playwright headless/错误分类+失败采集），连续派发不逐任务审查（用户要求全部完成后合并审查）。T6（ScriptExecutor 核心逻辑）待派发。
+6-11. — ⬜ 未开始。
+
+### 本会话进展（自快照 #17）
+- **T2-T5 连续完成**：
+  - T2（55be034）：RunConfig/RunRequest/BatchRunRequest/QuickRunRequest + last_status/category 枚举。9+7 测试。
+  - T3（65d9173）：扩 #4 step_mapping 加 element_name/page_name/action/value/assertion（改 #4 已提交代码，向后兼容）。15+2 测试。
+  - T4（173b9e4）：playwright_service.start(headless, timeout) 参数化，元素抓取零回归（44 测试绿）。2 测试。
+  - T5（6511683）：classify_error 四分类 + collect_failure 失败采集（截图+DOM+堆栈，浏览器关不崩）。6 测试。修正计划实现 bug：`traceback.format_exc()` 非 except 块返回 None → 改 `format_exception`。
+- **审查策略调整**：用户要求「所有 task 完成后合并审查」，故 T2-T5 连续派发实现子代理不逐任务审查，T6-T10 完成后一次性合并审查整个 #5a。
+- **计划 bug 持续修正**：T5 测试 storage 传参、T5 traceback 实现——均在派发时预判并指示实现者修正。
+
+### 下一步建议
+1. 派发 T6（ScriptExecutor 逐步执行+回写，#5a 核心逻辑）→ T7（stats+list filter）→ T8（端点+Celery）→ T9（前端）→ T10（验收）。
+2. T10 后做 #5a 整体合并审查。
+3. #5a 审查通过后 #5b（自愈）/ #5c（AI 诊断）。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #17 — 2026-08-25（第 17 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+c30b103 feat(exec): ExecutionDetail model + migration (#5a T1)
+381ee47 plan(script-exec): 10-task implementation plan (#5a)
+fa013b2 spec(script-exec): module #5a execution engine trunk design
+fe5b83a chore(script): cleanup unused imports + dead StepMappingEntry + gitignore coverage
+8fb9a5a fix(test): utf-8 stdout for test_batch_import_fix on Windows GBK console
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 #5a 实施中（subagent-driven）：spec + plan 已提交，T1 完成（ExecutionDetail 模型，审查通过）。T2（schemas）实现子代理运行中。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — worktree 未合。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #16）
+- **#5a spec 提交**（fa013b2）：执行引擎主干设计——乙路径逐步执行、扩 #4 step_mapping、execution_detail 自建 DDL、run/batch-run/quick-run/stats 端点、失败采集、playwright headless 参数化、自愈 Level1 接入（Level2-4 留 #5b，AI 诊断留 #5c）。
+- **#5a plan 提交**（381ee47）：10 个 TDD 任务。
+- **T1 完成**（c30b103）：ExecutionDetail 模型（16 字段 + CASCADE/SET NULL FK + 索引 + 迁移）+ 注册。6 测试通过，合并审查 Approved（实现者修正计划测试 `str(f)`→`f.ondelete=="CASCADE"` 断言）。
+- **审查策略**：#5a 小任务用合并 spec+质量单审查，与 #4 后期一致。
+
+### 下一步建议
+1. T2 审查通过后继续 T3（扩 step_mapping 加 element_name/page_name/action/value/assertion，改 #4 已提交代码）→ T4（playwright headless 参数化）→ T5（错误分类+失败采集）→ T6（ScriptExecutor）→ T7（stats+list filter）→ T8（端点+Celery）→ T9（前端）→ T10（验收）。
+2. #5a 完成后依次 #5b（自愈 Level2-4）、#5c（AI 诊断）。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #16 — 2026-08-25（第 16 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+fe5b83a chore(script): cleanup unused imports + dead StepMappingEntry + gitignore coverage
+8fb9a5a fix(test): utf-8 stdout for test_batch_import_fix on Windows GBK console
+5893f5a fix(script): loadCases/loadProjects handle flat response shape (#4 T15 fixup)
+a9712bb feat(script): frontend page + API client + route (#4 T15)
+1f6a9ae feat(script): confirm + diagnose endpoints (#4 T14)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — 🚧 brainstorming 中：需求核对完成，范围定 A（全 §3.6.3+§11），拆 3 spec（#5a 执行主干/#5b 自愈/#5c AI诊断）。#5a 设计决策已敲定（乙逐步执行、扩 step_mapping 加 element_name/page_name、quick-run 异步+SSE、失败采集截图+DOM+堆栈），待用户确认设计后写 spec。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — worktree 未合。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #15）
+- **临时文件已清理**：删除 _dbcheck.py / _dbprobe.py。
+- **#5a 设计决策敲定**：执行引擎走乙路径（逐步执行 step_mapping）+ 扩 step_mapping 加 element_name/page_name（改 #4 已提交代码）+ execution_detail 表自建 DDL + run/quick-run/batch-run/stats 端点 + 失败采集（截图+DOM+堆栈落 MinIO）+ 改 playwright_service headless 硬编码为 config 注入。
+- **待用户确认**：execution_detail 自建 DDL / 改 #4 step_mapping / 改 playwright_service headless——三点涉及动既有代码，等确认后写 spec。
+
+### 下一步建议
+1. 用户确认 #5a 设计三点 → 写 spec `docs/superpowers/specs/2026-08-25-script-execution-design.md` → writing-plans → subagent-driven 执行。
+2. #5a 完成后依次 #5b（自愈 Level2-4）、#5c（AI 诊断）。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #15 — 2026-08-25（第 15 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+- `backend/_dbcheck.py`（未跟踪，DB 连接测试脚本，临时文件）
+- `backend/_dbprobe.py`（未跟踪，裸 TCP 探测脚本，临时文件）
+
+### 最近 5 条提交
+```
+fe5b83a chore(script): cleanup unused imports + dead StepMappingEntry + gitignore coverage
+8fb9a5a fix(test): utf-8 stdout for test_batch_import_fix on Windows GBK console
+5893f5a fix(script): loadCases/loadProjects handle flat response shape (#4 T15 fixup)
+a9712bb feat(script): frontend page + API client + route (#4 T15)
+1f6a9ae feat(script): confirm + diagnose endpoints (#4 T14)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未确认是否已修。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成，已清理收尾。
+5. **UI自动化测试执行** — 🚧 brainstorming 中：3 子代理需求核对完成（页面/字段/规则 + API/流程/自愈 + DDL/Redis/SSE/Token）。范围已定 A（全 §3.6.3+§11 一体），待定是否拆 3 spec（#5a 执行主干/#5b 自愈/#5c AI诊断）。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — worktree 未合回 master。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #14）
+- **数据库就绪**：PostgreSQL 16.15 已装并运行；改 `lc_messages=en_US.UTF-8` 修 GBK 错误消息致 psycopg2 解码崩的问题；建 `moontest` 用户+库，连接验证通过（空库，CREATE 权限 OK）。具备迁移条件但按策略 A 暂不迁移（等全模块骨架完成统一接大模型+跑迁移+真实测试）。
+- **模块 #5 需求核对完成**：3 并行子代理核出主要缺口——执行引擎全缺（run/快速/批量端点、Playwright 编排、execution_detail 表无 DDL）、自愈仅 Level1 部分（Level2/3/4 缺）、AI 诊断 `/diagnostics/analyze` 未实现、SSE stage=execute/self_heal 未 emit、TRANS-04/07/08 未接通、self_heal_cache 实现与 DDL 字段名/TTL 偏差、regression_set 归 #5/#8 共建。
+- **范围决策**：用户选 A（全 §3.6.3+§11 一体）。下一步定 spec 拆分方式（1 拆3 / 2 合自愈+诊断 / 全包）。
+
+### 下一步建议
+1. 定模块 #5 spec 拆分方式（推荐拆 3：#5a 执行主干→#5b 自愈→#5c AI诊断，顺序实现，仍属模块 #5）。
+2. 定后写 #5a spec（出 spec 前按技能 §三 核对需求，已核）→ writing-plans → subagent-driven 执行。
+3. 清理临时文件：`backend/_dbcheck.py` / `_dbprobe.py` 删除或加 .gitignore。
+
+---
+
+---
+
+## 快照 #14 — 2026-08-25（第 14 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+fe5b83a chore(script): cleanup unused imports + dead StepMappingEntry + gitignore coverage
+8fb9a5a fix(test): utf-8 stdout for test_batch_import_fix on Windows GBK console
+5893f5a fix(script): loadCases/loadProjects handle flat response shape (#4 T15 fixup)
+a9712bb feat(script): frontend page + API client + route (#4 T15)
+1f6a9ae feat(script): confirm + diagnose endpoints (#4 T14)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；batch_import 测试已修可收集。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成 + 清理完成（fe5b83a）。25 提交全在 master，无 remote。等待用户定收尾方式。
+5-11. — ⬜ 未开始。
+
+### 本会话进展（自快照 #13）
+- **遗留清理完成**（fe5b83a）：convert service 删未用 import（Optional/datetime）、script_pipeline 删死代码 StepMappingEntry、.gitignore 加 .coverage 等测试产物。清理后 48 测试无回归。
+- **finishing-a-development-branch 流程**：检测到本仓库无 remote、直接在 master 开发，标准合并/PR 选项不适用。给用户 4 选项（保持现状/配 remote push/打 tag/丢弃），推荐 1 或 3，等待用户决定。
+- **诚实边界重申**：238 后端测试全 mock（无真实 DB/LLM/Redis），端到端真实链路 + 迁移 SQL 未对真实环境验证——属项目"先骨架后集成"策略。
+
+### 下一步建议
+1. 定收尾方式：保持现状 / 配 remote push / 打 tag `module-4-case-to-script`。
+2. 开下一模块 #5（UI自动化测试执行）。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #13 — 2026-08-25（第 13 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+- `.coverage`（未跟踪临时文件）
+
+### 最近 5 条提交
+```
+8fb9a5a fix(test): utf-8 stdout for test_batch_import_fix on Windows GBK console
+5893f5a fix(script): loadCases/loadProjects handle flat response shape (#4 T15 fixup)
+a9712bb feat(script): frontend page + API client + route (#4 T15)
+1f6a9ae feat(script): confirm + diagnose endpoints (#4 T14)
+6eaa4c3 fix(script): correct sse_url path + apply list pagination (#4 T13 fixup)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；batch_import 测试已修可收集。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成（T1-T16 全过），待 `finishing-a-development-branch` 收尾。
+5-11. — ⬜ 未开始。
+
+### 本会话进展（自快照 #12）
+- 无新提交。模块 #4 已完成验收，等待用户决定是否进 `finishing-a-development-branch` 收尾。
+- 仅存档文件 + .coverage 临时文件待提交/清理。
+
+### 下一步建议
+1. 用 `superpowers:finishing-a-development-branch` 收尾模块 #4。
+2. 清理 .coverage（加 .gitignore）+ convert service 未用 import + StepMappingEntry 死代码。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #12 — 2026-08-25（第 12 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+- `.coverage`（未跟踪，T16 跑覆盖率产生的临时文件，应加 .gitignore 或删除）
+
+### 最近 5 条提交
+```
+8fb9a5a fix(test): utf-8 stdout for test_batch_import_fix on Windows GBK console
+5893f5a fix(script): loadCases/loadProjects handle flat response shape (#4 T15 fixup)
+a9712bb feat(script): frontend page + API client + route (#4 T15)
+1f6a9ae feat(script): confirm + diagnose endpoints (#4 T14)
+6eaa4c3 fix(script): correct sse_url path + apply list pagination (#4 T13 fixup)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）测试已修复可收集，但 batch_import 字段映射 bug 本身（element_service.py）未确认是否已修。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成（subagent-driven T1-T16 全过）：16 任务 + 5 fixup；全量 238 后端测试通过，模块 #4 59 测试绿，核心服务覆盖率 94-100%；前端 build 通过。待 `finishing-a-development-branch` 收尾。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始（token_quota/ai_model_config 归此）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #11）
+- **T15 fixup 完成**（5893f5a）：修 loadCases/loadProjects 平铺返回结构 bug（用例下拉空数组）。
+- **T16 验收完成**：全量 238 后端测试通过；模块 #4 核心服务覆盖率 validator 100%/convert 97%/pipeline 94%/diagnose 94%；前端 vite build 9.4s 通过；11 条验收标准 9 满足、2 按计划推迟（tokens_estimated_total/token_quota/#10、性能 <10s 待真实 LLM）。
+- **附带修复**（8fb9a5a）：test_batch_import_fix.py 的 GBK UnicodeEncodeError 收集错误（emoji print），加 utf-8 stdout reconfigure，解锁全量 pytest。非 #4 工作但阻塞验收。
+- **诚实边界**：所有测试 mock（无真实 DB/LLM/Redis），端到端真实链路 + 迁移 SQL 未对真实 PostgreSQL 验证——属项目既定"先骨架后集成"策略。
+- **遗留 Minor**：convert service 未用 import（Optional/datetime）、StepMappingEntry 死代码、.coverage 未忽略。
+
+### 下一步建议
+1. 用 `superpowers:finishing-a-development-branch` 收尾模块 #4（合并/PR/清理决策）。
+2. 清理：.coverage 加 .gitignore；convert service 删未用 import + StepMappingEntry 死代码。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（#4 的 token 熔断/tokens_estimated_total/性能 <10s 届时补）。
+4. 下一模块：#5 UI自动化测试执行（#4 转脚本的运行职责归此）。
+
+---
+
+---
+
+## 快照 #11 — 2026-08-25（第 11 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `frontend/src/views/ScriptConvert.vue`（T15 fixup：loadCases 平铺返回 bug，仍在子代理后台处理）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+a9712bb feat(script): frontend page + API client + route (#4 T15)
+1f6a9ae feat(script): confirm + diagnose endpoints (#4 T14)
+6eaa4c3 fix(script): correct sse_url path + apply list pagination (#4 T13 fixup)
+c276cd4 feat(script): API convert/list/get endpoints (#4 T13)
+2dd8e2e fix(script): thread ai_optimize + broad per-case error catch (#4 T12 fixup)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1-T15 完成，T15 fixup 进行中（loadCases 平铺返回 bug，子代理后台运行）。仅剩 T16（验收）。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #10）
+- 无新提交。T15 fixup 子代理（修 loadCases 平铺返回结构）仍在后台运行，尚未返回。
+- 仅本存档文件与 ScriptConvert.vue 改动待提交。
+
+### 下一步建议
+1. T15 fixup 返回后进 T16（端到端验收：11 条验收标准 + skill 硬规则守门测试全绿 + 覆盖率 + 清理 Minor 遗留）。
+2. T16 后用 `superpowers:finishing-a-development-branch` 收尾。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #10 — 2026-08-25（第 10 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `frontend/src/views/ScriptConvert.vue`（T15 fixup 中：修 loadCases 平铺返回空数组 bug）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+a9712bb feat(script): frontend page + API client + route (#4 T15)
+1f6a9ae feat(script): confirm + diagnose endpoints (#4 T14)
+6eaa4c3 fix(script): correct sse_url path + apply list pagination (#4 T13 fixup)
+c276cd4 feat(script): API convert/list/get endpoints (#4 T13)
+2dd8e2e fix(script): thread ai_optimize + broad per-case error catch (#4 T12 fixup)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1-T15 完成（前端页面+API client+路由，commit a9712bb）。T15 fixup 进行中（loadCases 平铺返回 bug）。前端 build 通过、后端 18 测试无回归。仅剩 T16（验收）。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #9）
+- **T15 完成**：`frontend/src/api/script.js`（6 方法，subscribe 用修正后的 `/api/sse/stream/`）+ `ScriptConvert.vue`（项目/用例/AI优化/批量转脚本/文字直播/脚本列表/调试修复弹窗）+ 路由 `/scripts`。前端 vite build 成功（15.4s）。
+- **T15 fixup 派发**：实现者发现真实功能 bug——`testCaseAPI.list` 后端带 `response_model=CaseListResponse` 返回平铺 `{items,total,...}`（无 code/data 包装），plan 给的 `resp.data?.items` 在平铺下得 `[]`，用例下拉永远空。已指示修为 `resp.items || resp.data?.items || resp || []`，并核查 loadScripts/loadProjects 返回结构。
+- **审查模式回顾**：本模块累计 5 次 fixup（T1/T8/T11/T12/T13/T15），多为 plan 层面缺陷（字段漏写、正则反向、死接参数、路径错读、返回结构不兼容），子代理实现前我已预判部分并在 prompt 标明，其余由审查子代理独立核实捕获。
+
+### 下一步建议
+1. T15 fixup 提交后进 T16（端到端验收：11 条验收标准 + skill 硬规则守门测试全绿 + 覆盖率 + 清理 Minor 遗留）。
+2. T16 后用 `superpowers:finishing-a-development-branch` 收尾。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+4. 待清理 Minor：convert service 未用 import（Optional/datetime）、StepMappingEntry 死代码。
+
+---
+
+---
+
+## 快照 #9 — 2026-08-24（第 9 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+1f6a9ae feat(script): confirm + diagnose endpoints (#4 T14)
+6eaa4c3 fix(script): correct sse_url path + apply list pagination (#4 T13 fixup)
+c276cd4 feat(script): API convert/list/get endpoints (#4 T13)
+2dd8e2e fix(script): thread ai_optimize + broad per-case error catch (#4 T12 fixup)
+f98a3e3 feat(script): celery convert task + automation_status linkage (#4 T12)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1-T14 完成（含 T1/T8/T11/T12/T13 fixup），后端全链路 + 全 API 就位（convert/list/get/confirm/diagnose）。T15（前端页面）实现子代理运行中。18 后端测试绿。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #8）
+- **T13 完成+fixup**：API convert/list/get + 路由注册；fixup 修 CRITICAL bug（sse_url `/api/stream/`→`/api/sse/stream/`，真实挂载路径 `/api`+`/sse`+`/stream/{id}`）+ 应用 list 分页（offset/limit，原 plan 静默无分页）。11 测试。
+- **T14 完成**：confirm（TRANS-02 status→confirmed）+ diagnose（四分类归因+重生成，can_fix 分支拼 revised_script+version+1+ai_diagnosis）。7 测试，合并审查一次过审。
+- **审查发现的关键 bug**：T13 的 sse_url 路径错——我（controller）先前误读 spec §4.1「prefix /api」为完整路径，实际 sse_router 内层还有 `/sse`。子代理审查独立核实（main.py + api/__init__.py + ai_case_generation.py 4 处佐证），测试原断言锁定了错值（假绿）。已修正。
+- **T2 遗留确认**：ScriptResponse 未被任何代码 import（GET 端点用 to_dict dict 返回），`from_attributes` 仍可推迟，不阻塞。
+
+### 下一步建议
+1. T15 审查通过后进 T16（端到端验收：11 条验收标准逐项核对 + skill 硬规则守门测试全绿 + 覆盖率）。
+2. T16 后用 `superpowers:finishing-a-development-branch` 收尾（合并/PR/清理决策）。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（当前 18+ 测试全 mock）。
+4. 待清理 Minor：convert service 未用 import（Optional/datetime）、StepMappingEntry 死代码——可在验收阶段一并清。
+
+---
+
+---
+
+## 快照 #8 — 2026-08-24（第 8 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/app/api/v1/scripts.py`（未跟踪，T13 新建中）
+- `backend/tests/test_script_api.py`（未跟踪，T13 新建中）
+- `backend/app/api/__init__.py`（已改，注册 scripts 路由中）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+2dd8e2e fix(script): thread ai_optimize + broad per-case error catch (#4 T12 fixup)
+f98a3e3 feat(script): celery convert task + automation_status linkage (#4 T12)
+9d618c6 fix(script): diagnose regen test + drop dead extra + type hints (#4 T11 fixup)
+0af90ef feat(script): diagnose 4-category service (#4 T11)
+438a50b feat(script): convert service orchestration (#4 T10)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1-T12 完成（含 T1/T8/T11/T12 fixup），后端全链路打通（模型→schemas→pipeline Step0-4→validator→元素适配器→convert/diagnose service→Celery+automation_status 联动）。T13（API convert/list/get）实现子代理运行中（文件已写未提交）。10+测试绿。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #7）
+- **T11 完成+fixup**：diagnose 四分类 + 重生成（补 regen happy-path 测试、删死代码 **extra、补类型注解）。
+- **T12 完成+fixup**：Celery convert_scripts_task + automation_status→converted 联动 + _CountingGateway token 累计；fixup 修复 ai_optimize 死接 False（改为透传）+ 每用例错误处理过窄（ConvertError→Exception，加坏 LLM 不中断批测试）。
+- **审查发现的真实 bug 累计**：T7 引号不匹配、T8 索引正则反向+select_option、T12 ai_optimize 死接+错误处理过窄——均为 plan 层面缺陷，子代理实现前我已预判并在 prompt 里标明修正方向，实现者均按指引修复并补测试。
+- **集成策略记忆生效**：T12 用 MagicMock gateway + monkeypatch SSEStream 避开真实 Redis/broker，符合"先全模块骨架 mock，后统一接大模型+真实测试"约定。
+
+### 下一步建议
+1. T13 提交后审查（注意 DB-mock 约定：convert 端点的 Project/TestCase 查询必须用 dependency_overrides，不能打真实 DB）。
+2. T14（confirm + diagnose 端点）——届时给 ScriptResponse 补 model_config=ConfigDict(from_attributes=True)（T2 遗留）。
+3. T15 前端 → T16 验收。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #7 — 2026-08-24（第 7 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+438a50b feat(script): convert service orchestration (#4 T10)
+7f42049 feat(script): element locator lookup adapter (#4 T9)
+09cb137 fix(script): harden validator — select_option regex + specific fail assertions (#4 T8 fixup)
+425dc68 feat(script): skill 8-item validator (#4 T8)
+45f883a feat(script): pipeline Step4 codegen + step mapping (#4 T7)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1-T10 完成（数据模型/fixup/schemas/pipeline Step0-4/validator+fixup/元素适配器/convert service），全部审查通过。T11（diagnose 四分类）实现子代理运行中。后端服务层已基本成型，23 测试绿。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #6）
+- **T7-T10 连续完成**：Step4 代码生成+对照表、validator(skill 8 项守门+fixup 增强 select_option 正则与具体断言)、元素库查询适配器 ElementLocatorLookup、convert service 编排(DB/SSE/Token)。
+- **plan 缺陷持续修正**：T7 修测试引号不匹配、T8 修正则索引定位器正则反向+补 select_option、T9 确认 ElementService 静态方法零回归、T10 验证 FakeGateway 子串与实际 prompt 吻合。
+- **审查模式**：T8 用双审查(因守门关键)+fixup，其余合并单审查。全部一次过审（T8/T1 各一次 fixup）。
+- **待清理 Minor**：convert service 有未用 import Optional/datetime（非阻断）；StepMappingEntry 死代码（plan 定义但未用）。
+- **模块 #4 进度**：16 任务完成 10 个，剩 T11(diagnose)-T16。
+
+### 下一步建议
+1. T11 审查通过后继续 T12（Celery task + automation_status→converted 联动 + _CountingGateway token 累计）—— 这是把 mock 链路接真实 AIGateway 的关键集成点。
+2. T13-14 API（convert/list/get/confirm/diagnose）→ T15 前端 → T16 验收。
+3. T13 会用到 ScriptResponse（T2 遗留：需补 model_config=ConfigDict(from_attributes=True)），届时一并加。
+
+---
+
+---
+
+## 快照 #6 — 2026-08-24（第 6 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+2de5cd3 feat(script): pipeline Step3 locator matching (#4 T6)
+e64d56f feat(script): pipeline Step2 assertions + tautology check (#4 T5)
+c84846d feat(script): pipeline Step1 actions via LLM (#4 T4)
+3813632 feat(script): pipeline Step0 normalize (#4 T3)
+cbb0abb feat(script): pydantic schemas + enums (#4 T2)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1-T6 完成（数据模型/fixup/schemas/pipeline Step0-3），全部 spec+质量审查通过。T7（Step4 代码生成）实现子代理运行中。pipeline 5 阶段已建 4 阶段，13 测试绿。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #5）
+- **T3-T6 连续完成**：pipeline Step0 标准化、Step1 动作意图(LLM)、Step2 断言计划+永真断言黑名单、Step3 元素库定位匹配(TRANS-01)。纯函数层 mock LLM 单测，每任务 2-3 测试。
+- **审查策略稳定**：T2 起对小任务用合并 spec+质量单审查（低风险提速），T1 仍用双审查。全部一次过审。
+- **plan 缺陷修正**：T6 发现 plan 漏写 `ActionWithLocator.locator_source` 字段（循环里动态赋值），已指示实现者补为声明字段；T7 发现测试引号不匹配导致 substring 检查假 blocked，已指示修正测试 locator 用双引号。
+- **模块 #4 进度**：16 任务完成 6 个，剩 T7(Step4)-T16。
+
+### 下一步建议
+1. T7 审查通过后继续 T8（script_validator — skill 8 项质量自检，守门测试，是防回归关键）。
+2. T9 元素库查询适配器 → T10 convert service 编排 → T11 diagnose 四分类 → T12 Celery+automation_status 联动 → T13-14 API → T15 前端 → T16 验收。
+3. 累积未提交仅存档文件（无影响）。
+
+---
+
+---
+
+## 快照 #5 — 2026-08-24（第 5 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+cbb0abb feat(script): pydantic schemas + enums (#4 T2)
+2a1dc06 fix(script): migration/model parity — name NOT NULL + FK constraints (#4 T1 fixup)
+848a2d8 feat(script): ScriptAsset extension + ConvertSession model (#4 T1)
+9962b1a plan(case-to-script): 16-task implementation plan (#4)
+28bc2ee chore: update TODO_LIST progress (3/11 modules, P0 gap filled) + integration strategy
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 后端规则+禁用词+token+4 stages、前端 7 步 SSE 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举全栈落地，已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1 完成（含 fixup `2a1dc06`）+ 双重审查通过；T2 完成（schemas `cbb0abb`，7 测试绿），spec+质量合并审查进行中。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分（CaseRefiner 随 #3 提交）。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #4）
+- **T1 完成**（含 fixup）：ScriptAsset 6 列 + UNIQUE + 迁移 model/迁移 parity（name NOT NULL + FK 约束）+ ConvertSession FK；182 测试全绿。
+- **T2 完成**：`backend/app/schemas/script.py`（4 枚举 + 7 Pydantic 类）+ `test_script_schemas.py`（7 测试）。plan 里的占位 bug 已在派发时预先修复（给实现者干净代码）。
+- **审查策略优化**：T2 改用合并 spec+质量单审查（小任务低风险，提速）。
+
+### 下一步建议
+1. T2 审查通过后继续 T3（Pipeline Step0 用例标准化，纯函数 + NormalizeError）。
+2. T3-7 为 pipeline 五阶段，mock LLM 网关单测，是核心可测层，重点保证 80%+ 覆盖。
+3. 累积未提交：仅存档文件本身（每次存档都覆盖，建议某次顺手提交清掉，或保持现状无妨）。
+
+---
+
+---
+
+## 快照 #4 — 2026-08-24（第 4 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身，快照 #3 尚未提交）
+
+### 最近 5 条提交
+```
+848a2d8 feat(script): ScriptAsset extension + ConvertSession model (#4 T1)
+9962b1a plan(case-to-script): 16-task implementation plan (#4)
+28bc2ee chore: update TODO_LIST progress (3/11 modules, P0 gap filled) + integration strategy
+48defb8 feat(ui): CaseGenerate 7-step + SSE, Cases import/export/review cols, CaseDetail version/refine panels, CaseForm/Filter enum align (W5/W6)
+93eb7c7 spec(case-to-script): align with requirement verification (14 fixes)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 后端规则+禁用词+token+4 stages、前端 7 步 SSE 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举全栈落地，已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1 完成 + spec 审查通过（848a2d8）；T1 代码质量审查仍在后台等待。无新任务启动。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分（CaseRefiner 随 #3 提交）。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #3）
+- 无新提交（T1 代码质量审查子代理仍在后台运行，未返回）。
+- 仅本存档文件有改动（快照 #3 内容）。
+
+### 下一步建议
+1. T1 代码质量审查返回后：通过则继续 T2（schemas，注意修复 plan 里的占位 bug）；不通过则让实现子代理修复后重审。
+2. 继续按 16 任务顺序执行。
+
+---
+
+---
+
+## 快照 #3 — 2026-08-24（第 3 次快照）
+
+**当前分支**：master（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+848a2d8 feat(script): ScriptAsset extension + ConvertSession model (#4 T1)
+9962b1a plan(case-to-script): 16-task implementation plan (#4)
+28bc2ee chore: update TODO_LIST progress (3/11 modules, P0 gap filled) + integration strategy
+48defb8 feat(ui): CaseGenerate 7-step + SSE, Cases import/export/review cols, CaseDetail version/refine panels, CaseForm/Filter enum align (W5/W6)
+93eb7c7 spec(case-to-script): align with requirement verification (14 fixes)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0（batch_import 字段映射）未修。
+2. **AI智能用例生成** — W6 后端规则+禁用词+token+4 stages、前端 7 步 SSE 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 枚举全栈落地，已提交。
+4. **用例转自动化脚本** — 🚧 实施中（subagent-driven）：T1 完成（数据模型，commit 848a2d8），spec 合规审查通过，代码质量审查进行中。16 任务计划已完成（9962b1a）。
+5. **UI自动化测试执行** — ⬜ 未开始。
+6. **执行记录与报告** — ⬜ 未开始。
+7. **用例评审与E2E精修** — 部分（CaseRefiner 随 #3 提交）。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — ⬜ 未开始。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #2）
+- **模块 #4 进入实施阶段**：用 subagent-driven-development 执行 16 任务计划。
+- **T1 完成**：ScriptAsset 加 6 列（project_id/name/description/step_mapping/locator_source/ai_diagnosis）+ UNIQUE(project_id,name) + 2 索引；新建 ConvertSession 模型；幂等迁移；3 测试通过 + 13 旧测试无回归。
+- **T1 规范审查**：✅ 通过（子代理逐行核对代码，16 测试全绿）。
+- **T1 代码质量审查**：已派发，等待结果。
+- **集成策略记忆**：新增 memory `moontest-progress-and-integration-strategy`（3/11 模块完成 + P0 补全；先全模块骨架后统一接大模型+跑迁移+真实测试）与 `moontest-test-mock-survey`（当前 179 测试全 mock，无真实 DB/LLM，属预期）。
+
+### 下一步建议
+1. T1 代码质量审查通过后，继续 T2（Pydantic schemas）。
+2. 按 16 任务顺序连续执行（subagent-driven 不在任务间停顿）：T2 schemas → T3-7 pipeline Step0-4 → T8 validator → T9 元素适配器 → T10-11 服务层 → T12 Celery+联动 → T13-14 API → T15 前端 → T16 验收。
+3. T2 plan 含一个故意占位 bug（`_PATTERN` 行），需确保执行者按 Step4 修复。
+
+---
+
+---
+
 ## 快照 #2 — 2026-08-24（第 2 次快照）
 
 **当前分支**：master（工作树干净，无未提交改动）

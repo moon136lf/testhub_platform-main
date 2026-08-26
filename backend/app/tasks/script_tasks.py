@@ -174,6 +174,8 @@ def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: l
                     sa, config_obj, target_url, sse, er, page=None,
                 )
                 if detail is not None:
+                    # ExecutionDetail.case_id 写入 (关联到脚本所属用例)
+                    detail.case_id = getattr(sa, "case_id", None)
                     details.append(detail)
             # 持久化 detail (T6 遗留: execute 未 db.add, 这里补)
             for d in details:

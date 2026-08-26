@@ -146,6 +146,15 @@ async def run_script(request: RunRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/batch-run")
 async def batch_run_scripts(request: BatchRunRequest, db: AsyncSession = Depends(get_db)):
     """SCRIPT-04: 批量执行, 汇总一条 execution_record."""
+    # 校验 script_ids 存在性 (至少一个有效)
+    try:
+        sids = [uuid.UUID(s) for s in request.script_ids]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID in script_ids")
+    result = await db.execute(select(ScriptAsset).where(ScriptAsset.id.in_(sids)))
+    found = result.scalars().all()
+    if not found:
+        raise HTTPException(status_code=400, detail="script_ids 中无有效脚本")
     session_id = str(uuid.uuid4())
     run_scripts_task.delay(
         session_id=session_id, script_ids=request.script_ids,

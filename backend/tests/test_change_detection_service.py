@@ -140,8 +140,10 @@ class TestMarkAffectedScripts:
         detection.impact_level = "low"
 
         db = AsyncMock()
+        # 1st execute: fetch detection; 2nd execute: UPDATE script_asset (result unused)
         result = MagicMock(); result.scalar_one_or_none.return_value = detection
-        db.execute = AsyncMock(return_value=result)
+        update_result = MagicMock()
+        db.execute = AsyncMock(side_effect=[result, update_result])
         db.commit = AsyncMock(); db.refresh = AsyncMock()
 
         scripts = [
@@ -155,6 +157,67 @@ class TestMarkAffectedScripts:
 
         assert updated.affected_script_count == 4
         assert updated.impact_level == "high"  # >3 脚本 -> high
+
+    @pytest.mark.asyncio
+    async def test_writes_back_script_asset_last_status_affected(self):
+        """SCRIPT-07: mark_affected_scripts 回写 ScriptAsset.last_status='affected'."""
+        from app.models.test_case import ScriptAsset
+        from sqlalchemy import update
+
+        detection_id = uuid4()
+        detection = MagicMock()
+        detection.affected_scripts = []
+        detection.affected_script_count = 0
+        detection.impact_level = "low"
+
+        db = AsyncMock()
+        fetch_result = MagicMock(); fetch_result.scalar_one_or_none.return_value = detection
+        update_result = MagicMock()
+        db.execute = AsyncMock(side_effect=[fetch_result, update_result])
+        db.commit = AsyncMock(); db.refresh = AsyncMock()
+
+        s1, s2 = uuid4(), uuid4()
+        scripts = [
+            {"script_id": s1, "script_name": "login_test", "elements": ["btn-1"]},
+            {"script_id": s2, "script_name": "reg_test", "elements": ["btn-2"]},
+        ]
+
+        await ChangeDetectionService.mark_affected_scripts(db, detection_id, scripts)
+
+        # 2nd execute 是 UPDATE；校验它是 update() stmt 且绑定 last_status='affected'
+        assert db.execute.await_count == 2
+        stmt = db.execute.await_args_list[1].args[0]
+        # update(stmt) 在 compile 时包含 script_asset + last_status
+        compiled = stmt.compile()
+        rendered = str(compiled).lower()
+        assert "script_asset" in rendered
+        assert "last_status" in rendered
+        params = compiled.construct_params()
+        assert params.get("last_status") == "affected"
+        # 影响等级: 2 脚本 -> medium
+        assert detection.impact_level == "medium"
+        db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_affected_scripts_skips_writeback(self):
+        """affected_scripts 为空时不触发 UPDATE, impact_level=low."""
+        detection_id = uuid4()
+        detection = MagicMock()
+        detection.affected_scripts = []
+        detection.affected_script_count = 0
+        detection.impact_level = "high"
+
+        db = AsyncMock()
+        fetch_result = MagicMock(); fetch_result.scalar_one_or_none.return_value = detection
+        db.execute = AsyncMock(return_value=fetch_result)
+        db.commit = AsyncMock(); db.refresh = AsyncMock()
+
+        updated = await ChangeDetectionService.mark_affected_scripts(db, detection_id, [])
+
+        assert updated.affected_script_count == 0
+        assert updated.impact_level == "low"
+        # 只有 fetch detection 这一次 execute, 没有 UPDATE
+        assert db.execute.await_count == 1
 
 
 class TestUpdateLocatorsOneClick:

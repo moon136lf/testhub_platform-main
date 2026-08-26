@@ -100,7 +100,7 @@ def _make_exec_record():
 
 
 class TestScriptExecutorExecute:
-    def _exec(self, script_asset, fail_on_step=None):
+    def _exec(self, script_asset, fail_on_step=None, mock_page=None):
         element_svc = FakeElementService({
             "用户名": {"element_id": "e1", "element_name": "用户名",
                       "locator_strategies": {"strategies": [{"type": "label", "value": "用户名", "score": 10}]},
@@ -114,6 +114,8 @@ class TestScriptExecutorExecute:
         storage = MagicMock(); storage.upload_bytes = AsyncMock(return_value="/static/x.png")
         gw = MagicMock(); gw.tokens = 50
         svc = ScriptExecutor(db=db, gateway=gw, storage=storage, element_svc=element_svc)
+        # monkeypatch _launch_browser 避免真实启动 Playwright; 返回 mock page (默认 None)
+        svc._launch_browser = AsyncMock(return_value=mock_page)
         er = _make_exec_record()
         sse = FakeSSE()
         try:
@@ -170,6 +172,7 @@ class TestScriptExecutorExecute:
         storage = MagicMock(); storage.upload_bytes = AsyncMock(return_value="/static/x.png")
         gw = MagicMock(); gw.tokens = 0
         svc = ScriptExecutor(db=db, gateway=gw, storage=storage, element_svc=element_svc)
+        svc._launch_browser = AsyncMock(return_value=None)  # quick-run 不真实启动
         sse = FakeSSE()
         try:
             detail = asyncio_run(svc.execute(
@@ -182,3 +185,64 @@ class TestScriptExecutorExecute:
         assert detail is None  # quick-run 不落 detail
         # SSE 完成消息仍发
         assert any("完成" in (m.get("content", "")) for m in sse.messages)
+
+    def test_assertion_toast_message_pass(self):
+        """断言 toast_message is_valid=True 且页面含 expected → 通过."""
+        page = MagicMock()
+        page.text_content = AsyncMock(return_value="操作成功，已保存")
+        page.close = AsyncMock()
+        sa = _make_script_asset([{"step": 1, "action": "click", "element_name": "用户名",
+                                  "value": "", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None,
+                                  "assertion": {"type": "toast_message", "expected": "成功", "is_valid": True}}])
+        detail, sse, db = self._exec(sa, mock_page=page)
+        assert detail.status == "pass"
+        assert sa.last_status == "passed"
+
+    def test_assertion_toast_message_fail_classified_assertion_failed(self):
+        """断言 toast_message is_valid=True 但页面不含 expected → assertion_failed."""
+        page = MagicMock()
+        page.text_content = AsyncMock(return_value="出错了，请联系管理员")
+        page.screenshot = AsyncMock(return_value=b"png")
+        page.content = AsyncMock(return_value="<html>dom</html>")
+        page.close = AsyncMock()
+        sa = _make_script_asset([{"step": 1, "action": "click", "element_name": "用户名",
+                                  "value": "", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None,
+                                  "assertion": {"type": "toast_message", "expected": "成功", "is_valid": True}}])
+        detail, sse, db = self._exec(sa, mock_page=page)
+        assert detail.status == "fail"
+        assert detail.error_type == "assertion_failed"
+        assert sa.last_status == "failed"
+
+    def test_assertion_not_valid_skipped(self):
+        """is_valid=False 的断言不验证, 步骤通过."""
+        page = MagicMock()
+        page.close = AsyncMock()
+        sa = _make_script_asset([{"step": 1, "action": "click", "element_name": "用户名",
+                                  "value": "", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None,
+                                  "assertion": {"type": "toast_message", "expected": "成功", "is_valid": False}}])
+        detail, sse, db = self._exec(sa, mock_page=page)
+        assert detail.status == "pass"
+
+    def test_assertion_other_type_skipped(self):
+        """status_changed 等暂未实现的断言类型跳过 (不抛错)."""
+        page = MagicMock()
+        page.close = AsyncMock()
+        sa = _make_script_asset([{"step": 1, "action": "click", "element_name": "用户名",
+                                  "value": "", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None,
+                                  "assertion": {"type": "status_changed", "expected": "首页", "is_valid": True}}])
+        detail, sse, db = self._exec(sa, mock_page=page)
+        assert detail.status == "pass"
+
+    def test_launches_browser_when_page_none(self):
+        """page=None 时调用 _launch_browser (真实启动占位)."""
+        page = MagicMock()
+        page.close = AsyncMock()
+        sa = _make_script_asset([{"step": 1, "action": "fill", "element_name": "用户名",
+                                  "value": "admin", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None, "assertion": None}])
+        detail, sse, db = self._exec(sa, mock_page=page)
+        assert detail.status == "pass"
