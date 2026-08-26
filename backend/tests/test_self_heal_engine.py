@@ -53,3 +53,35 @@ class TestHealByDomFuzz:
         eng = SelfHealEngine(gateway=gw, element_cache=cache)
         result = asyncio_run(eng._heal_by_dom_fuzz(page, self._element_data()))
         assert result is None
+
+
+class TestHealByAiDom:
+    def _element_data(self):
+        return {"element_id": "e1", "element_name": "登录按钮",
+                "locator_strategies": {"strategies": []}, "semantic_info": {"text": "登录"}}
+
+    def test_ai_dom_returns_locator_from_llm(self):
+        page = MagicMock()
+        page.content = AsyncMock(return_value="<html><button>登录</button></html>")
+        loc = MagicMock()
+        loc.wait_for = AsyncMock()
+        page.locator = MagicMock(return_value=loc)
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": "page.get_by_role(\"button\", name=\"登录\")", "tokens": 50})
+        cache = FakeCache()
+        eng = SelfHealEngine(gateway=gw, element_cache=cache)
+        result = asyncio_run(eng._heal_by_ai_dom(page, self._element_data()))
+        assert result == "page.get_by_role(\"button\", name=\"登录\")"
+
+    def test_ai_dom_invalid_locator_returns_none(self):
+        page = MagicMock()
+        page.content = AsyncMock(return_value="<html></html>")
+        loc = MagicMock()
+        loc.wait_for = AsyncMock(side_effect=Exception("not found"))
+        page.locator = MagicMock(return_value=loc)
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": "page.bogus()", "tokens": 10})
+        cache = FakeCache()
+        eng = SelfHealEngine(gateway=gw, element_cache=cache)
+        result = asyncio_run(eng._heal_by_ai_dom(page, self._element_data()))
+        assert result is None

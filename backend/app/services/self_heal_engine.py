@@ -109,8 +109,35 @@ class SelfHealEngine:
         return f"page.get_by_text(\"{cand_text}\")"
 
     async def _heal_by_ai_dom(self, page, element_data: dict) -> Optional[str]:
-        """Level3: DOM + 元素描述发 LLM, 返回定位器, 验证. (Task 2 实现)"""
-        return None  # placeholder, Task 2 填充
+        """Level3: DOM + 元素描述发 LLM, 返回定位器, 验证."""
+        if self.gateway is None:
+            return None
+        try:
+            dom = await page.content()
+        except Exception as e:
+            logger.warning(f"ai_dom content fetch failed: {e}")
+            return None
+        dom = (dom or "")[:DOM_TRUNCATE]
+        semantic = element_data.get("semantic_info") or {}
+        prompt = f"""页面 DOM 如下, 找到元素 "{element_data.get('element_name')}" 的 Playwright 定位器.
+元素语义: {semantic}
+只输出一个定位器字符串 (如 page.get_by_role("button", name="登录")), 不要解释.
+
+DOM:
+{dom}"""
+        try:
+            resp = await self.gateway.chat([{"role": "user", "content": prompt}])
+        except Exception as e:
+            logger.warning(f"ai_dom LLM call failed: {e}")
+            return None
+        locator = (resp.get("content") or "").strip()
+        # 验证定位器有效
+        try:
+            loc = page.locator(locator)
+            await loc.wait_for(state="visible", timeout=3000)
+            return locator
+        except Exception:
+            return None
 
     async def _on_heal_success(self, element_data, locator, strategy) -> Optional[dict]:
         """返回 writeback 信号 (若有), 调用方执行 ElementService.writeback."""
