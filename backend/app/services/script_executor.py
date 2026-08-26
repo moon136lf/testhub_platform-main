@@ -139,6 +139,21 @@ class ScriptExecutor:
             logger.warning(f"assertion check error (type={atype}): {e}")
             return
 
+    async def _do_writeback(self, writeback: dict):
+        """TRANS-08: 执行 ElementService.writeback_healed_locator (confidence>=3 回写元素库).
+
+        #5b T5: 由 ScriptExecutor 调用, 将 SmartLocator 透传的 writeback 信号落回元素库.
+        db=None 时跳过; 异常仅记日志不崩 (回写失败不应影响执行主流程).
+        """
+        try:
+            if self.db is None:
+                return
+            from app.services.element_service import ElementService
+            svc = ElementService(self.db)
+            await svc.writeback_healed_locator(writeback["element_id"], writeback["locator"])
+        except Exception as e:
+            logger.warning(f"writeback to repo failed: {e}")
+
     async def execute(self, script_asset: ScriptAsset, config, target_url: str,
                       sse, execution_record: Optional[ExecutionRecord] = None,
                       page=None) -> Optional[ExecutionDetail]:
@@ -164,6 +179,7 @@ class ScriptExecutor:
         overall_status = "pass"
         last_failure = None
         max_failures = getattr(config, "max_failures", 8) or 8
+        heal_logs = []  # #5b T5: 收集每步 SmartLocator 透传的 heal_log (聚合填 ExecutionDetail)
         for i, sm in enumerate(steps):
             step = sm.get("step", i + 1)
             action = sm.get("action", "unknown")
@@ -191,13 +207,19 @@ class ScriptExecutor:
             # 执行
             locator = SmartLocator(_element_to_dict(element_data), gateway=self.gateway)
             try:
-                await locator.locate_and_interact(page, action, value=sm.get("value"))
+                result = await locator.locate_and_interact(page, action, value=sm.get("value"))
+                # #5b T5: 收集 heal 信号 (SmartLocator 透传 heal_log/writeback)
+                heal_logs.append(result.get("heal_log") or [])
+                writeback = result.get("writeback")
+                if writeback:
+                    await self._do_writeback(writeback)
+                had_heal = bool(result.get("heal_log"))
                 # 断言校验 (action 成功后): 若 assertion 存在且 is_valid → _check_assertion
                 assertion = sm.get("assertion")
                 if assertion:
                     await self._check_assertion(page, assertion)
                 await sse.send_message(type="system", stage="execute",
-                                       content=f"第 {step} 步：✅ 通过",
+                                       content=f"第 {step} 步：✅ 通过" + ("（自愈）" if had_heal else ""),
                                        progress=((i + 1) / max(len(steps), 1)) * 0.9)
             except Exception as e:
                 last_failure = await collect_failure(page, step, e, storage=self.storage)
@@ -228,6 +250,9 @@ class ScriptExecutor:
         if execution_record is None:
             return None
         duration_ms = int((time.time() - start) * 1000)
+        # #5b T5: 聚合 heal_log + 判定 heal_status (有自愈成功 → healed, 否则 none)
+        all_heal_logs = [h for logs in heal_logs for h in (logs or []) if h]
+        heal_status = "healed" if all_heal_logs and any(h.get("success") for h in all_heal_logs) else "none"
         detail = ExecutionDetail(
             execution_record_id=execution_record.id,
             script_id=getattr(script_asset, "id", None),
@@ -238,6 +263,7 @@ class ScriptExecutor:
             stack_trace=last_failure["stack_trace"] if last_failure else None,
             screenshot_url=last_failure["screenshot_url"] if last_failure else None,
             dom_snapshot=last_failure["dom_snapshot"] if last_failure else None,
-            heal_status="none", duration_ms=duration_ms,
+            heal_status=heal_status, heal_log=all_heal_logs or None,
+            duration_ms=duration_ms,
         )
         return detail

@@ -100,7 +100,7 @@ def _make_exec_record():
 
 
 class TestScriptExecutorExecute:
-    def _exec(self, script_asset, fail_on_step=None, mock_page=None):
+    def _exec(self, script_asset, fail_on_step=None, mock_page=None, locator_factory=None):
         element_svc = FakeElementService({
             "用户名": {"element_id": "e1", "element_name": "用户名",
                       "locator_strategies": {"strategies": [{"type": "label", "value": "用户名", "score": 10}]},
@@ -108,7 +108,12 @@ class TestScriptExecutorExecute:
         })
         import app.services.script_executor as exec_mod
         orig = getattr(exec_mod, "SmartLocator", None)
-        exec_mod.SmartLocator = lambda ed, gateway=None: FakeSmartLocator(ed, fail_on_step=fail_on_step)
+        # #5b T5: 允许调用方注入自定义 locator_factory (用于 heal_log/writeback 测试);
+        # 默认仍用 #5a 的 FakeSmartLocator (返回 {"status":"success"} 无 heal_log).
+        if locator_factory is not None:
+            exec_mod.SmartLocator = locator_factory
+        else:
+            exec_mod.SmartLocator = lambda ed, gateway=None: FakeSmartLocator(ed, fail_on_step=fail_on_step)
         db = FakeDB()
         from unittest.mock import MagicMock, AsyncMock
         storage = MagicMock(); storage.upload_bytes = AsyncMock(return_value="/static/x.png")
@@ -246,3 +251,130 @@ class TestScriptExecutorExecute:
                                   "page_name": None, "assertion": None}])
         detail, sse, db = self._exec(sa, mock_page=page)
         assert detail.status == "pass"
+
+
+class TestScriptExecutorHealFill:
+    """#5b T5: ScriptExecutor 捕获 heal_log/writeback → 填 ExecutionDetail + 调 _do_writeback."""
+
+    def test_heal_success_fills_execution_detail(self):
+        sa = _make_script_asset([{"step": 1, "action": "fill", "element_name": "用户名",
+                                  "value": "admin", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None, "assertion": None}])
+        # mock SmartLocator 返回带 heal_log + writeback
+        import app.services.script_executor as exec_mod
+
+        class FakeSL:
+            def __init__(self, ed, gateway=None):
+                pass
+
+            async def locate_and_interact(self, page, action, **kw):
+                return {"status": "success", "action": action,
+                        "heal_log": [{"level": 2, "strategy": "dom_fuzz", "success": True}],
+                        "writeback": {"element_id": "e1", "locator": {"type": "label", "value": "用户名"}}}
+
+        # patch ElementService.writeback_healed_locator 防止真实 DB 调用
+        import app.services.element_service as es_mod
+        orig_es = es_mod.ElementService
+
+        class FakeES:
+            def __init__(self, db):
+                self.db = db
+
+            async def writeback_healed_locator(self, element_id, healed_locator):
+                return True
+
+        es_mod.ElementService = FakeES
+        try:
+            detail, sse, db = TestScriptExecutorExecute()._exec(sa, locator_factory=FakeSL)
+            # 执行成功 + heal_status 应为 healed
+            assert detail.status == "pass"
+            assert detail.heal_status == "healed"
+            assert detail.heal_log is not None
+            assert len(detail.heal_log) == 1
+        finally:
+            es_mod.ElementService = orig_es
+
+    def test_no_heal_sets_none_status(self):
+        sa = _make_script_asset([{"step": 1, "action": "fill", "element_name": "用户名",
+                                  "value": "admin", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None, "assertion": None}])
+        import app.services.script_executor as exec_mod
+
+        class FakeSL:
+            def __init__(self, ed, gateway=None):
+                pass
+
+            async def locate_and_interact(self, page, action, **kw):
+                return {"status": "success", "action": action}  # 无 heal_log
+
+        try:
+            detail, sse, db = TestScriptExecutorExecute()._exec(sa, locator_factory=FakeSL)
+            assert detail.status == "pass"
+            assert detail.heal_status == "none"
+            assert detail.heal_log is None
+        finally:
+            pass
+
+    def test_heal_success_sends_self_heal_sse_marker(self):
+        """#5b T5: 有 heal_log 时 SSE 成功消息带"（自愈）"标记."""
+        sa = _make_script_asset([{"step": 1, "action": "fill", "element_name": "用户名",
+                                  "value": "admin", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None, "assertion": None}])
+        import app.services.script_executor as exec_mod
+
+        class FakeSL:
+            def __init__(self, ed, gateway=None):
+                pass
+
+            async def locate_and_interact(self, page, action, **kw):
+                return {"status": "success", "action": action,
+                        "heal_log": [{"level": 2, "strategy": "dom_fuzz", "success": True}],
+                        "writeback": None}
+
+        try:
+            detail, sse, db = TestScriptExecutorExecute()._exec(sa, locator_factory=FakeSL)
+            assert detail.status == "pass"
+            # SSE 应有带"（自愈）"的成功消息
+            assert any("自愈" in (m.get("content", "")) for m in sse.messages)
+        finally:
+            pass
+
+    def test_writeback_invokes_element_service(self):
+        """#5b T5: writeback 信号 → 调 ElementService.writeback_healed_locator (db 非 None 时)."""
+        sa = _make_script_asset([{"step": 1, "action": "fill", "element_name": "用户名",
+                                  "value": "admin", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None, "assertion": None}])
+        import app.services.script_executor as exec_mod
+
+        wb_calls = []
+
+        class FakeSL:
+            def __init__(self, ed, gateway=None):
+                pass
+
+            async def locate_and_interact(self, page, action, **kw):
+                return {"status": "success", "action": action,
+                        "heal_log": [{"level": 2, "strategy": "dom_fuzz", "success": True}],
+                        "writeback": {"element_id": "e1", "locator": {"type": "label", "value": "用户名"}}}
+
+        # patch ElementService.writeback_healed_locator (在 script_executor 顶层 import)
+        import app.services.element_service as es_mod
+        orig_es = es_mod.ElementService
+
+        class FakeES:
+            def __init__(self, db):
+                self.db = db
+
+            async def writeback_healed_locator(self, element_id, healed_locator):
+                wb_calls.append((element_id, healed_locator))
+                return True
+
+        es_mod.ElementService = FakeES
+        try:
+            detail, sse, db = TestScriptExecutorExecute()._exec(sa, locator_factory=FakeSL)
+            assert detail.status == "pass"
+            assert len(wb_calls) == 1
+            assert wb_calls[0][0] == "e1"
+        finally:
+            es_mod.ElementService = orig_es
+
