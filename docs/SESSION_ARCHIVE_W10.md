@@ -6,6 +6,43 @@
 
 ---
 
+## 快照 #5 — 2026-08-26（#9 spec 设计中 + 回归用例生成纳入）
+
+**当前分支**：worktree-module10-system-settings（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+378d1bb spec(review): #7 review center + batch refine + project report design
+62b6d50 docs: session archive W10 #4 (auto)
+2d49284 spec(reports): #6 execution records & reports design (report center + export)
+b96de81 docs: session archive W10 #3 (auto)
+809eca1 docs: session archive W10 #2 (auto)
+```
+
+### 13 task 进度（#10）
+- ✅ T1-T13 全完成。#10 worktree 保持完成态挂起，等 master 空闲合回。
+- 🔄 额外：#6/#7/#9 spec 设计中（存本 worktree，随 #10 合回 master 时进入）
+
+### 测试 / 构建
+- 后端：`223 passed, 14 warnings in 35.41s`（exit 0）
+
+### 本时段进展
+- **#7 spec 已提交**（378d1bb）：评审中心 + 批量精修 + 项目级汇总报告。
+- **#9 白盒代码体检 brainstorming 中**：需求 §5.1 读完，选型 semgrep（跨语言规则库）。设计第1段：2 表(code_scan/code_issue)+Celery异步扫描+AI修复建议。
+- **#9 范围扩展**：白盒扫描完产出**回归用例**（需求 WHITE-05「流程测试用例.md」本就含此）。链路：code_issue + ai_suggestion → AI 生成回归用例 → 存平台 TestCase → #8 消费。
+- **用户提供回归用例生成规范**：①提示词模板（角色+输入+分析步骤+输出）②用例列规范（编号/优先级/关联变更点/前置/步骤/预期断言/清理）③生成规则5条（基于代码依赖/兼顾新旧路径/数据隔离幂等/断言精细化/异常容错覆盖）④接口+UI用例示例表。要求融入 #9 生成规则。
+- **用户追加要求**：生成用例参考模块2（AI用例生成），**强制必须是自动化形式的用例**。
+
+### 下一步建议
+1. #9 spec 融入回归用例生成规则（提示词+列规范+5规则+接口/UI示例），强制自动化形式（复用 #2 的 steps 结构 + 断言要求）。
+2. #10 等 master 空闲合回；#6 等 #5a；#7 等 #10 合回后实施（不依赖 #5a）。
+3. 每小时 :13 自动存档 cron（session-only）。
+
+---
+
 ## 快照 #4 — 2026-08-25（#10 挂起 + #6 spec 写完）
 
 **当前分支**：worktree-module10-system-settings（工作树干净）
