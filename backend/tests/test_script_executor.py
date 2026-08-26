@@ -152,3 +152,33 @@ class TestScriptExecutorExecute:
         assert detail.status == "fail"
         assert detail.error_type == "script_error"
         assert "element_name" in (detail.error_msg or "").lower() or "缺" in (detail.error_msg or "")
+
+    def test_quick_run_no_execution_record(self):
+        """quick-run: execution_record=None -> 不落 ExecutionDetail, 返回 None."""
+        sa = _make_script_asset([{"step": 1, "action": "fill", "element_name": "用户名",
+                                  "value": "admin", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None, "assertion": None}])
+        element_svc = FakeElementService({
+            "用户名": {"element_id": "e1", "element_name": "用户名",
+                      "locator_strategies": {"strategies": [{"type": "label", "value": "用户名", "score": 10}]},
+                      "semantic_info": None}
+        })
+        import app.services.script_executor as exec_mod
+        orig = getattr(exec_mod, "SmartLocator", None)
+        exec_mod.SmartLocator = lambda ed: FakeSmartLocator(ed)
+        db = FakeDB()
+        storage = MagicMock(); storage.upload_bytes = AsyncMock(return_value="/static/x.png")
+        gw = MagicMock(); gw.tokens = 0
+        svc = ScriptExecutor(db=db, gateway=gw, storage=storage, element_svc=element_svc)
+        sse = FakeSSE()
+        try:
+            detail = asyncio_run(svc.execute(
+                sa, config=MagicMock(headless=True, timeout=60, max_failures=8),
+                target_url="http://x", sse=sse, execution_record=None,
+            ))
+        finally:
+            if orig:
+                exec_mod.SmartLocator = orig
+        assert detail is None  # quick-run 不落 detail
+        # SSE 完成消息仍发
+        assert any("完成" in (m.get("content", "")) for m in sse.messages)

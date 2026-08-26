@@ -85,8 +85,12 @@ class ScriptExecutor:
         self.element_svc = element_svc
 
     async def execute(self, script_asset: ScriptAsset, config, target_url: str,
-                      sse, execution_record: ExecutionRecord, page=None) -> ExecutionDetail:
-        """执行单个脚本, 返回整体 ExecutionDetail (step=0). page=None 时 mock 路径."""
+                      sse, execution_record: Optional[ExecutionRecord] = None,
+                      page=None) -> Optional[ExecutionDetail]:
+        """执行单个脚本, 返回整体 ExecutionDetail (step=0). page=None 时 mock 路径.
+
+        execution_record=None 用于 quick-run: 不落 ExecutionDetail, 仅 SSE 直播.
+        """
         start = time.time()
         step_mapping = script_asset.step_mapping or []
         steps = [s for s in step_mapping if s.get("step", 0) > 0]
@@ -142,6 +146,12 @@ class ScriptExecutor:
         script_asset.run_count = (script_asset.run_count or 0) + 1
         script_asset.last_run_at = datetime.utcnow()
 
+        await sse.send_message(type="system", stage="execute",
+                               content=f"执行完成：{'通过' if overall_status == 'pass' else '失败'}",
+                               progress=1.0, tokens_used=getattr(self.gateway, "tokens", 0))
+        # quick-run: 不落 ExecutionDetail (无 execution_record)
+        if execution_record is None:
+            return None
         duration_ms = int((time.time() - start) * 1000)
         detail = ExecutionDetail(
             execution_record_id=execution_record.id,
@@ -155,7 +165,4 @@ class ScriptExecutor:
             dom_snapshot=last_failure["dom_snapshot"] if last_failure else None,
             heal_status="none", duration_ms=duration_ms,
         )
-        await sse.send_message(type="system", stage="execute",
-                               content=f"执行完成：{'通过' if overall_status == 'pass' else '失败'}",
-                               progress=1.0, tokens_used=getattr(self.gateway, "tokens", 0))
         return detail

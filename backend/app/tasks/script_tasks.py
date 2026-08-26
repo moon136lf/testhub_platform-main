@@ -119,15 +119,6 @@ def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: l
                 "timeout": cfg.get("timeout", 60),
                 "max_failures": cfg.get("max_failures", 8),
             })()
-            # 建 execution_record
-            exec_type = "batch" if script_ids else ("quick_run" if script_content else "single")
-            er = ExecutionRecord(
-                exec_id=f"exec-{session_id[:8]}", project_id=None,
-                exec_type=exec_type, status="running",
-                total_cases=len(script_ids) if script_ids else 1,
-            )
-            db.add(er)
-            await db.flush()
             gateway = _CountingGateway(AIGateway())
             element_svc = ElementService(db)
             executor = ScriptExecutor(
@@ -135,33 +126,54 @@ def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: l
                 element_svc=element_svc,
             )
             sse = _SSEWrapper(SSEStream(session_id))
-            details = []
+
+            # quick-run: 不落库, 不建 ExecutionRecord (project_id 列 nullable=False,
+            # quick-run 无归属项目 → 跳过 record + detail, 仅 SSE 直播)
             if script_content:
-                # quick-run: 临时 script_asset, 不入库 (不入 db.add, 仅用于 execute 读 step_mapping)
                 sa = ScriptAsset(
                     case_id=None, project_id=None, name="quick-run",
                     content=script_content, version=1, status="confirmed",
                     category="uncategorized", step_mapping=[], locator_source="none_draft",
                 )
-                detail = await executor.execute(sa, config_obj, target_url, sse, er, page=None)
-                details.append(detail)
-            elif script_ids:
+                detail = await executor.execute(
+                    sa, config_obj, target_url, sse, execution_record=None, page=None,
+                )
+                # detail is None (quick-run skips ExecutionDetail), 无需 db.add
+                await db.commit()
+                return {"session_id": session_id, "status": "done"}
+
+            # single / batch: 先查 ScriptAsset 拿 project_id 再建 ExecutionRecord
+            if script_ids:
+                targets = []
                 for sid in script_ids:
                     r = await db.execute(
                         _sel(ScriptAsset).where(ScriptAsset.id == uuid.UUID(sid))
                     )
                     sa = r.scalar_one_or_none()
                     if sa:
-                        detail = await executor.execute(sa, config_obj, target_url, sse, er, page=None)
-                        details.append(detail)
+                        targets.append(sa)
             else:
-                # 单个 run
                 r = await db.execute(
                     _sel(ScriptAsset).where(ScriptAsset.id == uuid.UUID(script_id))
                 )
                 sa = r.scalar_one_or_none()
-                if sa:
-                    detail = await executor.execute(sa, config_obj, target_url, sse, er, page=None)
+                targets = [sa] if sa else []
+
+            project_id = targets[0].project_id if targets else None
+            er = ExecutionRecord(
+                exec_id=f"exec-{session_id[:8]}", project_id=project_id,
+                exec_type="batch" if script_ids else "single",
+                status="running", total_cases=len(targets),
+            )
+            db.add(er)
+            await db.flush()
+
+            details = []
+            for sa in targets:
+                detail = await executor.execute(
+                    sa, config_obj, target_url, sse, er, page=None,
+                )
+                if detail is not None:
                     details.append(detail)
             # 持久化 detail (T6 遗留: execute 未 db.add, 这里补)
             for d in details:
