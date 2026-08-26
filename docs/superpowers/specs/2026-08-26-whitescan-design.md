@@ -22,8 +22,8 @@
 
 ### 1.2 已确认决策
 
-- **扫描引擎**：semgrep（跨语言规则库，覆盖 WHITE-01/02）
-- **semgrep 环境**：**方案 A**——开发期全 mock（Windows 装不上，已验证 pip 卡住），Linux 部署时真实生效
+- **扫描引擎**：semgrep（Docker 跑，方案 B，跨语言规则库，覆盖 WHITE-01/02）
+- **semgrep 环境**：**方案 B**——Docker 调用 `returntocorp/semgrep` 镜像（Windows本地 Docker Desktop + Linux 部署通用，不依赖宿主机 pip 装）
 - **回归用例**：白盒扫描产出回归用例（WHITE-05「流程测试用例.md」本就含此），存平台 TestCase，强制自动化形式
 - **生成方式**：复用 #2 prompt 框架，输入从 PRD 换成 code_issue + 代码变更上下文
 - **增量生成**：一键生成只生成新 issue（已有 source_issue_id 跳过），代码变更的 issue 标 case_outdated 待手动重新生成
@@ -75,20 +75,26 @@
 | services/scan_export_service.py | 产出物导出：BUG清单.xlsx/API契约矩阵.md/功能点清单.md/流程测试用例.md/用例汇总统计.md |
 | tasks/code_scan_tasks.py | Celery: git clone→semgrep→写issue→统计→（可选）AI修复子任务 |
 
-### 3.2 semgrep 调用（方案 A：mock 开发，Linux 真跑）
+### 3.2 semgrep 调用（方案 B：Docker 跑，Windows本地+Linux部署通用）
 
 ```python
 # code_scan_service.py
 def _run_semgrep(repo_path: str) -> dict:
-    """调 semgrep 扫描。开发期 mock，Linux 部署真实 subprocess。"""
+    """调 semgrep 扫描。Docker 跑（用户本地装 Docker Desktop，Linux 部署同样通用）。
+    首次 docker run 自动拉 returntocorp/semgrep 镜像。"""
     result = subprocess.run(
-        ["semgrep", "scan", "--config", "auto", "--json", repo_path],
+        ["docker", "run", "--rm",
+         "-v", f"{repo_path}:/src",
+         "returntocorp/semgrep",
+         "semgrep", "scan", "--config", "auto", "--json", "/src"],
         capture_output=True, text=True, timeout=300
     )
     return json.loads(result.stdout)
 ```
-- 测试 `@patch('subprocess.run')` 返回固定 JSON
-- Linux 部署 pip 装 semgrep，真实生效，无需改代码
+- 测试 `@patch('subprocess.run')` 返回固定 JSON（不真起 Docker，测试快）
+- Windows 本地：Docker Desktop 运行中即可真实扫描
+- Linux 部署：装 Docker 即可，代码不用改
+- **不依赖宿主机 pip 装 semgrep**——requirements.txt 不加 semgrep，改加 Docker 镜像约定（部署文档标注需 Docker + 首次拉镜像）
 
 ### 3.3 回归用例生成器（核心，融入用户规范）
 
@@ -219,7 +225,7 @@ issue 标 false_positive 后，记录规则指纹，同规则同场景下次扫�
 **共享文件**：
 - `models/test_case.py`（加 source_issue_id）—— **与 #4 撞风险**，需协调（#9 在 #4 完成后基于最新 master 开）
 - `api/__init__.py`（注册 whitescan router，追加）
-- `requirements.txt`（加 semgrep，标注 Linux 装）
+- `requirements.txt`（不加 semgrep——改用 Docker 镜像约定，部署文档标注需 Docker + 首次拉 returntocorp/semgrep 镜像）
 
 ### 6.3 worktree 策略
 
@@ -229,14 +235,15 @@ issue 标 false_positive 后，记录规则指纹，同规则同场景下次扫�
 
 ### 6.4 风险
 
-- **semgrep Windows**：开发期 mock（方案A，已验证 pip 卡住），Linux 部署 pip 装顺
+- **semgrep Windows**：方案 B Docker 跑（用户本地已装 Docker Desktop），Windows本地+Linux部署通用，代码不改；测试 @patch subprocess 不真起 Docker
+- **Docker 依赖**：部署环境需装 Docker，首次 `docker run` 拉 returntocorp/semgrep 镜像（~500MB，首次慢，后续缓存）
 - **AI 修复 token 消耗**：每 issue 一次 AI 调用，复用 #10 token 配额预警
 - **git clone 安全**：限制内网/可信仓库，联调验证
 
 ### 6.5 诚实边界
 
-- 全 mock，无真实 DB / 无真实 semgrep / 无真实 LLM
-- semgrep 真实扫描 + git clone + AI 修复真实链路留 Linux 联调
+- 全 mock，无真实 DB / 无真实 Docker semgrep / 无真实 LLM
+- semgrep 真实扫描（Docker）+ git clone + AI 修复真实链路留联调（需 Docker 运行）
 - 误报忽略指纹机制 mock 测试，真实效果联调验证
 
 ---
@@ -246,9 +253,9 @@ issue 标 false_positive 后，记录规则指纹，同规则同场景下次扫�
 | 项 | 结果 |
 |---|---|
 | 占位符扫描 | 无 TBD/TODO |
-| 内部一致性 | semgrep方案A、回归用例复用#2框架、增量生成+case_outdated、/whitescan前缀——全文一致 |
+| 内部一致性 | semgrep方案B(Docker)、回归用例复用#2框架、增量生成+case_outdated、/whitescan前缀——全文一致 |
 | 范围检查 | 扫描+AI修复+回归用例+导出，单spec可承载，约2-2.5天 |
-| 歧义检查 | 已澄清：不写AST用semgrep、不自动覆盖用force、Windows不装走mock |
+| 歧义检查 | 已澄清：不写AST用semgrep(Docker)、不自动覆盖用force、Windows本地Docker跑 |
 | 依赖前置 | #2/#3在master，#5a Celery待完成，#4 test_case.py需协调 |
 
 确认后转入 writing-plans 生成实施计划（等 #5a 完成 + #4 协调 test_case.py 后实施）。
