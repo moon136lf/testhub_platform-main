@@ -6,6 +6,45 @@
 
 ---
 
+## 快照 #9 — 2026-08-26（#5a 完成，重新核对 #6 spec）
+
+**当前分支**：worktree-module10-system-settings（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+7b53cd5 spec(whitescan): switch semgrep to Docker (方案B, Windows local + Linux deploy)
+5b39c2b docs: session archive W10 #8 (auto)
+eef3f84 spec(whitescan): #9 whitebox scan + AI fix + regression case generation
+8af7303 docs: session archive W10 #7 (auto)
+d34318 docs: session archive W10 #6 (auto)
+```
+
+### 13 task 进度（#10）
+- ✅ T1-T13 全完成。#10 worktree 保持完成态挂起，等 master 空闲合回。
+- 🔄 额外：#6/#7/#9 spec 已落盘（随 #10 合回 master 时进入）
+
+### 测试 / 构建
+- 后端：`223 passed, 14 warnings in 35.95s`（exit 0）
+
+### 本时段进展
+- **#5a 已全部完成**（master `e33aa2e`，T1-T9 + 验收 fixup）：ExecutionRecord/ExecutionDetail model + 迁移 + ScriptExecutor + run/batch-run/quick-run/stats 端点（挂 `/scripts/*`，非 /executions）+ 前端 UI。
+- **#6 spec 核对发现 3 处需更新**（待改）：
+  1. master **无 `/executions` 前缀**——#5a 执行 API 在 `/scripts/*`（run/stats/list）。原 spec「避开 /executions」理由失效，改为「#6 用 /reports 独立前缀，与 #5a /scripts/* 不冲突」。
+  2. #5a 已有 `GET /scripts/stats`（脚本维度 last_status/run_count）+ `GET /scripts`（脚本列表）——与 #6 `/reports/stats`（执行记录维度 通过率/趋势）互补不冲突，spec 注明区分。
+  3. 依赖说明：#5a 已完成（master e33aa2e），#6 前置满足，可从 master 拉 worktree 实施。
+- **ExecutionDetail 字段齐**（screenshot_url/dom_snapshot/error_type/stack_trace/duration_ms/heal_status/heal_log）——#6 报告可用，✓。
+
+### 下一步建议
+1. 更新 #6 spec 3 处（API 前缀理由 + stats 区分 + 依赖状态）→ 提交。
+2. #6 更新后可从 master 拉 module6 worktree 实施（#5a 已完成）。
+3. #10 等 master 空闲合回；#7 等 #10 合回后实施。
+4. 每小时 :13 自动存档 cron（session-only）。
+
+---
+
 ## 快照 #8 — 2026-08-26（#9 spec 落盘 + semgrep 改方案B Docker）
 
 **当前分支**：worktree-module10-system-settings（工作树干净）
