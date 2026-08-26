@@ -6,6 +6,42 @@
 
 ---
 
+## 快照 #8 — 2026-08-26（#9 spec 落盘 + semgrep 改方案B Docker）
+
+**当前分支**：worktree-module10-system-settings（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+eef3f84 spec(whitescan): #9 whitebox scan + AI fix + regression case generation
+8af7303 docs: session archive W10 #7 (auto)
+d341318 docs: session archive W10 #6 (auto)
+8e09982 docs: session archive W10 #5 (auto)
+378d1bb spec(review): #7 review center + batch refine + project report design
+```
+
+### 13 task 进度（#10）
+- ✅ T1-T13 全完成。#10 worktree 保持完成态挂起，等 master 空闲合回。
+- 🔄 额外：#6/#7/#9 spec 已落盘（随 #10 合回 master 时进入）
+
+### 测试 / 构建
+- 后端：`223 passed, 14 warnings in 38.65s`（exit 0）
+
+### 本时段进展
+- **#9 spec 已落盘**（eef3f84）：白盒代码体检完整设计——semgrep扫描+AI修复+回归用例生成（复用#2框架，强制自动化形式，融入用户给的提示词/7列规范/5规则）+增量生成+case_outdated+产出物导出。4段设计确认。
+- **semgrep 安装尝试**：pip install semgrep 在 Windows 卡住（已验证，后台任务空输出无进展），印证 Windows 支持差。
+- **用户决策**：改用**方案B Docker 跑 semgrep**（用户本地装了 Docker Desktop）。
+- **待改 spec**：#9 spec 3.2节 从方案A(mock) 改方案B(Docker调用)：`_run_semgrep` 改 `docker run returntocorp/semgrep`；requirements 不加 semgrep 改加 Docker 镜像约定；风险更新为 Windows Docker Desktop 依赖。测试仍 @patch subprocess。
+
+### 下一步建议
+1. 改 #9 spec 3.2节为方案B Docker（待用户确认后改+提交）。
+2. #10 等 master 空闲合回；#6 等 #5a；#7 等 #10 合回后实施。
+3. 每小时 :13 自动存档 cron（session-only）。
+
+---
+
 ## 快照 #7 — 2026-08-26（#9 spec 第2段设计完成）
 
 **当前分支**：worktree-module10-system-settings（工作树干净）
