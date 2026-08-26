@@ -6,6 +6,44 @@
 
 ---
 
+## 快照 #7 — 2026-08-26（#9 spec 第2段设计完成）
+
+**当前分支**：worktree-module10-system-settings（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+d341318 docs: session archive W10 #6 (auto)
+8e09982 docs: session archive W10 #5 (auto)
+378d1bb spec(review): #7 review center + batch refine + project report design
+62b6d50 docs: session archive W10 #4 (auto)
+2d49284 spec(reports): #6 execution records & reports design (report center + export)
+```
+
+### 13 task 进度（#10）
+- ✅ T1-T13 全完成。#10 worktree 保持完成态挂起，等 master 空闲合回。
+- 🔄 额外：#6/#7/#9 spec 设计中（存本 worktree，随 #10 合回 master 时进入）
+
+### 测试 / 构建
+- 后端：`223 passed, 14 warnings in 37.46s`（exit 0）
+
+### 本时段进展
+- **#9 第2段（服务层+API）设计完成**（设计层面，未落 spec 文件）：
+  - 4 service：code_scan_service（扫描+issue流转+误报忽略）/ ai_fix_service（AI修复建议）/ regression_case_generator（回归用例，复用#2 prompt）/ scan_export_service（产出物导出）
+  - Celery task run_code_scan_task：git clone→semgrep→写issue→统计→（可选）AI修复子任务
+  - 8 个 /whitescan/* 端点（scan/scans/issues/ai-fix/generate-cases/export）
+  - WHITE-04 误报忽略：规则指纹（rule_id+代码位置哈希）跳过同场景
+- **待落 spec**：#9 第3段（前端页）+ 第4段（测试+边界+worktree）。
+
+### 下一步建议
+1. #9 spec 继续第3段（前端白盒体检页）。
+2. #10 等 master 空闲合回；#6 等 #5a；#7 等 #10 合回后实施。
+3. 每小时 :13 自动存档 cron（session-only）。
+
+---
+
 ## 快照 #6 — 2026-08-26（#9 brainstorming 持续，回归用例规则已整合）
 
 **当前分支**：worktree-module10-system-settings（工作树干净）
