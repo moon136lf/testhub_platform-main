@@ -1,10 +1,12 @@
 # 自愈引擎 Level2-4（模块 #5b）设计
 
-> 创建：2026-08-26
+> 创建：2026-08-26（2026-08-27 更新：审查修复后定位器契约统一为选择器字符串）
 > 流程：Superpowers brainstorming → spec → writing-plans → TDD → 编码 → 验收
 > 依据：需求文档 §11.1 自愈引擎详细设计、§11.2 硬性规则、§8.2.8 self_heal_cache、§8.3 heal_cache:{element_id}、§10.2 流程、§3.3.4 TRANS-07/08；技能规则 `docs/skills-reference/testcase-to-script-skill.md`
 > 需求核对：2026-08-25 模块 #5 整体核对（3 子代理）结论已落入；本 spec 聚焦自愈 Level2-4。
 > 模块归属：本 spec 是模块 #5「UI自动化测试执行」的第二切片（#5b 自愈），#5a 执行主干已完成，#5c AI 诊断独立 spec。
+
+> **定位器契约（2026-08-27 审查修复后定案）**：各级自愈返回**选择器字符串**（CSS/XPath/`text=`/`role=` 引擎语法，如 `text="登录"`、`[aria-label="用户名"]`、`role=button[name="登录"]`），与主路径 locator_strategies 的 value 格式一致，可直接传 `page.locator()`。**禁止** `page.get_by_*(...)` Python API 表达式（`page.locator()` 不认，真实浏览器抛 Unknown engine）。LLM 输出经 `_clean_llm_locator` 清洗（markdown 围栏/杂讯/引号，拒绝 get_by_* 表达式）。真浏览器守门测试 `test_self_heal_real_browser.py`。
 
 ---
 
@@ -57,7 +59,8 @@
 
 #5b 执行期填充：
 - `heal_status`：none → healing → healed（成功）/ failed（全失败）
-- `heal_log`：JSONB 数组 `[{level, strategy, success, locator?, confidence, timestamp}]`
+- `heal_log`：JSONB 数组 `[{level, strategy, success, locator?, confidence, timestamp}]`（实现：locator 已含；confidence 由缓存统一记，不重复落 log；timestamp 无时钟注入，spec §8 允许省略）
+- `heal_status` 实现：none（无自愈尝试）→ healed（有自愈成功）/ failed（有自愈尝试全失败，审查 #3）
 
 SmartLocator.locate_and_interact 返回值扩展带 heal 信息，ScriptExecutor 捕获后填 ExecutionDetail。
 
@@ -137,9 +140,8 @@ class SelfHealEngine:
     async def _heal_by_dom_fuzz(self, page, element_data: dict) -> Optional[str]:
         """扫页面可交互元素, rapidfuzz 算文本/属性相似度, top-K 验证."""
         from rapidfuzz import fuzz
-        target_text = (element_data.get("element_name") or "") + (element_data.get("semantic_info", {}) or {}).get("text", "")
-        if not target_text:
-            return None
+        # 目标 = [element_name, semantic.text] 各算一次取最高分 (避免拼接稀释相似度)
+        targets = [t for t in [element_name, sem_text] if t]
         selectors = ["button", "a", "input", "select", "textarea", "[role='button']", "[role='link']", "[role='checkbox']"]
         candidates = []
         for sel in selectors:
@@ -148,18 +150,17 @@ class SelfHealEngine:
                 text = (await el.text_content() or "").strip()
                 aria = await el.get_attribute("aria-label") or ""
                 label = await el.get_attribute("placeholder") or ""
-                for candidate_text in [text, aria, label]:
+                for field, candidate_text in [("text", text), ("aria", aria), ("placeholder", label)]:
                     if candidate_text:
-                        score = fuzz.ratio(target_text, candidate_text)
+                        score = max(fuzz.ratio(t, candidate_text) for t in targets)
                         if score >= 70:  # 阈值
-                            candidates.append((score, el, candidate_text))
+                            candidates.append((score, el, field, candidate_text))
         candidates.sort(key=lambda x: x[0], reverse=True)
-        for score, el, _ in candidates[:5]:  # top-5 验证
+        for score, el, field, cand in candidates[:5]:  # top-5 验证
             try:
-                # 构造定位器 (优先 text/aria-label)
-                # 验证可见 + 可操作
                 if await el.is_visible():
-                    return await self._build_locator_from_element(el, candidates[0])
+                    # 按命中属性构造选择器: text→text="x" / aria→[aria-label="x"] / placeholder→[placeholder="x"]
+                    return self._build_locator_from_candidate(field, cand)
             except Exception:
                 continue
         return None
@@ -174,12 +175,12 @@ class SelfHealEngine:
         dom = dom[:20000]  # 截断防 token 爆
         prompt = f"""页面 DOM 如下, 找到元素 "{element_data.get('element_name')}" 的 Playwright 定位器.
 元素语义: {element_data.get('semantic_info', {})}
-只输出一个定位器字符串 (如 page.get_by_role("button", name="登录")), 不要解释.
+{LOCATOR_OUTPUT_INSTRUCTION}  # 要求输出选择器字符串, 禁 page.get_by_* 表达式
 
 DOM:
 {dom}"""
         resp = await self.gateway.chat([{"role": "user", "content": prompt}])
-        locator = resp["content"].strip()
+        locator = self._clean_llm_locator(resp.get("content"))  # 清洗围栏/杂讯/引号, 拒绝 get_by_*
         # 验证定位器有效
         try:
             loc = page.locator(locator)
@@ -196,19 +197,19 @@ DOM:
         """截图发 kimi2.6 多模态 (provider=moonshot), LLM 看图返回定位器, 验证.
 
         路线1: Level4 专用 kimi2.6 (显式 provider="moonshot"), 其他级仍默认 glm5.2.
+        截图压缩: 超宽 (>1280px) 缩放 + JPEG q70, 控制多模态 token 成本 (审查 #6).
         """
         screenshot = await page.screenshot()
-        import base64
-        img_b64 = base64.b64encode(screenshot).decode()
-        prompt_text = f"页面截图如下, 找到元素 \"{element_data.get('element_name')}\" 的 Playwright 定位器. 只输出定位器, 不要解释."
+        img_b64 = self._screenshot_to_b64(screenshot)  # PIL 缩放/JPEG, 失败降级原样
+        prompt_text = f"页面截图如下, 找到元素 \"{element_data.get('element_name')}\" 的 Playwright 定位器. {LOCATOR_OUTPUT_INSTRUCTION}"
         messages = [
             {"role": "user", "content": [
                 {"type": "text", "text": prompt_text},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
             ]}
         ]
         resp = await self.gateway.chat(messages, provider="moonshot")
-        locator = resp["content"].strip()
+        locator = self._clean_llm_locator(resp.get("content"))  # 清洗, 同 Level3
         # 验证定位器有效 (同 Level3)
         try:
             loc = page.locator(locator)
@@ -231,10 +232,11 @@ DOM:
 
 ### 3.6 SmartLocator 接入
 
-改 `SmartLocator._self_heal_and_interact`（`backend/app/services/smart_locator.py:123`）：
+改 `SmartLocator._self_heal_and_interact`（`backend/app/services/smart_locator.py`）：
 - 当前：只调 `self._heal_by_semantic`
 - 改为：调 `SelfHealEngine(self.gateway, ElementCacheService).heal(page, self._element_data_dict(), action, **kw)`
 - 返回值带 heal_log，SmartLocator 透传给调用方（ScriptExecutor 填 ExecutionDetail.heal_log）
+- 全失败：抛 `ElementNotFoundError(msg, heal_log=...)`（异常携带失败记录，供执行器落库，审查 #3）；**不再**在 SmartLocator 里重复 record_heal_failure（引擎已记，审查 #2）
 
 SmartLocator 需持 gateway 引用（当前不持有）——改 SmartLocator 构造或 _self_heal_and_interact 接收 gateway。
 
