@@ -271,6 +271,10 @@ class ClaudeProvider(AIProvider):
 class MoonshotProvider(AIProvider):
     """Moonshot (kimi2.6) Provider - 支持多模态 (文本+图片)."""
 
+    def __init__(self, api_key: str, api_url: str, model: str = "kimi-2.6"):
+        super().__init__(api_key, api_url)
+        self.model = model
+
     async def chat_completion(self, messages: List[Dict], **kwargs) -> Dict:
         """Moonshot 聊天补全. 多模态: messages content 可含 image_url (base64 data URI)."""
         try:
@@ -279,7 +283,7 @@ class MoonshotProvider(AIProvider):
                 "Content-Type": "application/json"
             }
             payload = {
-                "model": kwargs.get("model", "kimi-2.6"),
+                "model": kwargs.get("model", self.model),
                 "messages": messages,
                 "temperature": kwargs.get("temperature", 0.7),
                 "max_tokens": kwargs.get("max_tokens", 2000)
@@ -339,7 +343,8 @@ class AIGateway:
         if settings.MOONSHOT_API_KEY:
             self._providers["moonshot"] = MoonshotProvider(
                 api_key=settings.MOONSHOT_API_KEY,
-                api_url=settings.MOONSHOT_API_URL
+                api_url=settings.MOONSHOT_API_URL,
+                model=settings.MOONSHOT_MODEL,
             )
 
         if not self._providers:

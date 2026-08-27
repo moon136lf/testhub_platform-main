@@ -20,8 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 class ElementNotFoundError(Exception):
-    """元素未找到异常：所有定位器策略与自愈均失败"""
-    pass
+    """元素未找到异常：所有定位器策略与自愈均失败
+
+    heal_log: 自愈失败时携带各级尝试记录 (供 ScriptExecutor 落 ExecutionDetail.heal_log,
+    审查 #3: 失败的自愈尝试也应可见, 且 heal_status 可判 "failed").
+    """
+
+    def __init__(self, message: str, heal_log: Optional[list] = None):
+        super().__init__(message)
+        self.heal_log = heal_log
 
 
 class SmartLocator:
@@ -124,11 +131,11 @@ class SmartLocator:
     async def _self_heal_and_interact(
         self, page, action: str, **kwargs
     ) -> Dict[str, Any]:
-        """自愈定位 (Level1-3 via SelfHealEngine).
+        """自愈定位 (Level1-4 via SelfHealEngine).
 
-        委托 SelfHealEngine 逐级尝试 semantic/dom_fuzz/ai_dom:
+        委托 SelfHealEngine 逐级尝试 semantic/dom_fuzz/ai_dom/visual:
         - 命中: 用 healed locator 执行操作, 返回带 heal_log/writeback 的结果
-        - 全失败: 记录失败, 抛 ElementNotFoundError
+        - 全失败: 抛 ElementNotFoundError (失败记录由引擎负责)
 
         TODO: 集成 playwright-healer 库做更智能的自愈
         """
@@ -137,10 +144,11 @@ class SmartLocator:
         result = await engine.heal(page, self._element_data_dict(), action, **kwargs)
 
         if not result["success"]:
-            if self.element_id:
-                await ElementCacheService.record_heal_failure(self.element_id)
+            # 失败记录由 SelfHealEngine._on_heal_failure 统一负责 (#5b 审查 #2:
+            # 此处不再重复 record_heal_failure, 避免 failure_count 双计)
             raise ElementNotFoundError(
-                f"Element '{self.element_name}' self-heal failed (Level1-3 all failed)"
+                f"Element '{self.element_name}' self-heal failed (Level1-4 all failed)",
+                heal_log=result.get("heal_log") or [],
             )
 
         # 命中: 用 healed locator 执行操作

@@ -225,6 +225,10 @@ class ScriptExecutor:
                 last_failure = await collect_failure(page, step, e, storage=self.storage)
                 failures += 1
                 overall_status = "fail"
+                # #5b 审查 #3: 自愈失败也保留 heal_log (ElementNotFoundError 携带), 供 heal_status="failed" 判定
+                failed_heal_log = getattr(e, "heal_log", None)
+                if failed_heal_log:
+                    heal_logs.append(failed_heal_log)
                 await sse.send_message(type="error", stage="execute",
                                        content=f"第 {step} 步：❌ 失败（{last_failure['error_type']}）",
                                        progress=((i + 1) / max(len(steps), 1)) * 0.9)
@@ -250,9 +254,14 @@ class ScriptExecutor:
         if execution_record is None:
             return None
         duration_ms = int((time.time() - start) * 1000)
-        # #5b T5: 聚合 heal_log + 判定 heal_status (有自愈成功 → healed, 否则 none)
+        # #5b T5: 聚合 heal_log + 判定 heal_status (有自愈成功 → healed; 有自愈尝试全失败 → failed; 无 → none)
         all_heal_logs = [h for logs in heal_logs for h in (logs or []) if h]
-        heal_status = "healed" if all_heal_logs and any(h.get("success") for h in all_heal_logs) else "none"
+        if all_heal_logs and any(h.get("success") for h in all_heal_logs):
+            heal_status = "healed"
+        elif all_heal_logs:
+            heal_status = "failed"
+        else:
+            heal_status = "none"
         detail = ExecutionDetail(
             execution_record_id=execution_record.id,
             script_id=getattr(script_asset, "id", None),

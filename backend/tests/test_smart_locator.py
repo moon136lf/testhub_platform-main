@@ -269,6 +269,26 @@ class TestSelfHealIntegration:
         with pytest.raises(ElementNotFoundError):
             asyncio_run(sl.locate_and_interact(page, "click"))
 
+    def test_all_fail_does_not_double_record_heal_failure(self, monkeypatch):
+        """审查 #2: 全失败时 SmartLocator 不再重复 record_heal_failure (引擎已记)."""
+        page = MagicMock()
+        loc = MagicMock()
+        loc.wait_for = AsyncMock(side_effect=Exception("not found"))
+        page.locator = MagicMock(return_value=loc)
+        from app.services import self_heal_engine as she_mod, smart_locator as sl_mod
+        fake_engine = MagicMock()
+        fake_engine.heal = AsyncMock(return_value={
+            "success": False, "locator": None, "strategy": None, "heal_log": [], "writeback": None,
+        })
+        monkeypatch.setattr(she_mod, "SelfHealEngine", lambda gw, cache: fake_engine)
+        fail_mock = AsyncMock()
+        monkeypatch.setattr(sl_mod.ElementCacheService, "record_heal_failure", fail_mock)
+        sl = SmartLocator(self._element_data(), gateway=MagicMock())
+        with pytest.raises(ElementNotFoundError):
+            asyncio_run(sl.locate_and_interact(page, "click"))
+        # 引擎内部已记一次; SmartLocator 路径不应再调 (双计会使 failure_count+2)
+        fail_mock.assert_not_awaited()
+
     def test_gateway_defaults_none_backwards_compatible(self):
         """SmartLocator 不传 gateway 时 gateway=None (向后兼容)."""
         sl = SmartLocator(self._element_data())

@@ -339,8 +339,36 @@ class TestScriptExecutorHealFill:
         finally:
             pass
 
+    def test_heal_failure_keeps_heal_log_and_sets_failed_status(self):
+        """审查 #3: 自愈全失败 (抛异常) 时 heal_log 保留, heal_status="failed"."""
+        sa = _make_script_asset([{"step": 1, "action": "click", "element_name": "用户名",
+                                  "value": "", "status": "ok", "case_req": "", "impl": "x",
+                                  "page_name": None, "assertion": None}])
+
+        class FakeSL:
+            def __init__(self, ed, gateway=None):
+                pass
+
+            async def locate_and_interact(self, page, action, **kw):
+                from app.services.smart_locator import ElementNotFoundError
+                # 模拟 SelfHealEngine 全失败: 异常携带失败 heal_log
+                raise ElementNotFoundError("self-heal failed", heal_log=[
+                    {"level": 1, "strategy": "semantic", "success": False},
+                    {"level": 2, "strategy": "dom_fuzz", "success": False},
+                    {"level": 3, "strategy": "ai_dom", "success": False},
+                    {"level": 4, "strategy": "visual", "success": False},
+                ])
+
+        detail, sse, db = TestScriptExecutorExecute()._exec(sa, locator_factory=FakeSL)
+        assert detail.status == "fail"
+        assert detail.error_type == "locate_failed"
+        # heal_log 不丢失 + heal_status="failed"
+        assert detail.heal_log is not None
+        assert len(detail.heal_log) == 4
+        assert all(h.get("success") is False for h in detail.heal_log)
+        assert detail.heal_status == "failed"
+
     def test_writeback_invokes_element_service(self):
-        """#5b T5: writeback 信号 → 调 ElementService.writeback_healed_locator (db 非 None 时)."""
         sa = _make_script_asset([{"step": 1, "action": "fill", "element_name": "用户名",
                                   "value": "admin", "status": "ok", "case_req": "", "impl": "x",
                                   "page_name": None, "assertion": None}])

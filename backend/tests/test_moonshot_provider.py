@@ -88,3 +88,12 @@ class TestAIGatewayRegistersMoonshot:
             gw = AIGateway()
             assert "moonshot" in gw._providers
             assert "glm-4" in gw._providers  # glm 仍注册(键名不变)
+
+    def test_moonshot_model_from_settings_not_dead(self):
+        """审查 #7: settings.MOONSHOT_MODEL 应注入 provider (非死配置)."""
+        from app.services.ai_gateway import MoonshotProvider
+        provider = MoonshotProvider(api_key="sk", api_url="http://x", model="kimi-custom")
+        assert provider.model == "kimi-custom"
+        # 未传 model 时默认 kimi-2.6
+        provider2 = MoonshotProvider(api_key="sk", api_url="http://x")
+        assert provider2.model == "kimi-2.6"
