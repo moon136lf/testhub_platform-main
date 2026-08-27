@@ -1,7 +1,402 @@
 # MoonTest 会话存档
 
-> 由定时任务（每小时 :07）自动追加。最新快照在最上方，旧的在下。
-> 自动过期：recurring 任务 7 天后失效（见 `482991f7`）。
+> 由定时任务（每小时 :50）自动追加。最新快照在最上方，旧的在下。
+> 自动过期：recurring 任务 7 天后失效（见 `03985124`）。
+
+---
+
+## 快照 #33 — 2026-08-27（第 33 次快照，:50 触发）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_HANDOFF_2026-08-26.md`（未跟踪，下班交接文档）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+0d1a1b6 feat(heal): MoonshotProvider kimi2.6 multimodal + GLM upgrade glm5.2 (#5b T7)
+7f335e1 feat(heal): ScriptExecutor fills heal_status/heal_log + writeback (#5b T5)
+f1357b7 feat(heal): SmartLocator integrates SelfHealEngine Level1-3 (#5b T4)
+3257ef0 feat(heal): TRANS-08 writeback signal + ElementService.writeback (#5b T3)
+6ac992b feat(heal): Level3 AI DOM via LLM (#5b T2)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；🚧 #5b 实施中：T1-T7 完成（T7 commit 0d1a1b6，341 测试全绿，测试污染根治——真凶是 test_knowledge_service 的 sys.modules['app.services.ai_gateway']=MagicMock 未恢复，加 save/restore）。T8（Level4 视觉 kimi2.6 多模态）子代理后台运行。剩 T9（spec+验收）→合并审查。
+6-11. — ⬜/#10已完成。
+
+### 本会话进展（自快照 #32）
+- **T7 污染根治**：撤回过度清理，定位真凶 test_knowledge_service.py 的 sys.modules 替换未恢复（mock ai_gateway 泄漏到 moonshot 测试），加 save/restore 三模块。全量 341 passed。提交 T7（0d1a1b6）。
+- **T8 派发**：Level4 视觉（截图→base64→多模态 messages→provider="moonshot"→kimi2.6→定位器→验证），heal() 加 Level4 分支。
+- **交接文档保留**：`docs/SESSION_HANDOFF_2026-08-26.md` 未删（历史记录）。
+
+### 下一步建议
+1. T8 返回后派 T9（spec §1.4 删 Level4 偏差 + 验收 11 条核对）。
+2. T9 后 #5b 整体合并审查。
+3. #6/#7/#9 spec 已就绪，可新会话 worktree 并行。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（含 #10 待办）。
+
+---
+
+
+---
+
+## 快照 #32 — 2026-08-27（第 32 次快照，:50 触发）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/app/core/config.py`（T7：MOONSHOT 配置）
+- `backend/app/services/ai_gateway.py`（T7：MoonshotProvider + glm5.2）
+- `backend/tests/test_ai_gateway.py`（T7：MOONSHOT mock + **过度清理需撤回**）
+- `backend/tests/test_moonshot_provider.py`（未跟踪，T7 测试，单独跑全过）
+- `docs/SESSION_HANDOFF_2026-08-26.md`（未跟踪，下班交接文档）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+7f335e1 feat(heal): ScriptExecutor fills heal_status/heal_log + writeback (#5b T5)
+f1357b7 feat(heal): SmartLocator integrates SelfHealEngine Level1-3 (#5b T4)
+3257ef0 feat(heal): TRANS-08 writeback signal + ElementService.writeback (#5b T3)
+6ac992b feat(heal): Level3 AI DOM via LLM (#5b T2)
+f89d7ff feat(heal): SelfHealEngine + Level2 rapidfuzz DOM fuzzy (#5b T1)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；🚧 #5b T1-T5 完成 + T7 实现完待提交。卡在 T7 测试污染（sys.modules mock 污染 app.core.database）。已写交接文档 `docs/SESSION_HANDOFF_2026-08-26.md`，方案 B 根治（撤回过度清理 + 改 patch settings）留明天。
+6-11. — ⬜/#10已完成。
+
+### 本会话进展（自快照 #31）
+- **下班存档**：写交接文档 `SESSION_HANDOFF_2026-08-26.md`（含 T7 阻塞根因 + 方案 B 步骤 + Level4 kimi2.6 接入参数 + T8/T9 待办 + 新会话启动指令）。
+- **定时存档改 :50**：删旧任务 482991f7（每小时 :07），建新 03985124（每小时 :50 durable），方便下班前自动存档。
+- **T7 测试污染诊断完成**：sys.modules['app.core.config']=MagicMock 窗口期缓存 mock settings 到 app.core.database，致 moonshot 测试在 test_ai_gateway 之后 fail。我加的 `del sys.modules['app.*']` 过度清理引入 34 failed（全量），需撤回。
+
+### 下一步建议（明天新会话）
+1. 贴交接文档启动指令 → 读 `docs/SESSION_HANDOFF_2026-08-26.md`。
+2. 方案 B 根治 T7 测试污染（撤回过度清理 + 改 patch settings，手动不派子代理避免 stall）→ 提交 T7。
+3. 派 T8（Level4 视觉：截图→kimi2.6→定位器，provider="moonshot"）→ T9（spec §1.4 删偏差 + 验收）→ #5b 合并审查。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（含 #10 待办）。
+
+---
+
+
+---
+
+## 快照 #31 — 2026-08-26（第 31 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/app/core/config.py`（T7：MOONSHOT 配置）
+- `backend/app/services/ai_gateway.py`（T7：MoonshotProvider + glm5.2）
+- `backend/tests/test_ai_gateway.py`（T7：MOONSHOT mock + sys.modules 污染修复）
+- `backend/tests/test_moonshot_provider.py`（未跟踪，T7 测试）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+7f335e1 feat(heal): ScriptExecutor fills heal_status/heal_log + writeback (#5b T5)
+f1357b7 feat(heal): SmartLocator integrates SelfHealEngine Level1-3 (#5b T4)
+3257ef0 feat(heal): TRANS-08 writeback signal + ElementService.writeback (#5b T3)
+6ac992b feat(heal): Level3 AI DOM via LLM (#5b T2)
+f89d7ff feat(heal): SelfHealEngine + Level2 rapidfuzz DOM fuzzy (#5b T1)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；🚧 #5b T1-T5 完成 + T7 实现完成待提交。T7 fixup 子代理（修 test_ai_gateway sys.modules 污染）仍在后台运行（已超 1 小时，可能再次 stall）。剩 T8/T9。
+6-11. — ⬜/#10已完成。
+
+### 本会话进展（自快照 #30）
+- 无新提交。T7 fixup 子代理仍在后台，未返回（疑似 stall）。
+
+### 下一步建议
+1. 若 T7 fixup 子代理仍无响应，考虑手动终止 + 直接修复（污染根因已诊断：sys.modules['app.core.config']=MagicMock 窗口期缓存 mock settings 到 app.core.database）。
+2. T7 提交后派 T8（Level4 视觉：截图→kimi2.6→定位器，provider="moonshot"）→ T9（spec+验收）→ #5b 合并审查。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #30 — 2026-08-26（第 30 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/app/core/config.py`（T7：MOONSHOT 配置）
+- `backend/app/services/ai_gateway.py`（T7：MoonshotProvider + glm5.2）
+- `backend/tests/test_ai_gateway.py`（T7：MOONSHOT mock 字段 + sys.modules 污染修复）
+- `backend/tests/test_moonshot_provider.py`（未跟踪，T7 测试）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+7f335e1 feat(heal): ScriptExecutor fills heal_status/heal_log + writeback (#5b T5)
+f1357b7 feat(heal): SmartLocator integrates SelfHealEngine Level1-3 (#5b T4)
+3257ef0 feat(heal): TRANS-08 writeback signal + ElementService.writeback (#5b T3)
+6ac992b feat(heal): Level3 AI DOM via LLM (#5b T2)
+f89d7ff feat(heal): SelfHealEngine + Level2 rapidfuzz DOM fuzzy (#5b T1)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；🚧 #5b T1-T5 完成 + T7 实现完成待提交。T7 fixup 子代理（修 test_ai_gateway sys.modules mock 污染）仍在后台运行。剩 T8（Level4 视觉）→T9（spec+验收）。
+6-11. — ⬜/#10已完成。
+
+### 本会话进展（自快照 #29）
+- 无新提交。T7 fixup 子代理仍在后台修测试污染（test_ai_gateway sys.modules mock 缓存致 moonshot 测试在它之后 fail）。
+- 仅 T7 改动待提交 + 存档文件。
+
+### 下一步建议
+1. T7 fixup 返回后跑全量验证（应 341 passed）→ 派 T8（Level4 视觉：截图→kimi2.6→定位器，provider="moonshot"）。
+2. T8 后 T9（spec §1.4 删 Level4 偏差 + 验收）→ #5b 合并审查。
+3. #6/#7/#9 spec 已就绪，可新会话 worktree 并行。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（含 #10 待办）。
+
+---
+
+---
+
+## 快照 #29 — 2026-08-26（第 29 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/app/core/config.py`（T7：MOONSHOT_API_KEY/URL/MODEL）
+- `backend/app/services/ai_gateway.py`（T7：MoonshotProvider + GLM glm5.2）
+- `backend/tests/test_ai_gateway.py`（T7：加 MOONSHOT mock 字段 + sys.modules 污染修复）
+- `backend/tests/test_moonshot_provider.py`（未跟踪，T7 测试）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+7f335e1 feat(heal): ScriptExecutor fills heal_status/heal_log + writeback (#5b T5)
+f1357b7 feat(heal): SmartLocator integrates SelfHealEngine Level1-3 (#5b T4)
+3257ef0 feat(heal): TRANS-08 writeback signal + ElementService.writeback (#5b T3)
+6ac992b feat(heal): Level3 AI DOM via LLM (#5b T2)
+f89d7ff feat(heal): SelfHealEngine + Level2 rapidfuzz DOM fuzzy (#5b T1)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；🚧 #5b 实施中 T1-T5 完成 + T7 实现完成待提交。T7 子代理首次 stall（600s 看门狗终止），已派 fixup 子代理修 test_ai_gateway 的 sys.modules mock 污染（污染致 moonshot 测试在 test_ai_gateway 之后 fail）。剩 T8（Level4 视觉）→T9（spec+验收）。
+6-11. — ⬜/#10已完成。
+
+### 本会话进展（自快照 #28）
+- **T7 实现**：MoonshotProvider（kimi2.6 多模态 OpenAI 兼容）+ GLM 模型 glm-4→glm5.2 + config MOONSHOT 配置 + AIGateway 注册 moonshot。单跑 moonshot 测试 4 全过。
+- **T7 测试污染**：test_ai_gateway.py 的 sys.modules['app.core.config']=MagicMock 在窗口期缓存了 mock settings 到 app.core.database，恢复 config 后 database 缓存的 mock 未清 → moonshot 测试在 test_ai_gateway 之后 fail（models 解包错误）。全量 4 failed 337 passed。
+- **fixup 子代理派发**：修测试污染（moonshot 用 patch settings 而非依赖 sys.modules）+ 提交 T7。
+
+### 下一步建议
+1. T7 fixup 返回后跑全量验证（应 341 passed）→ 派 T8（Level4 视觉：截图→kimi2.6→定位器，provider="moonshot"）。
+2. T8 后 T9（spec §1.4 删 Level4 偏差 + 验收）→ #5b 合并审查。
+3. #6/#7/#9 spec 已就绪，可新会话 worktree 并行。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（含 #10 待办）。
+
+---
+
+---
+
+## 快照 #28 — 2026-08-26（第 28 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/tests/test_moonshot_provider.py`（未跟踪，T7 实现子代理刚写，待提交）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+7f335e1 feat(heal): ScriptExecutor fills heal_status/heal_log + writeback (#5b T5)
+f1357b7 feat(heal): SmartLocator integrates SelfHealEngine Level1-3 (#5b T4)
+3257ef0 feat(heal): TRANS-08 writeback signal + ElementService.writeback (#5b T3)
+6ac992b feat(heal): Level3 AI DOM via LLM (#5b T2)
+f89d7ff feat(heal): SelfHealEngine + Level2 rapidfuzz DOM fuzzy (#5b T1)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；🚧 #5b 实施中 T1-T5 完成（Level2/Level3/回写/SmartLocator接入/ScriptExecutor填heal），T7（MoonshotProvider kimi2.6+glm5.2 升级）子代理后台运行（测试文件已写未提交）。剩 T8（Level4 视觉）→T9（spec+验收）。
+6. **执行记录与报告** — ⏳ spec 已写。
+7. **用例评审与E2E精修** — ⏳ spec 已写。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⏳ spec 已写。
+10. **系统设置** — ✅ 已合 master；待办增强已记 memory。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #27）
+- **#5b T4-T5 完成**：SmartLocator 接入 SelfHealEngine（f1357b7，35 测试）→ ScriptExecutor 填 heal_status/heal_log + writeback（7f335e1，19 测试）。_exec helper 加 locator_factory 管理 patch 生命周期。
+- **T7 派发**：MoonshotProvider（kimi2.6 多模态，OpenAI 兼容 image_url 格式）+ GLM 模型名 glm-4→glm5.2（provider 键名仍 glm-4）+ config 加 MOONSHOT_API_KEY/URL/MODEL。测试文件 test_moonshot_provider.py 已写未提交。
+- **Level4 kimi2.6 接入信息确认**：model=kimi-2.6，endpoint=moonshot.cn，多模态 OpenAI 格式，key 后填 .env。
+- **非阻断疑虑**（T4）：全失败时 record_heal_failure 被调两次（SelfHealEngine + SmartLocator，confidence -2），后续优化。
+
+### 下一步建议
+1. T7 返回后派 T8（Level4 视觉模型：截图→kimi2.6→定位器，硬编码 provider="moonshot"）。
+2. T8 后 T9（spec §1.4 删 Level4 偏差 + 验收）。
+3. T9 后 #5b 整体合并审查。
+4. #6/#7/#9 spec 已就绪，可新会话 worktree 并行。
+5. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（含 #10 待办）。
+
+---
+
+---
+
+## 快照 #27 — 2026-08-26（第 27 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `backend/app/services/smart_locator.py`（T4：接入 SelfHealEngine，子代理进行中）
+- `backend/tests/test_smart_locator.py`（T4：集成测试 + 旧测试适配）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+3257ef0 feat(heal): TRANS-08 writeback signal + ElementService.writeback (#5b T3)
+6ac992b feat(heal): Level3 AI DOM via LLM (#5b T2)
+f89d7ff feat(heal): SelfHealEngine + Level2 rapidfuzz DOM fuzzy (#5b T1)
+1bc07d3 fix(router): remove duplicate route brace after rebase merge (W10)
+2d4f8b7 spec(reports): align #6 with #5a completion — /scripts/* not /executions, stats dimension区分
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；🚧 #5b 实施中 T1-T3 完成（Level2/Level3/回写信号），T4（SmartLocator 接入）子代理后台运行。计划扩 T7-T9（MoonshotProvider kimi2.6 + glm5.2 升级 + Level4 视觉）。
+6. **执行记录与报告** — ⏳ spec 已写（8c0ed9f + 对齐 #5a 2d4f8b7）。
+7. **用例评审与E2E精修** — ⏳ spec 已写（0555985）。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⏳ spec 已写（ec4bf44，semgrep Docker）。
+10. **系统设置** — ✅ 已合 master。待办增强已记 memory（按 scope 配模型 + kimi2.6 统一接入）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #26）
+- **#5b T1-T3 完成**：SelfHealEngine + Level2 rapidfuzz（f89d7ff）→ Level3 AI DOM LLM（6ac992b）→ TRANS-08 回写信号 + ElementService.writeback（3257ef0）。9 测试通过。
+- **Level4 kimi2.6 决策定**：路线1（硬编码 provider="moonshot"，其他 glm5.2）；glm5.2 直接替换 glm-4（选 A）；kimi key 后填 .env。计划扩 T7（MoonshotProvider+glm5.2）/T8（Level4 视觉）/T9（spec 删偏差+验收）。
+- **#10 待办记录**：memory 新建 `moontest-module10-todo.md`（按 scope 配 ai_model_config + kimi2.6 多模态统一接入），归全模块完成后真实化时做。
+- **外部 W10 已合 master**：#10 全量 + #6/#7/#9 spec。#5b 子代理基于 #5a 完成（e33aa2e）开发，留意与外部合并冲突。
+
+### 下一步建议
+1. T4 返回后继续 T5（ScriptExecutor 填 heal 字段 + 执行 writeback）。
+2. 写 T7-T9（MoonshotProvider + Level4）进 #5b plan 派发。
+3. T6 + T9 验收后 #5b 整体合并审查。
+4. #6/#7/#9 spec 已就绪，可新会话 worktree 并行实现。
+5. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（含 #10 待办）。
+
+---
+
+---
+
+## 快照 #26 — 2026-08-26（第 26 次快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+1bc07d3 fix(router): remove duplicate route brace after rebase merge (W10)
+2d4f8b7 spec(reports): align #6 with #5a completion — /scripts/* not /executions, stats dimension区分
+e391cab docs: session archive W10 #9 (auto)
+9eaa1b1 spec(whitescan): switch semgrep to Docker (方案B, Windows local + Linux deploy)
+d690c4c docs: session archive W10 #8 (auto)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成。#5b 实施中（Task 1 SelfHealEngine+Level2 子代理后台运行）。#5c 待续。
+6. **执行记录与报告** — ⏳ spec 已写（8c0ed9f #6 报告中心+导出），后续对齐 #5a（2d4f8b7）。
+7. **用例评审与E2E精修** — ⏳ spec 已写（0555985 #7 评审中心+批量精修+项目报告）。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⏳ spec 已写（ec4bf44 #9 白盒扫描+AI修复+回归用例生成），semgrep 改 Docker 方案。
+10. **系统设置** — ✅ 已合并回 master（da83502→77ef976 等系列 W10 提交，含 TokenDashboard/警告横幅/AI设置/运行配置/环境管理/系统API/Token配额；router fix 1bc07d3）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #25）
+- **#5b spec + plan 提交**（9660913 spec / b6b77dd plan）：自愈 Level2-3，Level4 留记录。
+- **#5b Task 1 派发**：SelfHealEngine + Level2 rapidfuzz DOM 模糊，子代理后台运行中。
+- **外部会话（W10）大幅推进**（非本会话）：#10 系统设置全量提交并合并回 master（含 router fix）；#6/#7/#9 spec 均已写；#6 还对齐了 #5a 完成（/scripts/* 而非 /executions）。master HEAD 前进到 1bc07d3。
+- **影响**：#5b 子代理基于 #5a 完成状态（e33aa2e）开发，master 已前进——#5b 提交时可能与外部 #10 改动有冲突风险（若 #10 动了 smart_locator/element_service）。需 #5b 完成后留意 rebase。
+
+### 下一步建议
+1. #5b Task 1 子代理返回后继续 T2-T6，全部完成 + 合并审查。
+2. 留意 #5b 提交时与外部 #10 合并的冲突（smart_locator/element_service/__init__.py）。
+3. 外部已推进 #6/#7/#9 spec——可与新会话 worktree 并行实现。
+4. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
+
+---
+
+## 快照 #25 — 2026-08-26（第 25 次快照）
+
+**当前分支**：master（工作树干净）
+
+### 未提交改动
+无（工作树干净）
+
+### 最近 5 条提交
+```
+e33aa2e fix(exec): #5a acceptance fixes — affected linkage + playwright launch + assertion + batch validation
+1d69d46 fix(exec): ExecutionRecord.project_id from script_asset + quick-run skips detail (#5a T8 fixup)
+6e3551c feat(exec): frontend run/quick-run/batch-run UI + stats (#5a T9)
+175eb0f feat(exec): run/batch-run/quick-run endpoints + celery task (#5a T8)
+4ae613c feat(exec): stats endpoint + list category/keyword filter (#5a T7)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 执行引擎主干完成（11 提交，280 测试，6 项全修）。#5b spec brainstorming 中：范围待定（Level2-4），用户问 Level4 视觉模型详情，已答（多模态 LLM 看截图 vs 本地 CV），等用户定 A/B/C。
+6. **执行记录与报告** — ⬜ 未开始（#5a 定型后写 #6 spec）。
+7. **用例评审与E2E精修** — 部分。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⬜ 未开始。
+10. **系统设置** — worktree 未合（3 加行冲突）。
+11. **仪表盘优化** — ⬜ 未开始。
+
+### 本会话进展（自快照 #24）
+- **#5a 收尾全修完成**（e33aa2e）：6 项全修（affected 联动/Playwright 启动占位/assertion 执行/spec 偏差/batch 校验/import+case_id）。280 测试通过（+10）。memory 已更新（5/11 模块）。
+- **#5b spec brainstorming 启动**：用户选范围时反问 Level4 视觉模型是什么。已答：Level4 = 截图→CV/多模态LLM 识别元素位置，DOM 全失效时兜底。建议选 B（Level2+3），Level4 留后续。等用户定。
+
+### 下一步建议
+1. 用户定 #5b 范围（A 全 / B Level2+3 推荐 / C 仅 Level2）→ 写 #5b spec。
+2. #5b 完成后 #5c AI 诊断。
+3. 并行可做：写 #6 spec → 新会话 worktree 执行 #6（只读 execution_record/detail，低冲突）。
+4. #10 + #6 worktree 最后合 master。
+5. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试。
+
+---
 
 ---
 

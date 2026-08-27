@@ -1,9 +1,9 @@
-# 自愈引擎 Level2-3（模块 #5b）设计
+# 自愈引擎 Level2-4（模块 #5b）设计
 
 > 创建：2026-08-26
 > 流程：Superpowers brainstorming → spec → writing-plans → TDD → 编码 → 验收
 > 依据：需求文档 §11.1 自愈引擎详细设计、§11.2 硬性规则、§8.2.8 self_heal_cache、§8.3 heal_cache:{element_id}、§10.2 流程、§3.3.4 TRANS-07/08；技能规则 `docs/skills-reference/testcase-to-script-skill.md`
-> 需求核对：2026-08-25 模块 #5 整体核对（3 子代理）结论已落入；本 spec 聚焦自愈 Level2-3。
+> 需求核对：2026-08-25 模块 #5 整体核对（3 子代理）结论已落入；本 spec 聚焦自愈 Level2-4。
 > 模块归属：本 spec 是模块 #5「UI自动化测试执行」的第二切片（#5b 自愈），#5a 执行主干已完成，#5c AI 诊断独立 spec。
 
 ---
@@ -12,13 +12,12 @@
 
 ### 1.1 本切片做
 
-定位失败时逐级自愈：**Level1 启发式（semantic，#1 已建）→ Level2 DOM 模糊匹配（rapidfuzz，新建）→ Level3 AI DOM（LLM，新建）**。每级命中：confidence+1 + 回写缓存；confidence≥3 时回写元素库（TRANS-08 接通，当前 helper 已写但无调用方）。全失败抛 ElementNotFoundError。透明接入 SmartLocator，ScriptExecutor 无需改。
+定位失败时逐级自愈：**Level1 启发式（semantic，#1 已建）→ Level2 DOM 模糊匹配（rapidfuzz，新建）→ Level3 AI DOM（LLM，新建）→ Level4 视觉（kimi2.6 多模态截图识别，新建）**。每级命中：confidence+1 + 回写缓存；confidence≥3 时回写元素库（TRANS-08 接通，当前 helper 已写但无调用方）。全失败抛 ElementNotFoundError。透明接入 SmartLocator，ScriptExecutor 无需改。
 
 ### 1.2 本切片不做（明确留下游/后期）
 
 | 不做项 | 归属 | 理由 |
 |---|---|---|
-| Level4 视觉模型（截图→CV/多模态LLM 识别元素位置） | **后期需要再做** | DOM 通常不会全失效，一期价值低；走多模态 LLM 成本不高但属"DOM 完全失效"兜底，真实使用频率低。spec §1.4 偏差表登记。 |
 | 自愈策略配置（SMART/HEURISTIC_ONLY/DOM_ONLY/VISUAL_ONLY/FULL/PARALLEL） | #10 | §11.1 提到，#5b 先用默认 FULL（逐级），策略开关 + UI 归 #10 系统设置 |
 | 双 TTL 缓存（稳定 30 天/失效 1 小时） | 优化 | 当前固定 1 天（HEAL_CACHE_TTL=86400）够用，双 TTL 留优化，不阻断 |
 | SelfHealCache 表结构改字段名 | 不改 | 需求 §8.2.8 原始字段（locator_value/hit_count/fail_count/ttl_days）与实现（healed_locator/success_count/failure_count）有偏差，改表有迁移风险，#5b 不动，spec §1.4 登记偏差 |
@@ -26,13 +25,13 @@
 
 ### 1.3 与 #5a 的关系
 
-#5a 的 ScriptExecutor 定位失败时 SmartLocator.locate_and_interact 抛 ElementNotFoundError。#5b **改 SmartLocator 内部自愈链**（`_self_heal_and_interact` 从「只调 _heal_by_semantic」改为「调 SelfHealEngine.heal() Level1-3」），ScriptExecutor 无感知——自愈透明。ExecutionDetail.heal_status/heal_log（#5a 预留字段）由 SmartLocator 回传 heal 信息填充。
+#5a 的 ScriptExecutor 定位失败时 SmartLocator.locate_and_interact 抛 ElementNotFoundError。#5b **改 SmartLocator 内部自愈链**（`_self_heal_and_interact` 从「只调 _heal_by_semantic」改为「调 SelfHealEngine.heal() Level1-4」），ScriptExecutor 无感知——自愈透明。ExecutionDetail.heal_status/heal_log（#5a 预留字段）由 SmartLocator 回传 heal 信息填充。
 
 ### 1.4 与需求的偏差
 
 | 偏差 | 需求 | 本切片做法 | 理由 |
 |---|---|---|---|
-| Level4 视觉模型 | §11.1 四级 | 不做，留后期 | DOM 全失效场景一期频率低，多模态 LLM 兜底后期补 |
+| Level4 视觉模型 | §11.1 四级 | **本期实现**（T8）：截图→kimi2.6 多模态 LLM→定位器，显式 `provider="moonshot"`（路线1，其他仍 glm5.2） | 有现成 kimi2.6 多模态模型，Level4 一起做更完整；按 scope 配模型留 #10 后续 |
 | 策略配置 | §11.1 SMART/HEURISTIC_ONLY/... | 默认 FULL 逐级，开关留 #10 | 策略 UI + 配置归系统设置 |
 | SelfHealCache 字段名 | §8.2.8 locator_value/hit_count/fail_count/ttl_days | 不改表，用现有 healed_locator/success_count/failure_count | 改表迁移风险，现有字段功能等价 |
 | 双 TTL | §11.1 稳定 30d/失效 1h | 固定 1 天 | 优化项，不阻断 |
@@ -48,6 +47,7 @@
 - `semantic`（Level1，现有）
 - `dom_fuzz`（Level2，新）
 - `ai_dom`（Level3，新）
+- `visual`（Level4，新，kimi2.6 多模态）
 
 ### 2.2 复用 ElementCacheService
 
@@ -75,8 +75,8 @@ SmartLocator.locate_and_interact 返回值扩展带 heal 信息，ScriptExecutor
 
 ```python
 class SelfHealEngine:
-    """自愈引擎 Level1-3 状态机.
-    Level1 复用 SmartLocator._heal_by_semantic; Level2 rapidfuzz DOM 模糊; Level3 AI DOM.
+    """自愈引擎 Level1-4 状态机.
+    Level1 复用 SmartLocator._heal_by_semantic; Level2 rapidfuzz DOM 模糊; Level3 AI DOM; Level4 视觉 (kimi2.6 多模态).
     每级命中: record_heal_success + confidence+1 + 检查回写; 失败: record_heal_failure + 降级.
     全失败抛 ElementNotFoundError."""
 
@@ -105,6 +105,12 @@ class SelfHealEngine:
         if loc:
             await self._on_heal_success(element_data, loc, "ai_dom")
             return {"success": True, "locator": loc, "strategy": "ai_dom", "heal_log": heal_log}
+        # Level4: visual (kimi2.6 多模态, provider="moonshot")
+        loc = await self._heal_by_visual(page, element_data)
+        heal_log.append({"level": 4, "strategy": "visual", "success": loc is not None})
+        if loc:
+            await self._on_heal_success(element_data, loc, "visual")
+            return {"success": True, "locator": loc, "strategy": "visual", "heal_log": heal_log}
         # 全失败
         await self._on_heal_failure(element_data)
         return {"success": False, "locator": None, "strategy": None, "heal_log": heal_log}
@@ -183,7 +189,36 @@ DOM:
             return None
 ```
 
-### 3.4 TRANS-08 回写元素库
+### 3.4 Level4 视觉（kimi2.6 多模态）
+
+```python
+    async def _heal_by_visual(self, page, element_data: dict) -> Optional[str]:
+        """截图发 kimi2.6 多模态 (provider=moonshot), LLM 看图返回定位器, 验证.
+
+        路线1: Level4 专用 kimi2.6 (显式 provider="moonshot"), 其他级仍默认 glm5.2.
+        """
+        screenshot = await page.screenshot()
+        import base64
+        img_b64 = base64.b64encode(screenshot).decode()
+        prompt_text = f"页面截图如下, 找到元素 \"{element_data.get('element_name')}\" 的 Playwright 定位器. 只输出定位器, 不要解释."
+        messages = [
+            {"role": "user", "content": [
+                {"type": "text", "text": prompt_text},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+            ]}
+        ]
+        resp = await self.gateway.chat(messages, provider="moonshot")
+        locator = resp["content"].strip()
+        # 验证定位器有效 (同 Level3)
+        try:
+            loc = page.locator(locator)
+            await loc.wait_for(state="visible", timeout=3000)
+            return locator
+        except Exception:
+            return None
+```
+
+### 3.5 TRANS-08 回写元素库
 
 ```python
     async def _writeback_to_repo(self, element_id, healed_locator):
@@ -194,7 +229,7 @@ DOM:
 
 新建 `ElementService.writeback_healed_locator(element_id, healed_locator)` 方法（UPDATE ElementRepository，source="healed"）。
 
-### 3.5 SmartLocator 接入
+### 3.6 SmartLocator 接入
 
 改 `SmartLocator._self_heal_and_interact`（`backend/app/services/smart_locator.py:123`）：
 - 当前：只调 `self._heal_by_semantic`
@@ -217,7 +252,7 @@ SmartLocator 需持 gateway 引用（当前不持有）——改 SmartLocator �
 
 | 规则 | #5b 覆盖 |
 |---|---|
-| TRANS-07 定位失败触发自愈 | #5b Level1-3 状态机（SmartLocator._self_heal_and_interact 接 SelfHealEngine）|
+| TRANS-07 定位失败触发自愈 | #5b Level1-4 状态机（SmartLocator._self_heal_and_interact 接 SelfHealEngine）|
 | TRANS-08 自愈成功置信度≥3 回写仓库 | #5b _writeback_to_repo 接通（should_writeback + get_writeback + ElementService.writeback）|
 
 ---
@@ -226,9 +261,10 @@ SmartLocator 需持 gateway 引用（当前不持有）——改 SmartLocator �
 
 ### 6.1 单元测试（mock page + LLM + ElementCacheService）
 
-- `SelfHealEngine.heal`：Level1 命中（semantic 成功）/ Level2 命中（dom_fuzz 成功，Level1 失败）/ Level3 命中（ai_dom 成功，Level1-2 失败）/ 全失败（抛 ElementNotFoundError）四分支
+- `SelfHealEngine.heal`：Level1 命中（semantic 成功）/ Level2 命中（dom_fuzz 成功，Level1 失败）/ Level3 命中（ai_dom 成功，Level1-2 失败）/ Level4 命中（visual 成功，Level1-3 失败）/ 全失败（抛 ElementNotFoundError）五分支
 - `_heal_by_dom_fuzz`：mock page.query_selector_all 返回候选元素列表，rapidfuzz 算分，断言取 score≥70 的 top-5 验证
 - `_heal_by_ai_dom`：mock gateway.chat 返回定位器，验证 wait_for → 命中；LLM 返回无效定位器 → None
+- `_heal_by_visual`：mock page.screenshot + gateway.chat(provider="moonshot") 多模态返回定位器 → 命中；无效定位器 / 截图失败 → None
 - `_on_heal_success`：mock record_heal_success + should_writeback=True → 断言 _writeback_to_repo 被调
 - `_on_heal_failure`：mock record_heal_failure
 - `_writeback_to_repo`：mock ElementService.writeback_healed_locator 被调
@@ -251,7 +287,7 @@ SmartLocator 需持 gateway 引用（当前不持有）——改 SmartLocator �
 
 ## 7. 验收标准
 
-1. 定位失败 → SmartLocator 触发 SelfHealEngine Level1-3 逐级（TRANS-07）
+1. 定位失败 → SmartLocator 触发 SelfHealEngine Level1-4 逐级（TRANS-07）
 2. Level2 rapidfuzz DOM 模糊匹配命中候选（score≥70，top-5 验证）
 3. Level3 AI DOM（LLM 返回定位器 + 验证）
 4. 每级命中：record_heal_success + confidence+1 + heal_log 记录
@@ -261,7 +297,7 @@ SmartLocator 需持 gateway 引用（当前不持有）——改 SmartLocator �
 8. SmartLocator 透明接入，ScriptExecutor 无需改业务逻辑（仅填 heal 字段）
 9. 核心服务测试覆盖 ≥80%
 10. rapidfuzz 依赖加入 requirements.txt
-11. Level4 留记录（spec §1.4 偏差表登记，后期再做）
+11. Level4 视觉自愈已实现（T8）：截图→kimi2.6 多模态→定位器→验证，显式 `provider="moonshot"`（路线1，其他级仍 glm5.2）
 
 ---
 
