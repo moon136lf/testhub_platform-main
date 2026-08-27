@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #2 — 2026-08-27 17:19（auto）
+
+**最近 8 条 commit**：
+- f772f23 feat(review): ReviewCenter page + routes + menu fix (W7)
+- 54fae66 docs: session archive W7 #1 (T1+T2 done, T3 frontend in progress)
+- 0212588 feat(review): reviews API 4 endpoints + router registration (W7)
+- 0ba3332 feat(review): ReviewService stats/batch-refine/report/batch-review (W7)
+- 974c394 plan(review): #7 4-task implementation plan
+- 7a09172 docs(heal): spec update — Level4 visual in-scope (#5b T9)
+- 529f91e feat(heal): Level4 visual self-heal via kimi2.6 multimodal (#5b T8)
+- 0d1a1b6 feat(heal): MoonshotProvider kimi2.6 multimodal + GLM upgrade glm5.2 (#5b T7)
+
+**未提交变更**：2 文件（`frontend/src/api/review.js`、`frontend/src/views/reviews/ReviewCenter.vue`——T3 子代理构建后正在按偏差修正中）
+
+**当前进度**：T3 前端 ReviewCenter 页已 commit（f772f23，含路由+菜单死链修复），子代理仍在收尾修正 2 个未提交文件；剩 T4 收尾 + 统一审查 + rebase 新 master 后合回。
+
+---
+
 ## 快照 #1 — 2026-08-27 16:21（建种子）
 
 **进度**：#7 spec（master 已有 0555985）+ plan（974c394）完成；T1+T2 后端完成（T1 ReviewService `0ba3332` / T2 API 4 端点注册 `0212588`，worktree 357 passed，2 处合理偏离均为计划测试自相矛盾的修正）；T3 前端子代理运行中。
