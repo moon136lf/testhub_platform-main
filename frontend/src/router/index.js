@@ -92,6 +92,12 @@ const router = createRouter({
           name: 'TokenDashboard',
           component: () => import('@/views/system/TokenDashboard.vue'),
           meta: { title: 'Token成本管理' }
+        },
+        {
+          path: 'reviews',
+          name: 'ReviewCenter',
+          component: () => import('@/views/reviews/ReviewCenter.vue'),
+          meta: { title: '用例评审与E2E精修' }
         }
       ]
     }
