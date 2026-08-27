@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #4 — 2026-08-27 19:52（auto）
+
+**最近 8 条 commit**：
+- f40995e fix(dashboard): address code review (@change re-pull / unknown fallback / lint cleanup)
+- f14e069 docs: session archive W11 #3 (auto)
+- d3a98a9 docs: session archive W11 #2 (all tasks done, review in progress)
+- fae792c chore: update TODO_LIST (#11 dashboard done) (W11)
+- ca76506 feat(dashboard): Dashboard.vue wire real /dashboard/overview API (W11)
+- 09b885e feat(dashboard): /dashboard/overview API + router registration (W11)
+- 135da33 docs: session archive W11 #1 (spec/plan done, T1+T2 in progress)
+- 6c3a834 feat(dashboard): DashboardService 4-table aggregation (W11)
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：审查完成（With fixes）→ 修复已 commit（@change 重拉 / unknown 兜底 / lint 清理），#11 开发+审查全部完成，**待合回 master**（master 在 7a09172 #5b T9 spec，合并前需处理前进）。
+
+---
+
 ## 快照 #3 — 2026-08-27 18:50（auto）
 
 **最近 8 条 commit**：
