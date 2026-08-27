@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard">
+  <div class="dashboard" v-loading="loading">
     <el-card class="filter-card">
       <el-row :gutter="20">
         <el-col :span="6">
@@ -129,13 +129,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { dashboardAPI } from '@/api/dashboard.js'
+import { projectAPI } from '@/api/project.js'
 
 const selectedProject = ref('')
 const timeRange = ref('7')
 const projects = ref([])
+const loading = ref(false)
 
 const stats = ref({
   elementCount: 0,
@@ -146,6 +149,10 @@ const stats = ref({
   todayTokens: 0
 })
 
+const elementDist = ref([])
+const caseDist = ref([])
+const aiTrend = ref([])
+
 const elementChartRef = ref(null)
 const caseChartRef = ref(null)
 const trendChartRef = ref(null)
@@ -155,6 +162,10 @@ let caseChart = null
 let trendChart = null
 
 const initCharts = () => {
+  elementChart?.dispose()
+  caseChart?.dispose()
+  trendChart?.dispose()
+
   if (elementChartRef.value) {
     elementChart = echarts.init(elementChartRef.value)
     elementChart.setOption({
@@ -169,13 +180,7 @@ const initCharts = () => {
         {
           type: 'pie',
           radius: '50%',
-          data: [
-            { value: 30, name: 'button' },
-            { value: 25, name: 'input' },
-            { value: 20, name: 'link' },
-            { value: 15, name: 'select' },
-            { value: 10, name: 'other' }
-          ]
+          data: elementDist.value.map(i => ({ value: i.count, name: i.type }))
         }
       ]
     })
@@ -195,10 +200,7 @@ const initCharts = () => {
         {
           type: 'pie',
           radius: '50%',
-          data: [
-            { value: 60, name: 'functional' },
-            { value: 40, name: 'api' }
-          ]
+          data: caseDist.value.map(i => ({ value: i.count, name: i.type }))
         }
       ]
     })
@@ -215,7 +217,7 @@ const initCharts = () => {
       },
       xAxis: {
         type: 'category',
-        data: ['8-11', '8-12', '8-13', '8-14', '8-15', '8-16', '8-17']
+        data: aiTrend.value.map(i => i.date)
       },
       yAxis: {
         type: 'value'
@@ -224,40 +226,71 @@ const initCharts = () => {
         {
           name: '调用次数',
           type: 'line',
-          data: [50, 80, 120, 100, 130, 110, 128]
+          data: aiTrend.value.map(i => i.call_count)
         },
         {
           name: 'Token消耗',
           type: 'line',
-          data: [15000, 24000, 36000, 30000, 39000, 33000, 45672]
+          data: aiTrend.value.map(i => i.tokens)
         }
       ]
     })
   }
 }
 
-const refreshData = () => {
-  // Mock data - will be replaced with API calls
-  stats.value = {
-    elementCount: 156,
-    caseCount: 243,
-    automatedCount: 187,
-    pointCount: 324,
-    todayAICalls: 128,
-    todayTokens: 45672
+const loadProjects = async () => {
+  try {
+    const res = await projectAPI.list()
+    projects.value = Array.isArray(res) ? res : (res?.items || [])
+  } catch (e) {
+    console.error('load projects failed:', e)
   }
 }
 
-onMounted(async () => {
-  refreshData()
-  await nextTick()
-  initCharts()
+const refreshData = async () => {
+  loading.value = true
+  try {
+    const d = await dashboardAPI.getOverview({
+      project_id: selectedProject.value || undefined,
+      days: Number(timeRange.value) || 7
+    })
+    stats.value = {
+      elementCount: d.stats.element_count,
+      caseCount: d.stats.case_count,
+      automatedCount: d.stats.automated_count,
+      pointCount: d.stats.point_count,
+      todayAICalls: d.today.ai_calls,
+      todayTokens: d.today.tokens_used
+    }
+    elementDist.value = d.element_distribution || []
+    caseDist.value = d.case_distribution || []
+    aiTrend.value = d.ai_trend || []
+    await nextTick()
+    initCharts()
+  } catch (e) {
+    console.error('refresh dashboard failed:', e)
+  } finally {
+    loading.value = false
+  }
+}
 
-  window.addEventListener('resize', () => {
-    elementChart?.resize()
-    caseChart?.resize()
-    trendChart?.resize()
-  })
+const handleResize = () => {
+  elementChart?.resize()
+  caseChart?.resize()
+  trendChart?.resize()
+}
+
+onMounted(async () => {
+  await loadProjects()
+  await refreshData()
+  window.addEventListener('resize', handleResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  elementChart?.dispose()
+  caseChart?.dispose()
+  trendChart?.dispose()
 })
 </script>
 
