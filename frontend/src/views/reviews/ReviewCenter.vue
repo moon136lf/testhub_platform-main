@@ -113,7 +113,6 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { reviewAPI } from '@/api/review.js'
 import { projectAPI } from '@/api/project.js'
-import { testCaseAPI } from '@/api/testCase.js'
 
 const loading = ref(false)
 const refining = ref(false)
@@ -158,12 +157,12 @@ const loadAll = async () => {
   } catch (e) { console.error(e) } finally { loading.value = false }
 }
 
-// 列表复用 #3 用例列表，page_size=100 拉全量；返回 {total, page, page_size, items}
+// 列表复用 #3 用例列表 + api 层补齐评审字段（list items 为 CaseResponse 摘要，
+// 不含 review_status/feasibility_level/refinement_report，detail 才有）
 const loadCases = async () => {
   if (!projectId.value) return
   try {
-    const res = await testCaseAPI.list({ project_id: projectId.value, page: 1, page_size: 100 })
-    cases.value = res?.items || []
+    cases.value = await reviewAPI.listCasesWithReview(projectId.value)
   } catch (e) { console.error(e) }
 }
 
