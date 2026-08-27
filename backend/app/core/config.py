@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     CLAUDE_API_KEY: str = ""
     CLAUDE_API_URL: str = "https://api.anthropic.com/v1/messages"
 
+    # Moonshot (kimi2.6 多模态) - Level4 视觉自愈专用
+    MOONSHOT_API_KEY: str = ""
+    MOONSHOT_API_URL: str = "https://api.moonshot.cn/v1/chat/completions"
+    MOONSHOT_MODEL: str = "kimi-2.6"
+
     # Token Configuration
     TOKEN_QUOTA: int = 100000
     TOKEN_WARNING_RATE: float = 0.1

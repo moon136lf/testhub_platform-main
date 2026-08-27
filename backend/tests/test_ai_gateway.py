@@ -27,6 +27,9 @@ mock_settings.DEEPSEEK_API_KEY = ""
 mock_settings.DEEPSEEK_API_URL = "https://test.com"
 mock_settings.CLAUDE_API_KEY = ""
 mock_settings.CLAUDE_API_URL = "https://test.com"
+mock_settings.MOONSHOT_API_KEY = ""
+mock_settings.MOONSHOT_API_URL = "https://api.moonshot.cn/v1/chat/completions"
+mock_settings.MOONSHOT_MODEL = "kimi-2.6"
 
 import importlib.util
 
@@ -319,36 +322,47 @@ class TestAIGateway:
         partial_settings.DEEPSEEK_API_URL = "https://test.com"
         partial_settings.CLAUDE_API_KEY = ""  # Empty - not configured
         partial_settings.CLAUDE_API_URL = "https://test.com"
+        partial_settings.MOONSHOT_API_KEY = ""  # Empty - not configured
+        partial_settings.MOONSHOT_API_URL = "https://api.moonshot.cn/v1/chat/completions"
+        partial_settings.MOONSHOT_MODEL = "kimi-2.6"
 
-        # Mock the config module for this test
+        # Mock the config module for this test (restore in finally to avoid leaking)
+        _saved = sys.modules.get('app.core.config')
         sys.modules['app.core.config'] = MagicMock(settings=partial_settings)
+        try:
+            # Reload the module to pick up new settings
+            import importlib.util
+            backend_path = Path(__file__).parent.parent
+            ai_gateway_path = backend_path / "app" / "services" / "ai_gateway.py"
+            spec = importlib.util.spec_from_file_location("ai_gateway_partial", ai_gateway_path)
+            ai_gateway_partial = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(ai_gateway_partial)
 
-        # Reload the module to pick up new settings
-        import importlib.util
-        backend_path = Path(__file__).parent.parent
-        ai_gateway_path = backend_path / "app" / "services" / "ai_gateway.py"
-        spec = importlib.util.spec_from_file_location("ai_gateway_partial", ai_gateway_path)
-        ai_gateway_partial = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(ai_gateway_partial)
+            gateway = ai_gateway_partial.AIGateway()
 
-        gateway = ai_gateway_partial.AIGateway()
+            # Verify only GLM and Qwen are initialized
+            assert "glm-4" in gateway._providers
+            assert "qwen" in gateway._providers
+            assert "deepseek" not in gateway._providers
+            assert "claude" not in gateway._providers
+            assert len(gateway._providers) == 2
 
-        # Verify only GLM and Qwen are initialized
-        assert "glm-4" in gateway._providers
-        assert "qwen" in gateway._providers
-        assert "deepseek" not in gateway._providers
-        assert "claude" not in gateway._providers
-        assert len(gateway._providers) == 2
+            # Verify trying to use DeepSeek fails with appropriate error
+            with pytest.raises(ValueError) as exc_info:
+                await gateway.chat(
+                    messages=[{"role": "user", "content": "Hi"}],
+                    provider="deepseek"
+                )
 
-        # Verify trying to use DeepSeek fails with appropriate error
-        with pytest.raises(ValueError) as exc_info:
-            await gateway.chat(
-                messages=[{"role": "user", "content": "Hi"}],
-                provider="deepseek"
-            )
-
-        error_msg = str(exc_info.value).lower()
-        assert "deepseek" in error_msg
-        assert "not available" in error_msg
-        assert "check api key" in error_msg
+            error_msg = str(exc_info.value).lower()
+            assert "deepseek" in error_msg
+            assert "not available" in error_msg
+            assert "check api key" in error_msg
+        finally:
+            # Restore real config (only config; leave app.* submodules as-is —
+            # deleting them caused re-import storms breaking downstream tests).
+            if _saved is not None:
+                sys.modules['app.core.config'] = _saved
+            else:
+                sys.modules.pop('app.core.config', None)
 

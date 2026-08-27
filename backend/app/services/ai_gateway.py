@@ -49,10 +49,10 @@ class AIProvider(ABC):
 
 
 class GLMProvider(AIProvider):
-    """GLM-4 Provider"""
+    """GLM Provider (glm5.2)"""
 
     async def chat_completion(self, messages: List[Dict], **kwargs) -> Dict:
-        """GLM-4 聊天补全"""
+        """GLM 聊天补全"""
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -60,7 +60,7 @@ class GLMProvider(AIProvider):
             }
 
             payload = {
-                "model": kwargs.get("model", "glm-4"),
+                "model": kwargs.get("model", "glm5.2"),
                 "messages": messages,
                 "temperature": kwargs.get("temperature", 0.7),
                 "max_tokens": kwargs.get("max_tokens", 2000)
@@ -78,11 +78,11 @@ class GLMProvider(AIProvider):
                 content = data["choices"][0]["message"]["content"]
                 tokens = data["usage"]["total_tokens"]
 
-                logger.info(f"GLM-4 chat completed, tokens: {tokens}")
+                logger.info(f"GLM chat completed, tokens: {tokens}")
                 return {"content": content, "tokens": tokens}
 
         except Exception as e:
-            logger.error(f"GLM-4 chat failed: {e}")
+            logger.error(f"GLM chat failed: {e}")
             raise
 
 
@@ -268,6 +268,37 @@ class ClaudeProvider(AIProvider):
             raise
 
 
+class MoonshotProvider(AIProvider):
+    """Moonshot (kimi2.6) Provider - 支持多模态 (文本+图片)."""
+
+    async def chat_completion(self, messages: List[Dict], **kwargs) -> Dict:
+        """Moonshot 聊天补全. 多模态: messages content 可含 image_url (base64 data URI)."""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": kwargs.get("model", "kimi-2.6"),
+                "messages": messages,
+                "temperature": kwargs.get("temperature", 0.7),
+                "max_tokens": kwargs.get("max_tokens", 2000)
+            }
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    self.api_url, json=payload, headers=headers
+                )
+                response.raise_for_status()
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                tokens = data["usage"]["total_tokens"]
+                logger.info(f"Moonshot chat completed, tokens: {tokens}")
+                return {"content": content, "tokens": tokens}
+        except Exception as e:
+            logger.error(f"Moonshot chat failed: {e}")
+            raise
+
+
 class AIGateway:
     """统一 AI 网关"""
 
@@ -302,6 +333,13 @@ class AIGateway:
             self._providers["claude"] = ClaudeProvider(
                 api_key=settings.CLAUDE_API_KEY,
                 api_url=settings.CLAUDE_API_URL
+            )
+
+        # Initialize Moonshot (kimi2.6 多模态, Level4 视觉用)
+        if settings.MOONSHOT_API_KEY:
+            self._providers["moonshot"] = MoonshotProvider(
+                api_key=settings.MOONSHOT_API_KEY,
+                api_url=settings.MOONSHOT_API_URL
             )
 
         if not self._providers:

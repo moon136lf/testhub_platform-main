@@ -14,6 +14,12 @@ sys.path.insert(0, str(backend_path))
 
 # Mock only the DB and AI gateway dependencies (not the whole app package),
 # so the real app.models / app.services packages stay importable.
+# Save the originals so we can restore after loading this module (otherwise the
+# MagicMock replacement leaks into other test modules, e.g. test_moonshot_provider
+# which needs the real ai_gateway classes).
+_saved_db = sys.modules.get('app.core.database')
+_saved_knowledge_model = sys.modules.get('app.models.knowledge')
+_saved_ai_gateway = sys.modules.get('app.services.ai_gateway')
 sys.modules['app.core.database'] = MagicMock()
 sys.modules['app.models.knowledge'] = MagicMock()
 sys.modules['app.services.ai_gateway'] = MagicMock()
@@ -26,6 +32,17 @@ knowledge_service_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(knowledge_service_module)
 
 KnowledgeService = knowledge_service_module.KnowledgeService
+
+# Restore real modules so downstream tests see the genuine ai_gateway/classes.
+for _name, _orig in [
+    ('app.core.database', _saved_db),
+    ('app.models.knowledge', _saved_knowledge_model),
+    ('app.services.ai_gateway', _saved_ai_gateway),
+]:
+    if _orig is not None:
+        sys.modules[_name] = _orig
+    else:
+        sys.modules.pop(_name, None)
 
 
 class TestKnowledgeService:
