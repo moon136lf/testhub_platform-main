@@ -51,6 +51,12 @@ class SelfHealEngine:
         if loc:
             wb = await self._on_heal_success(element_data, loc, "ai_dom")
             return {"success": True, "locator": loc, "strategy": "ai_dom", "heal_log": heal_log, "writeback": wb}
+        # Level4: visual (kimi2.6 多模态)
+        loc = await self._heal_by_visual(page, element_data)
+        heal_log.append({"level": 4, "strategy": "visual", "success": loc is not None})
+        if loc:
+            wb = await self._on_heal_success(element_data, loc, "visual")
+            return {"success": True, "locator": loc, "strategy": "visual", "heal_log": heal_log, "writeback": wb}
         # 全失败
         await self._on_heal_failure(element_data)
         return {"success": False, "locator": None, "strategy": None, "heal_log": heal_log, "writeback": None}
@@ -129,6 +135,49 @@ DOM:
             resp = await self.gateway.chat([{"role": "user", "content": prompt}])
         except Exception as e:
             logger.warning(f"ai_dom LLM call failed: {e}")
+            return None
+        locator = (resp.get("content") or "").strip()
+        # 验证定位器有效
+        try:
+            loc = page.locator(locator)
+            await loc.wait_for(state="visible", timeout=3000)
+            return locator
+        except Exception:
+            return None
+
+    async def _heal_by_visual(self, page, element_data: dict) -> Optional[str]:
+        """Level4: 截图发 kimi2.6 多模态 (provider=moonshot), LLM 看图返回定位器, 验证.
+
+        路线1: Level4 专用 kimi2.6 (显式 provider="moonshot"), 其他级仍默认 glm5.2.
+        """
+        if self.gateway is None:
+            return None
+        try:
+            screenshot = await page.screenshot()
+        except Exception as e:
+            logger.warning(f"visual screenshot failed: {e}")
+            return None
+        if not screenshot:
+            return None
+        import base64
+        img_b64 = base64.b64encode(screenshot).decode()
+        semantic = element_data.get("semantic_info") or {}
+        prompt_text = (
+            f"页面截图如下, 找到元素 \"{element_data.get('element_name')}\" 的 Playwright 定位器.\n"
+            f"元素语义: {semantic}\n"
+            f"只输出一个定位器字符串 (如 page.get_by_role(\"button\", name=\"登录\")), 不要解释."
+        )
+        messages = [
+            {"role": "user", "content": [
+                {"type": "text", "text": prompt_text},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+            ]}
+        ]
+        try:
+            # 显式 provider="moonshot" (路线1: Level4 专用 kimi2.6, 其他仍默认)
+            resp = await self.gateway.chat(messages, provider="moonshot")
+        except Exception as e:
+            logger.warning(f"visual LLM call failed: {e}")
             return None
         locator = (resp.get("content") or "").strip()
         # 验证定位器有效

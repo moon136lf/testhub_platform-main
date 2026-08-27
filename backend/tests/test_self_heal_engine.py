@@ -146,6 +146,69 @@ class TestWritebackSignal:
         assert result["writeback"]["element_id"] == "e1"
 
 
+class TestHealByVisual:
+    def _element_data(self):
+        return {"element_id": "e1", "element_name": "登录按钮",
+                "locator_strategies": {"strategies": []}, "semantic_info": {"text": "登录"}}
+
+    def test_visual_returns_locator_from_multimodal(self):
+        """Level4: 截图+base64 发 moonshot 多模态, LLM 返回定位器, 验证命中."""
+        page = MagicMock()
+        page.screenshot = AsyncMock(return_value=b"fake-png-bytes")
+        page.locator = MagicMock(return_value=MagicMock(wait_for=AsyncMock()))
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": "page.get_by_role(\"button\", name=\"登录\")", "tokens": 300})
+        cache = FakeCache()
+        eng = SelfHealEngine(gateway=gw, element_cache=cache)
+        result = asyncio_run(eng._heal_by_visual(page, self._element_data()))
+        assert result == "page.get_by_role(\"button\", name=\"登录\")"
+        # 验证 chat 被调, 且 provider="moonshot"
+        gw.chat.assert_awaited_once()
+        call_kwargs = gw.chat.call_args
+        assert call_kwargs.kwargs.get("provider") == "moonshot"
+
+    def test_visual_invalid_locator_returns_none(self):
+        """Level4: LLM 返回无效定位器, 验证失败返回 None."""
+        page = MagicMock()
+        page.screenshot = AsyncMock(return_value=b"png")
+        bad_loc = MagicMock()
+        bad_loc.wait_for = AsyncMock(side_effect=Exception("not found"))
+        page.locator = MagicMock(return_value=bad_loc)
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": "page.bogus()", "tokens": 50})
+        cache = FakeCache()
+        eng = SelfHealEngine(gateway=gw, element_cache=cache)
+        result = asyncio_run(eng._heal_by_visual(page, self._element_data()))
+        assert result is None
+
+    def test_visual_screenshot_fail_returns_none(self):
+        """Level4: 截图失败返回 None."""
+        page = MagicMock()
+        page.screenshot = AsyncMock(side_effect=Exception("browser closed"))
+        gw = MagicMock()
+        cache = FakeCache()
+        eng = SelfHealEngine(gateway=gw, element_cache=cache)
+        result = asyncio_run(eng._heal_by_visual(page, self._element_data()))
+        assert result is None
+
+    def test_heal_falls_through_to_level4(self):
+        """heal() Level1-3 全失败 -> Level4 命中."""
+        page = MagicMock()
+        page.screenshot = AsyncMock(return_value=b"png")
+        page.locator = MagicMock(return_value=MagicMock(wait_for=AsyncMock()))
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": "page.get_by_role(\"button\")", "tokens": 200})
+        cache = FakeCache()
+        eng = SelfHealEngine(gateway=gw, element_cache=cache)
+        eng._heal_by_semantic = AsyncMock(return_value=None)
+        eng._heal_by_dom_fuzz = AsyncMock(return_value=None)
+        eng._heal_by_ai_dom = AsyncMock(return_value=None)
+        result = asyncio_run(eng.heal(page, self._element_data(), "click"))
+        assert result["success"] is True
+        assert result["strategy"] == "visual"
+        assert len(result["heal_log"]) == 4  # L1-L4
+
+
 class TestElementServiceWriteback:
     def test_writeback_updates_element(self):
         from app.services.element_service import ElementService
