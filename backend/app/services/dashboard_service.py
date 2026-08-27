@@ -2,7 +2,6 @@
 
 Read-only. project_id=None means "all projects" (skip the filter).
 """
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -13,8 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.element import ElementRepository
 from app.models.test_case import TestCase, TestPoint
 from app.models.execution import AICallLog
-
-logger = logging.getLogger(__name__)
 
 
 class DashboardService:
@@ -72,7 +69,7 @@ class DashboardService:
                             TestCase.project_id)
         elem_dist = [{"type": r[0] or "other", "count": r[1]}
                      for r in (await self.db.execute(elem_dist_q)).all()]
-        case_dist = [{"type": r[0] or "functional", "count": r[1]}
+        case_dist = [{"type": r[0] or "unknown", "count": r[1]}
                      for r in (await self.db.execute(case_dist_q)).all()]
 
         # ---- AI trend (only section affected by days) ----

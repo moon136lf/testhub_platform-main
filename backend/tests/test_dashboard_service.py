@@ -24,8 +24,8 @@ def mock_db():
 class TestGetOverview:
     @pytest.mark.asyncio
     async def test_overview_all_sections(self, mock_db):
-        """8 sequential queries: elem count, case count, automated count,
-        point count, today calls, today tokens, elem dist, case dist, trend = 9."""
+        """9 sequential queries: elem count, case count, automated count,
+        point count, today calls, today tokens, elem dist, case dist, trend."""
         today_dt = MagicMock()
         today_dt.date.return_value = MagicMock(isoformat=MagicMock(return_value="2026-08-27"))
         trend_row = MagicMock()

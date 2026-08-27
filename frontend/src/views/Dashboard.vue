@@ -3,7 +3,7 @@
     <el-card class="filter-card">
       <el-row :gutter="20">
         <el-col :span="6">
-          <el-select v-model="selectedProject" placeholder="选择项目" style="width: 100%">
+          <el-select v-model="selectedProject" placeholder="选择项目" style="width: 100%" @change="refreshData">
             <el-option label="全部项目" value="" />
             <el-option
               v-for="project in projects"
@@ -14,7 +14,7 @@
           </el-select>
         </el-col>
         <el-col :span="6">
-          <el-select v-model="timeRange" placeholder="时间范围" style="width: 100%">
+          <el-select v-model="timeRange" placeholder="时间范围" style="width: 100%" @change="refreshData">
             <el-option label="近7天" value="7" />
             <el-option label="近30天" value="30" />
           </el-select>
