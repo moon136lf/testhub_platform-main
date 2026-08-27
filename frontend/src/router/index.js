@@ -92,6 +92,18 @@ const router = createRouter({
           name: 'TokenDashboard',
           component: () => import('@/views/system/TokenDashboard.vue'),
           meta: { title: 'Token成本管理' }
+        },
+        {
+          path: 'reports',
+          name: 'ExecutionList',
+          component: () => import('@/views/reports/ExecutionList.vue'),
+          meta: { title: '执行记录与报告' }
+        },
+        {
+          path: 'reports/:execId',
+          name: 'ReportDetail',
+          component: () => import('@/views/reports/ReportDetail.vue'),
+          meta: { title: '报告详情' }
         }
       ]
     }

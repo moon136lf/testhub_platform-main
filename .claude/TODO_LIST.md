@@ -81,18 +81,21 @@
 
 ---
 
-#### 6. 执行记录与报告 (0%)
-**状态**：待开始  
+#### 6. 执行记录与报告 (P0 完成) - 2026-08-26
+**状态**：✅ 骨架完成（worktree `worktree-module6-execution-reports`，待合回 master）
 **预估时间**：3-4 小时  
-**依赖**：UI自动化测试执行
+**依赖**：UI自动化测试执行（#5a execution_record/execution_detail 两表，只读消费）
 
-**核心功能**：
-- [ ] 执行记录列表
-- [ ] 执行详情查看
-- [ ] 测试报告生成
-- [ ] 统计图表展示
-- [ ] 日志查看和下载
-- [ ] 失败用例分析
+**核心功能（已落地）**：
+- [x] 执行记录列表（项目隔离 + 类型/时间筛选 + 分页，`/reports/records`）
+- [x] 执行详情查看（record + 聚合统计 + 失败明细，`/reports/records/{id}`）
+- [x] 测试报告生成（Jinja2 HTML + weasyprint PDF + MinIO 上传 + report_url 回写，幂等 + force，`/reports/{id}/generate`）
+- [x] 统计图表展示（通过率趋势 ECharts 折线，`/reports/trend`）
+- [x] 报告导出（HTML/PDF，`/reports/{id}/export`）
+- [x] 失败用例分析（失败步骤明细表 + 截图 + 堆栈，前端 ReportDetail）
+- [x] notifier stub（P1 推送预留，钉钉/微信后接）
+
+**诚实边界**：所有测试 mock（无真实 DB/LLM/weasyprint）；weasyprint Windows 未装走 guarded import（PDF 失败非致命）；token_remaining 联调时从 #10 token_service 取。
 
 ---
 
@@ -169,14 +172,14 @@
 
 ## 📊 总体进度
 
-- **已完成**：4/11 模块（#1 元素库 / #2 AI生成 / #3 用例管理 / #4 转脚本 在 master；#10 系统设置 在 worktree 待合回）
-- **待开始**：#5 UI执行 / #6 报告 / #7 评审完整页 / #8 回归 / #9 白盒 / #11 仪表盘
+- **已完成**：5/11 模块（#1 元素库 / #2 AI生成 / #3 用例管理 / #4 转脚本 / #10 系统设置 在 master；#6 执行记录与报告 在 worktree 待合回）
+- **待开始**：#5 UI执行 / #7 评审完整页 / #8 回归 / #9 白盒 / #11 仪表盘
 
 ---
 
 ## 🎯 当前任务
 
-**#10 系统设置**：✅ 13 task 中 T1-T12 完成，T13（本会话进行中：全量验证+收尾）。worktree `worktree-module10-system-settings` 待合回 master（注意 ai_gateway.py 与 #4 合并）。
+**#6 执行记录与报告**：✅ 全部 task 完成（T1 storage / 组A schema+notifier+模板+依赖 / 组B+C query service+generator / 组D API router / 组E 前端 / T11 验证收尾）。worktree `worktree-module6-execution-reports` 待合回 master。后端 341 passed，前端 build 通过，6 个 /reports/* 路由已注册。
 **集成策略（用户确认 2026-08-24）**：先完成全部模块开发（结构骨架 + 接口契约 + 单测），最后统一接入大模型；数据库迁移在真实联调前一次性执行，再真实测试。AI 模块当前用可插拔占位（ai_gateway 已抽象），不在开发期阻塞。
 
 ---
@@ -191,4 +194,4 @@
 
 ---
 
-**最后更新**：2026-08-24
+**最后更新**：2026-08-26
