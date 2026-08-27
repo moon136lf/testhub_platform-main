@@ -4,7 +4,7 @@ API router configuration
 
 from fastapi import APIRouter
 
-from app.api.v1 import projects, health, elements, sse, ai_case_generation, test_cases, scripts, system, reports
+from app.api.v1 import projects, health, elements, sse, ai_case_generation, test_cases, scripts, system, reports, dashboard
 
 api_router = APIRouter()
 
@@ -17,6 +17,7 @@ api_router.include_router(test_cases.router, prefix="/test-cases", tags=["test-c
 api_router.include_router(scripts.router, prefix="/scripts", tags=["scripts"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 
 # SSE router (separate prefix)
 sse_router = APIRouter()
