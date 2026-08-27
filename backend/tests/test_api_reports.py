@@ -80,3 +80,12 @@ class TestExport:
         r = client.get("/api/v1/reports/E1/export?format=html")
         assert r.status_code == 200
         assert b"<html>" in r.content
+
+    def test_export_404_when_not_generated(self, client):
+        from app.api.v1 import reports as reports_api
+        reports_api.storage_client.get_object_bytes = MagicMock(side_effect=Exception("NoSuchKey"))
+        svc = MagicMock()
+        svc.get_detail = AsyncMock(return_value={"record": {"exec_id": "E1"}, "details": []})
+        _override(svc)
+        r = client.get("/api/v1/reports/E1/export?format=pdf")
+        assert r.status_code == 404

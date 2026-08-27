@@ -73,28 +73,24 @@ class ReportGenerator:
             logger.warning(f"weasyprint failed (non-fatal, PDF skipped): {e}")
             pdf_bytes = None
 
-        # upload to MinIO
+        # upload to MinIO. upload_bytes returns a full access URL, but per
+        # spec §2.1 report_url must store the KEY (stable across env migrations;
+        # export endpoint reconstructs the key from exec_id, not report_url).
         html_key = f"reports/{exec_id}.html"
-        html_url = await storage_client.upload_bytes(html.encode("utf-8"), html_key)
-        if html_url is None:
-            html_url = html_key
+        await storage_client.upload_bytes(html.encode("utf-8"), html_key)
         pdf_key = None
         if pdf_bytes:
             pdf_key = f"reports/{exec_id}.pdf"
-            pdf_url = await storage_client.upload_bytes(pdf_bytes, pdf_key)
-            if pdf_url is None:
-                pdf_url = pdf_key
-        else:
-            pdf_url = None
+            await storage_client.upload_bytes(pdf_bytes, pdf_key)
 
-        # write back report_url
-        rec.report_url = html_url
+        # write back report_url (store the HTML KEY, not the MinIO URL)
+        rec.report_url = html_key
         await self.db.commit()
 
         # notify (P1 stub)
-        await notify_report_ready(exec_id, {"html_url": html_url, "pdf_url": pdf_url})
+        await notify_report_ready(exec_id, {"html_url": html_key, "pdf_url": pdf_key})
 
-        return {"html_url": html_url, "pdf_url": pdf_url, "regenerated": True}
+        return {"html_url": html_key, "pdf_url": pdf_key, "regenerated": True}
 
     def _pdf_key(self, exec_id: str) -> str:
         return f"reports/{exec_id}.pdf"

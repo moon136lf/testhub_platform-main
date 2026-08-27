@@ -54,21 +54,24 @@ class TestGenerateReport:
     @pytest.mark.asyncio
     async def test_generate_renders_and_uploads(self, mock_db, record_with_detail):
         gen = ReportGenerator(mock_db)
-        with patch("app.services.report_generator.render_template", return_value="<html>report</html>") as mock_render, \
+        # upload_bytes returns full MinIO URLs in production; per spec §2.1
+        # report_url must store the KEY (reports/{exec_id}.html), not the URL.
+        html_url_ret = "http://localhost:9000/moontest/reports/EXEC-20260826-1.html"
+        pdf_url_ret = "http://localhost:9000/moontest/reports/EXEC-20260826-1.pdf"
+        with patch("app.services.report_generator.render_template", return_value="<html>report</html>"), \
              patch("app.services.report_generator.storage_client") as mock_storage, \
              patch("app.services.report_generator.notify_report_ready", new=AsyncMock()):
-            mock_storage.upload_bytes = AsyncMock(side_effect=[
-                "reports/exec.html", "reports/exec.pdf"
-            ])
+            mock_storage.upload_bytes = AsyncMock(side_effect=[html_url_ret, pdf_url_ret])
             with patch("app.services.report_generator.HTML") as mock_html_cls:
                 mock_html = MagicMock()
                 mock_html.write_pdf.return_value = b"%PDF-fake"
                 mock_html_cls.return_value = mock_html
                 result = await gen.generate_report("EXEC-20260826-1")
-        assert result["html_url"] == "reports/exec.html"
-        assert result["pdf_url"] == "reports/exec.pdf"
+        assert result["html_url"] == "reports/EXEC-20260826-1.html"
+        assert result["pdf_url"] == "reports/EXEC-20260826-1.pdf"
         assert result["regenerated"] is True
-        assert record_with_detail.report_url == "reports/exec.html"
+        # report_url stores the KEY, not the MinIO URL returned by upload_bytes
+        assert record_with_detail.report_url == "reports/EXEC-20260826-1.html"
         assert mock_db.commit.called
 
     @pytest.mark.asyncio
@@ -87,10 +90,15 @@ class TestGenerateReport:
              patch("app.services.report_generator.storage_client") as mock_storage, \
              patch("app.services.report_generator.notify_report_ready", new=AsyncMock()), \
              patch("app.services.report_generator.HTML") as mock_html_cls:
-            mock_storage.upload_bytes = AsyncMock(side_effect=["reports/exec.html", "reports/exec.pdf"])
+            mock_storage.upload_bytes = AsyncMock(side_effect=[
+                "http://localhost:9000/moontest/reports/EXEC-20260826-1.html",
+                "http://localhost:9000/moontest/reports/EXEC-20260826-1.pdf",
+            ])
             mock_html_cls.return_value.write_pdf.return_value = b"%PDF"
             result = await gen.generate_report("EXEC-20260826-1", force=True)
         assert result["regenerated"] is True
+        # force overwrites report_url with the fresh KEY (not the old, not the URL)
+        assert record_with_detail.report_url == "reports/EXEC-20260826-1.html"
 
     @pytest.mark.asyncio
     async def test_generate_missing_record_returns_none(self, mock_db):

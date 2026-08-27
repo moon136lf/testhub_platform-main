@@ -78,3 +78,18 @@ class TestTrend:
         assert result[0]["date"] == "2026-08-25"
         assert result[0]["pass_rate"] == 92.5
         assert result[0]["exec_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_trend_handles_real_datetime_rows(self, mock_db):
+        # Real DB returns datetime from date_trunc, not a bare string.
+        # Covers the r[0].date() branch (the hasattr shim is mock-compat only).
+        from datetime import datetime as _dt
+        d1 = _dt(2026, 8, 25, 0, 0, 0)
+        d2 = _dt(2026, 8, 24, 0, 0, 0)
+        rows = [(d1, 90.0, 2), (d2, 70.0, 4)]
+        mock_db.execute.return_value = Mock(all=Mock(return_value=rows))
+        svc = ExecutionQueryService(mock_db)
+        result = await svc.get_trend(str(uuid4()), days=7)
+        assert result[0]["date"] == "2026-08-25"
+        assert result[1]["date"] == "2026-08-24"
+        assert result[0]["pass_rate"] == 90.0

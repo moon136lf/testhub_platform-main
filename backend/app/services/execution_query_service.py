@@ -77,10 +77,13 @@ class ExecutionQueryService:
     async def get_trend(self, project_id: str, days: int = 7) -> list:
         pid = UUID(project_id)
         since = datetime.now(timezone.utc) - timedelta(days=days)
+        # pass_rate weighted by total_cases per spec §3.1 (a 1-case 100% run must
+        # not outweigh a 100-case 80% run). NULLIF guards divide-by-zero.
         q = (
             select(
                 func.date_trunc("day", ExecutionRecord.started_at).label("d"),
-                func.avg(ExecutionRecord.pass_rate).label("avg_rate"),
+                (func.sum(ExecutionRecord.pass_rate * ExecutionRecord.total_cases)
+                 / func.nullif(func.sum(ExecutionRecord.total_cases), 0)).label("avg_rate"),
                 func.count().label("cnt"),
             )
             .where(ExecutionRecord.project_id == pid, ExecutionRecord.started_at >= since)

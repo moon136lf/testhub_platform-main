@@ -67,5 +67,8 @@ httpx==0.27.0
 # Mind Map / Import-Export
 xmind
 
-weasyprint
+# Report generation (W6). weasyprint needs GTK/Pango/cairo native deps and
+# does not install cleanly on Windows; gated so `pip install -r` still works
+# there. The app degrades gracefully (PDF skipped) when weasyprint is absent.
+weasyprint; sys_platform != "win32"
 Jinja2
