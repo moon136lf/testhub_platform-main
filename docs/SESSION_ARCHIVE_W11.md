@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #3 — 2026-08-27 18:50（auto）
+
+**最近 8 条 commit**：
+- d3a98a9 docs: session archive W11 #2 (all tasks done, review in progress)
+- fae792c chore: update TODO_LIST (#11 dashboard done) (W11)
+- ca76506 feat(dashboard): Dashboard.vue wire real /dashboard/overview API (W11)
+- 09b885e feat(dashboard): /dashboard/overview API + router registration (W11)
+- 135da33 docs: session archive W11 #1 (spec/plan done, T1+T2 in progress)
+- 6c3a834 feat(dashboard): DashboardService 4-table aggregation (W11)
+- c9044c5 plan(dashboard): #11 4-task implementation plan
+- 48e6ddd spec(dashboard): #11 dashboard real-data wiring design
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：全部 4 task 完成（351 passed + 前端 build 通过 + TODO_LIST 6/11），统一代码审查子代理运行中，待审查通过后合回 master。master 已前进（7a09172 #5b T9 spec），#11 分支尚未合回。
+
+---
+
 ## 快照 #2 — 2026-08-27（全部 4 task 完成，统一审查中）
 
 **进度**：#11 全部 4 task 实施完成，统一代码审查子代理运行中。
