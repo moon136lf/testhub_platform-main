@@ -351,10 +351,10 @@ class TestDiagnoseScriptEndpoint:
         monkeypatch.setattr(scripts_api, "ScriptDiagnoseService", lambda gateway: FakeDiag())
         monkeypatch.setattr(scripts_api, "AIGateway", lambda: None)
 
-        mock_asset = MagicMock()
-        mock_asset.content = "original content"
-        mock_asset.version = 1
-        mock_asset.ai_diagnosis = None
+        # #5c: use a real ScriptAsset (no DB needed) so the array-ized write path
+        # (mode/created_at, history preserved) is exercised, not auto-mocked.
+        from app.models.test_case import ScriptAsset
+        mock_asset = ScriptAsset(content="original content", version=1, ai_diagnosis=None)
         mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=mock_asset)
         mock_db.execute.return_value = mock_result
@@ -374,9 +374,14 @@ class TestDiagnoseScriptEndpoint:
         assert response["data"]["revised_script"] is not None
         assert "original content" in response["data"]["revised_script"]
         assert "new code" in response["data"]["revised_script"]
-        # version bumped + ai_diagnosis set on the asset
+        # version bumped + ai_diagnosis set on the asset (#5c: array-ized, mode+created_at added)
         assert mock_asset.version == 2
-        assert mock_asset.ai_diagnosis == card
+        assert len(mock_asset.ai_diagnosis) == 1
+        stored = mock_asset.ai_diagnosis[0]
+        assert stored["category"] == card["category"]
+        assert stored["revised_step"] == card["revised_step"]
+        assert stored["mode"] == "rule"
+        assert "created_at" in stored
         mock_db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio

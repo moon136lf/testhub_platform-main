@@ -135,6 +135,29 @@ class ScriptAsset(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    @property
+    def diagnosis_list(self) -> list:
+        """诊断卡数组视图 (#5c): 兼容 #4 旧单对象 dict 格式."""
+        if not self.ai_diagnosis:
+            return []
+        if isinstance(self.ai_diagnosis, dict):
+            return [self.ai_diagnosis]
+        return self.ai_diagnosis
+
+    def append_diagnosis(self, card: dict, mode: str) -> None:
+        """append 诊断卡 (rule/multimodal), 补 mode + created_at, 保留历史."""
+        from datetime import datetime as _dt
+        card = dict(card)
+        card.setdefault("mode", mode)
+        card.setdefault("created_at", _dt.utcnow().isoformat())
+        existing = self.diagnosis_list
+        # 旧 dict 卡若无 mode, 视为 #4 rule 卡
+        for c in existing:
+            if isinstance(c, dict) and "mode" not in c:
+                c["mode"] = "rule"
+        existing.append(card)
+        self.ai_diagnosis = existing
+
     def to_dict(self):
         return {
             "id": str(self.id),

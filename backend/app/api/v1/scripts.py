@@ -232,7 +232,7 @@ async def diagnose_script(script_id: str, request: DiagnoseRequest,
         revised_script = (asset.content or "") + "\n# --- 修复步骤 {} ---\n".format(
             request.failed_step) + card["revised_step"]
         asset.content = revised_script
-        asset.ai_diagnosis = card
+        asset.append_diagnosis(card, mode="rule")  # #5c: 数组化, 保留历史
         asset.version = (asset.version or 1) + 1
         await db.commit()
     return {"code": 0, "data": {"diagnosis_card": card, "revised_script": revised_script}}
