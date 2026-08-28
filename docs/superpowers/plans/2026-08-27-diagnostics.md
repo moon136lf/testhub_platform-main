@@ -1215,7 +1215,7 @@ git commit -m "feat(diagnostics): report page + script convert page diagnosis en
 - Modify: `backend/app/api/v1/scripts.py`（run/batch-run 响应加 exec_id，前端免拼）
 - Test: `backend/tests/test_diagnostics_service.py`（追加 1 测试）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加到 `tests/test_diagnostics_service.py`：
 
@@ -1233,12 +1233,12 @@ class TestAnalyzeCardExtras:
         assert result["card"]["element_name"] == "登录按钮"
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_diagnostics_service.py -q -k Extras`
 Expected: FAIL — KeyError: 'element_name'
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `diagnostics_service.py` 的 `_parse_llm_card` 调用处与 `_build_fragment` 统一：在 `analyze` 里取 element_name 并传入卡。改 `_call_llm` 签名加 `element_name`，`_parse_llm_card` 里加：
 
@@ -1276,16 +1276,16 @@ Expected: FAIL — KeyError: 'element_name'
 
 batch-run 同款（message 换 "Batch execution started"）。
 
-- [ ] **Step 4: 跑测试 + 全量回归**
+- [x] **Step 4: 跑测试 + 全量回归**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/ -q --ignore=tests/test_batch_import_fix.py`
 Expected: 全部 PASS
 
-- [ ] **Step 5: 前端切到后端 exec_id（消除拼接 hack）**
+- [x] **Step 5: 前端切到后端 exec_id（消除拼接 hack）**
 
 `ScriptConvert.vue` 的 `loadExecFails`/`openExecDiagnose` 改用 `resp.data.exec_id`（handleRun/handleBatchRun 里存 `execId.value = resp.data.exec_id`），删 `exec-${...slice(0,8)}` 拼接。
 
-- [ ] **Step 6: build + Commit**
+- [x] **Step 6: build + Commit**
 
 ```bash
 cd /d/MoonTest/frontend && npx vite build 2>&1 | tail -2
@@ -1299,17 +1299,17 @@ git commit -m "feat(diagnostics): card.element_name + run resp exec_id (#5c T7)"
 
 **Files:** 无新文件（验证任务）
 
-- [ ] **Step 1: 全量后端测试**
+- [x] **Step 1: 全量后端测试**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/ -q --ignore=tests/test_batch_import_fix.py`
 Expected: 全部 PASS
 
-- [ ] **Step 2: 前端 build**
+- [x] **Step 2: 前端 build**
 
 Run: `cd /d/MoonTest/frontend && npx vite build 2>&1 | tail -2`
 Expected: `✓ built`
 
-- [ ] **Step 3: spec 验收 11 条逐条核对**
+- [x] **Step 3: spec 验收 11 条逐条核对**
 
 对照 `docs/superpowers/specs/2026-08-27-diagnostics-design.md` §7：
 1. analyze 收 execution_id 自动取数（T2 测试 test_analyze_happy_path 四要素断言）
@@ -1324,11 +1324,11 @@ Expected: `✓ built`
 10. 核心服务覆盖 ≥80%（DiagnosticsService 单测覆盖 analyze 全分支 + apply 全分支）
 11. KB-AUTO-01/scope 不做（spec §1.2 登记）
 
-- [ ] **Step 4: 派代码审查子代理（requesting-code-review 流程）**
+- [x] **Step 4: 派代码审查子代理（requesting-code-review 流程）**
 
 Base: T1 前 HEAD，Head: T7 提交。重点核对 spec 偏差表 A-I 与实现一致性。
 
-- [ ] **Step 5: 审查问题修复 + 最终提交**
+- [x] **Step 5: 审查问题修复 + 最终提交**
 
 ```bash
 git add -A
