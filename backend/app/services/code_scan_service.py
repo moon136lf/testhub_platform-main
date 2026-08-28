@@ -128,3 +128,56 @@ class CodeScanService:
         scan.error_msg = error_msg[:2000]
         await self.db.commit()
         return scan.to_dict()
+
+    # severity mapping: semgrep ERROR/WARNING/INFO -> high/mid/low
+    _SEV_MAP = {"ERROR": "high", "WARNING": "mid", "INFO": "low"}
+
+    async def run_scan_sync(self, scan_dict: dict, repo_path: str) -> dict:
+        """Synchronous scan orchestration (called by Celery task with its own
+        session). scan_dict: create_scan() output."""
+        import time
+
+        scan_id = scan_dict["id"]
+        started = time.time()
+        try:
+            ignored = set(await self.get_ignored_fingerprints(scan_id))
+            semgrep = _run_semgrep(repo_path)
+            counts = {"high": 0, "mid": 0, "low": 0}
+            files = set()
+            for r in semgrep.get("results", []):
+                fp = _compute_fingerprint(
+                    r.get("check_id", ""),
+                    r.get("path", ""),
+                    (r.get("start") or {}).get("line", 0),
+                    (r.get("extra") or {}).get("lines", ""),
+                )
+                if fp in ignored:
+                    continue
+                sev = self._SEV_MAP.get((r.get("extra") or {}).get("severity", "INFO"), "low")
+                counts[sev] += 1
+                files.add(r.get("path", ""))
+                issue = CodeIssue(
+                    scan_id=UUID(scan_id),
+                    severity=sev,
+                    file_path=r.get("path", ""),
+                    line_no=(r.get("start") or {}).get("line"),
+                    title=(r.get("check_id", "")).split(".")[-1][:200] or "issue",
+                    description=(r.get("extra") or {}).get("message", ""),
+                    example_code=(r.get("extra") or {}).get("lines", ""),
+                    fingerprint=fp,
+                )
+                self.db.add(issue)
+            duration_ms = int((time.time() - started) * 1000)
+            await self.db.commit()
+            await self.mark_scan_done(
+                scan_id, total=sum(counts.values()),
+                high=counts["high"], mid=counts["mid"], low=counts["low"],
+                file_count=len(files), duration_ms=duration_ms,
+            )
+            return {"total_issues": sum(counts.values()),
+                    "high_count": counts["high"], "mid_count": counts["mid"],
+                    "low_count": counts["low"],
+                    "file_count": len(files), "duration_ms": duration_ms}
+        except Exception as e:
+            await self.mark_scan_failed(scan_id, str(e))
+            raise

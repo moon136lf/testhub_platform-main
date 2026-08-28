@@ -26,6 +26,7 @@ def mock_db():
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     db.refresh = AsyncMock()
+    db.add = MagicMock()  # sync add: AsyncMock auto-add yields unawaited coroutines
     return db
 
 
@@ -112,3 +113,80 @@ class TestIssueFlow:
         svc = CodeScanService(mock_db)
         result = await svc.get_ignored_fingerprints(str(uuid4()))
         assert result == ["fp-a", "fp-b"]
+
+
+class TestRunScanSync:
+    @pytest.mark.asyncio
+    async def test_run_scan_writes_issues_and_stats(self, mock_db):
+        svc = CodeScanService(mock_db)
+        scan = MagicMock()
+        scan.id = uuid4()
+        scan.to_dict = Mock(return_value={"id": str(scan.id), "status": "scanning"})
+        # Plan's side_effect only listed the mark_scan_done fetch, but
+        # run_scan_sync first calls get_ignored_fingerprints (db.execute().all())
+        # then mark_scan_done (db.execute().scalar_one_or_none()) — plan-internal
+        # ordering bug (deviation from plan, documented): prepend the fingerprints
+        # fetch so the plan's intended result lands on mark_scan_done.
+        mock_db.execute.side_effect = [
+            Mock(all=Mock(return_value=[])),  # get_ignored_fingerprints
+            _mock_scalar_one(scan),           # mark_scan_done fetch
+        ]
+        with patch("app.services.code_scan_service._run_semgrep",
+                   return_value=SEMGREP_JSON):
+            result = await svc.run_scan_sync(
+                {"id": str(uuid4()), "project_id": str(uuid4())},
+                repo_path="/tmp/repo")
+        assert result["total_issues"] == 2
+        # plan's return dict spreads counts as high/mid/low keys (plan-internal
+        # key mismatch vs its own test's high_count assertion — deviation from
+        # plan, documented): return high_count/mid_count/low_count, matching
+        # CodeScan.to_dict + ScanResponse schema keys
+        assert result["high_count"] >= 1  # ERROR mapped high
+        assert mock_db.commit.called or mock_db.add.called
+
+    @pytest.mark.asyncio
+    async def test_run_scan_skips_ignored_fingerprints(self, mock_db):
+        svc = CodeScanService(mock_db)
+        # both issues ignored -> 0 written
+        async def fake_ignored(scan_id):
+            return {_compute_fingerprint(
+                SEMGREP_JSON["results"][0]["check_id"],
+                SEMGREP_JSON["results"][0]["path"],
+                SEMGREP_JSON["results"][0]["start"]["line"],
+                SEMGREP_JSON["results"][0]["extra"]["lines"]),
+                _compute_fingerprint(
+                SEMGREP_JSON["results"][1]["check_id"],
+                SEMGREP_JSON["results"][1]["path"],
+                SEMGREP_JSON["results"][1]["start"]["line"],
+                SEMGREP_JSON["results"][1]["extra"]["lines"])}
+        svc.get_ignored_fingerprints = fake_ignored
+        # mark_scan_done fetch must return a real Mock scan (AsyncMock auto-attr
+        # scalar_one_or_none returns an unawaited coroutine whose .status write
+        # would crash — plan-internal mock gap, deviation documented)
+        mock_db.execute.side_effect = [_mock_scalar_one(MagicMock())]
+        with patch("app.services.code_scan_service._run_semgrep",
+                   return_value=SEMGREP_JSON):
+            result = await svc.run_scan_sync(
+                {"id": str(uuid4()), "project_id": str(uuid4())},
+                repo_path="/tmp/repo")
+        assert result["total_issues"] == 0
+
+
+class TestScanExport:
+    @pytest.mark.asyncio
+    async def test_export_buglist_xlsx_bytes(self):
+        from app.services.scan_export_service import ScanExportService
+        svc = ScanExportService()
+        issues = [{"severity": "high", "file_path": "a.py", "line_no": 1,
+                   "title": "SQLi", "description": "d", "status": "open"}]
+        data = svc.export_buglist_xlsx(issues)
+        assert data[:2] == b"PK"  # xlsx zip magic
+
+    @pytest.mark.asyncio
+    async def test_export_markdown_nonempty(self):
+        from app.services.scan_export_service import ScanExportService
+        svc = ScanExportService()
+        issues = [{"severity": "high", "file_path": "a.py", "line_no": 1,
+                   "title": "SQLi", "description": "d", "status": "open"}]
+        md = svc.export_issues_markdown(issues, title="BUG清单")
+        assert "SQLi" in md and "#" in md
