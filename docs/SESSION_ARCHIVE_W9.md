@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #8 — 2026-08-28 17:58（手动触发）
+
+**最近 8 条 commit**：
+- 3f9d5c7 docs: session archive W9 #7 (auto)
+- 25b419c docs: session archive W9 #6 (auto)
+- a514b9c chore: update TODO_LIST (#9 done) (W9)
+- 5e9c01e feat(whitescan): WhiteScan page + routes + menu rename 白盒测试 (W9)
+- 5690e91 docs: session archive W9 #5 (auto)
+- d319728 feat(whitescan): API endpoints + router registration (W9)
+- 8b10ce3 docs: session archive W9 #4 (auto)
+- 20c2e4c docs: session archive W9 #3 (auto)
+
+**未提交变更**：1 文件（`code_scan_service.py`——审查修复 C1/C2 已改，剩余 I5/I6/I7 修复中）
+
+**当前进度**：审查反馈修复进行中（2C 代码已改；剩生成器校验器/repo_url 防护/token 埋点 + 测试补充），修完跑全量 → commit → #9 就绪挂起（周一与 #7 一起合）。
+
+---
+
 ## 快照 #7 — 2026-08-28 17:29（auto）
 
 **最近 8 条 commit**：
