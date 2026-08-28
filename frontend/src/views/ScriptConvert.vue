@@ -45,6 +45,15 @@
       </el-col>
     </el-row>
 
+    <!-- 执行失败明细 (AI 诊断入口, #5c) -->
+    <div v-if="lastExecFails.length" class="fail-list">
+      <div class="fail-title">失败步骤（点击 AI 诊断）</div>
+      <div v-for="f in lastExecFails" :key="f.id" class="fail-row">
+        <span>第 {{ f.step }} 步 {{ f.action }}：{{ f.error_type }}</span>
+        <el-button link type="primary" @click="openExecDiagnose(f)">AI诊断</el-button>
+      </div>
+    </div>
+
     <!-- Tab 切换：转脚本 / 脚本库执行 / 快速运行 -->
     <el-tabs v-model="activeTab" style="margin-top: 16px">
       <!-- Tab1: 转脚本 (#4 既有) -->
@@ -183,6 +192,20 @@
         <el-button type="primary" @click="runDiagnose">诊断</el-button>
       </template>
     </el-dialog>
+
+    <!-- AI 诊断弹窗 (#5c, 与 #4 调试修复弹窗并存) -->
+    <el-dialog v-model="aiDiagVisible" title="AI 诊断" width="640px">
+      <div v-loading="aiDiagLoading">
+        <DiagnosisCard v-if="aiDiagCard" :card="aiDiagCard" :applying="aiApplying" @apply="onAiApply" />
+        <el-empty v-else-if="!aiDiagLoading" description="暂无诊断结果" />
+      </div>
+      <template #footer>
+        <el-button @click="aiDiagVisible = false">关闭</el-button>
+        <el-button type="success" :disabled="!aiDiagCard || !aiDiagCard.new_locator" @click="rerunHint">
+          重跑验证
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -193,6 +216,9 @@ import { Refresh } from '@element-plus/icons-vue'
 import { scriptAPI } from '@/api/script'
 import { projectAPI } from '@/api/project'
 import { testCaseAPI } from '@/api/testCase'
+import { diagnosticsAPI } from '@/api/diagnostics'
+import DiagnosisCard from '@/components/DiagnosisCard.vue'
+import axios from '@/api/axios.js'
 
 const projects = ref([])
 const finalizedCases = ref([])
@@ -282,7 +308,14 @@ const handleRun = async (row) => {
   runningId.value = row.id
   try {
     const resp = await scriptAPI.run(row.id, { ...runConfig })
-    startSSE(resp.data.session_id, { onDone: () => { runningId.value = null } })
+    execSessionId.value = resp.data.session_id
+    lastExecFails.value = []
+    startSSE(resp.data.session_id, {
+      onDone: async () => {
+        runningId.value = null
+        await loadExecFails()
+      },
+    })
   } catch (e) { ElMessage.error('运行失败'); runningId.value = null }
 }
 
@@ -292,7 +325,14 @@ const handleBatchRun = async () => {
   try {
     const ids = selected.value.map(s => s.id)
     const resp = await scriptAPI.batchRun(ids, { ...runConfig })
-    startSSE(resp.data.session_id, { onDone: () => { batching.value = false } })
+    execSessionId.value = resp.data.session_id
+    lastExecFails.value = []
+    startSSE(resp.data.session_id, {
+      onDone: async () => {
+        batching.value = false
+        await loadExecFails()
+      },
+    })
   } catch (e) { ElMessage.error('批量运行失败'); batching.value = false }
 }
 
@@ -332,6 +372,73 @@ const runDiagnose = async () => {
   ElMessage.success('诊断完成')
 }
 
+// ---- 执行失败明细 + AI 诊断 (#5c) ----
+// 注意: #4 既有诊断弹窗已占用 diagVisible/diagCard/diagForm 等变量名, 本区全部用 aiDiag* 前缀
+const lastExecFails = ref([])
+const execSessionId = ref(null)
+// TODO(#5c T7): 后端 run 响应加 exec_id 后改用后端返回值, 删拼接
+const execIdFromSession = (sid) => `exec-${sid.slice(0, 8)}`
+
+const loadExecFails = async () => {
+  if (!execSessionId.value) return
+  try {
+    const resp = await axios.get(`/api/v1/reports/records/${execIdFromSession(execSessionId.value)}/details?status=fail`)
+    lastExecFails.value = resp.data?.data ?? []
+  } catch { lastExecFails.value = [] }
+}
+
+const openExecDiagnose = (row) => {
+  openAiDiagnose({ ...row, execId: execIdFromSession(execSessionId.value) })
+}
+
+// ---- AI 诊断 (#5c): 弹窗状态/分析/应用 (与 #4 diag* 变量隔离) ----
+const aiDiagVisible = ref(false)
+const aiDiagLoading = ref(false)
+const aiApplying = ref(false)
+const aiDiagCard = ref(null)
+const aiDiagRow = ref(null)
+
+const openAiDiagnose = async (row) => {
+  aiDiagRow.value = row
+  aiDiagCard.value = null
+  aiDiagVisible.value = true
+  aiDiagLoading.value = true
+  try {
+    const resp = await diagnosticsAPI.analyze(row.execId, row.step)
+    aiDiagCard.value = resp.data?.card ?? resp.data
+    ElMessage.success('诊断完成')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '诊断失败')
+    aiDiagVisible.value = false
+  } finally {
+    aiDiagLoading.value = false
+  }
+}
+
+const onAiApply = async () => {
+  if (!aiDiagCard.value?.new_locator || !aiDiagRow.value?.script_id) return
+  aiApplying.value = true
+  try {
+    await diagnosticsAPI.apply({
+      script_id: aiDiagRow.value.script_id,
+      project_id: form.projectId,
+      element_name: aiDiagCard.value.element_name ?? aiDiagRow.value.element_name ?? '',
+      new_locator: aiDiagCard.value.new_locator,
+      confidence: aiDiagCard.value.confidence,
+    })
+    ElMessage.success('已回写元素库（source=ai_fixed），可重跑验证')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '应用修复失败')
+  } finally {
+    aiApplying.value = false
+  }
+}
+
+const rerunHint = () => {
+  aiDiagVisible.value = false
+  ElMessage.info('请到脚本库或转脚本页重跑该脚本验证修复效果')
+}
+
 onMounted(async () => {
   const presp = await projectAPI.list()
   projects.value = presp.items || presp.data || presp || []
@@ -351,4 +458,7 @@ onMounted(async () => {
 .log-box { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; }
 .log-line { margin-bottom: 4px; }
 .diag-card { margin-top: 12px; padding: 12px; background: #f5f7fa; border-radius: 4px; }
+.fail-list { margin-top: 12px; padding: 8px 12px; background: #fef0f0; border-radius: 4px; }
+.fail-title { font-size: 13px; color: #f56c6c; margin-bottom: 6px; }
+.fail-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 13px; }
 </style>

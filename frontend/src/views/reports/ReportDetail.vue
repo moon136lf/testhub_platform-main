@@ -53,8 +53,26 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
+        <el-table-column label="诊断" width="110">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDiagnose(row)">AI诊断</el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
+
+    <el-dialog v-model="diagVisible" title="AI 诊断" width="640px">
+      <div v-loading="diagLoading">
+        <DiagnosisCard v-if="diagCard" :card="diagCard" :applying="applying" @apply="onApply" />
+        <el-empty v-else-if="!diagLoading" description="暂无诊断结果" />
+      </div>
+      <template #footer>
+        <el-button @click="diagVisible = false">关闭</el-button>
+        <el-button type="success" :disabled="!diagCard || !diagCard.new_locator" @click="rerunHint">
+          重跑验证
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -63,6 +81,8 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { reportAPI } from '@/api/report.js'
+import { diagnosticsAPI } from '@/api/diagnostics.js'
+import DiagnosisCard from '@/components/DiagnosisCard.vue'
 import axios from '@/api/axios.js'
 
 const route = useRoute()
@@ -87,6 +107,54 @@ const generate = async (force) => {
 }
 const exportReport = (format) => {
   window.location = axios.defaults.baseURL + reportAPI.exportUrl(route.params.execId, format)
+}
+
+// ---- AI 诊断 (#5c) ----
+const diagVisible = ref(false)
+const diagLoading = ref(false)
+const applying = ref(false)
+const diagCard = ref(null)
+const diagRow = ref(null)
+
+const openDiagnose = async (row) => {
+  diagRow.value = row
+  diagCard.value = null
+  diagVisible.value = true
+  diagLoading.value = true
+  try {
+    const resp = await diagnosticsAPI.analyze(route.params.execId, row.step)
+    diagCard.value = resp.data?.card ?? resp.data
+    ElMessage.success('诊断完成')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '诊断失败')
+    diagVisible.value = false
+  } finally {
+    diagLoading.value = false
+  }
+}
+
+const onApply = async () => {
+  if (!diagCard.value?.new_locator || !diagRow.value?.script_id) return
+  applying.value = true
+  try {
+    await diagnosticsAPI.apply({
+      script_id: diagRow.value.script_id,
+      project_id: detail.value?.record?.project_id,
+      element_name: diagCard.value.element_name ?? diagRow.value.element_name ?? '',
+      new_locator: diagCard.value.new_locator,
+      confidence: diagCard.value.confidence,
+    })
+    ElMessage.success('已回写元素库（source=ai_fixed），可重跑验证')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '应用修复失败')
+  } finally {
+    applying.value = false
+  }
+}
+
+const rerunHint = () => {
+  diagVisible.value = false
+  ElMessage.info('请到脚本库或转脚本页重跑该脚本验证修复效果')
 }
 onMounted(load)
 </script>
