@@ -223,3 +223,67 @@ class TestAnalyzeFetch:
         asyncio_run(svc.analyze("exec-abc12345", step=3))
         prompt_text = gw.chat.call_args.args[0][0]["content"][0]["text"]
         assert "await page.click" in prompt_text  # 整段脚本
+
+
+# ---- T3: apply ----
+# 注意: ElementService.find_by_name 内部先 uuid.UUID(project_id) 再查库,
+# project_id 必须是合法 UUID 字符串 (与 T4 API 测试用例一致), 否则未到 FakeDB 即抛错.
+_T3_PID = "1a2b3c4d-5e6f-4948-8276-000000000000"
+
+
+class TestApply:
+    def _element(self):
+        from app.models.element import ElementRepository
+        return ElementRepository(
+            page_id="pg1", project_id=_T3_PID, element_id="login-btn",
+            element_name="登录按钮", element_type="button",
+            locator_strategies={"strategies": [{"type": "css", "value": "#old-btn"}]},
+            source="manual", confidence=3)
+
+    def test_apply_writes_element_with_ai_fixed(self):
+        """apply: 清洗合法 → find_by_name → 回写 source=ai_fixed + confidence=round(c*10)."""
+        el = self._element()
+        db = FakeDB([el])
+        svc = DiagnosticsService(db=db, gateway=MagicMock(), storage=MagicMock())
+        result = asyncio_run(svc.apply(
+            project_id=_T3_PID, element_name="登录按钮",
+            new_locator="#new-login-btn", confidence=0.92))
+        assert result["updated"] is True
+        assert result["element_id"] == "login-btn"
+        assert result["cleaned_locator"] == "#new-login-btn"
+        assert el.source == "ai_fixed"
+        assert el.confidence == 9  # round(0.92*10) = 9
+        strategies = el.locator_strategies["strategies"]
+        assert strategies[0]["value"] == "#new-login-btn"
+
+    def test_apply_rejects_getby_expression(self):
+        """get_by_* 表达式 → 400 语义 (ValueError), 不写库."""
+        el = self._element()
+        db = FakeDB([el])
+        svc = DiagnosticsService(db=db, gateway=MagicMock(), storage=MagicMock())
+        try:
+            asyncio_run(svc.apply(project_id=_T3_PID, element_name="登录按钮",
+                                  new_locator='page.get_by_role("button", name="登录")',
+                                  confidence=0.9))
+            assert False, "should raise"
+        except ValueError as e:
+            assert "无效" in str(e)
+
+    def test_apply_element_not_found(self):
+        db = FakeDB([None])
+        svc = DiagnosticsService(db=db, gateway=MagicMock(), storage=MagicMock())
+        try:
+            asyncio_run(svc.apply(project_id=_T3_PID, element_name="不存在",
+                                  new_locator="#x", confidence=0.9))
+            assert False, "should raise"
+        except ValueError as e:
+            assert "未找到" in str(e)
+
+    def test_apply_confidence_mapping_edge(self):
+        """confidence=1.0 → 10."""
+        el = self._element()
+        db = FakeDB([el])
+        svc = DiagnosticsService(db=db, gateway=MagicMock(), storage=MagicMock())
+        asyncio_run(svc.apply(project_id=_T3_PID, element_name="登录按钮",
+                              new_locator="text=\"登录\"", confidence=1.0))
+        assert el.confidence == 10

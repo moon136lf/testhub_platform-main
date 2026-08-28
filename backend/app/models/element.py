@@ -81,7 +81,7 @@ class ElementRepository(Base):
     # Status management
     status = Column(String(20), default="active", comment="active/deprecated/deleted")
     confidence = Column(Integer, default=0, comment="置信度 0-10")
-    source = Column(String(20), default="manual", comment="manual/auto/healed")
+    source = Column(String(20), default="manual", comment="manual/auto/healed/ai_fixed")
 
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -199,3 +199,34 @@ class DiagnosticsService:
             return None
         from app.services.self_heal_engine import SelfHealEngine
         return SelfHealEngine._clean_llm_locator(raw.strip())
+
+    async def apply(self, *, project_id: str, element_name: str,
+                    new_locator: str, confidence: Optional[float]) -> dict:
+        """TRANS-06 偏差版 (spec §1.4-G): new_locator 清洗 → 回写元素库.
+
+        - 清洗拒绝 page.get_by_* 表达式 (#5b 审查教训)
+        - source="ai_fixed" (§11.2 枚举扩展, spec 偏差 C)
+        - confidence=round(c*10) 直接设值, 不叠加自愈计数器 (spec 偏差 E)
+        - 无浏览器上下文, 不做真实命中验证 (spec §1.2 已登记); 靠重跑验证
+        """
+        from app.services.self_heal_engine import SelfHealEngine
+        cleaned = SelfHealEngine._clean_llm_locator((new_locator or "").strip())
+        if not cleaned:
+            raise ValueError(f"定位器无效（含 page.get_by_* 表达式或格式非法）: {new_locator}")
+
+        from app.services.element_service import ElementService
+        svc = ElementService(self.db)
+        el = await svc.find_by_name(project_id, element_name)
+        if not el:
+            raise ValueError(f"元素库未找到: {element_name}")
+
+        # 新策略放首位 (主路径按 score 降序尝试, 新定位器优先用)
+        existing = (el.locator_strategies or {}).get("strategies") or []
+        new_strategy = {"type": "ai_fixed", "value": cleaned, "score": 100,
+                        "unique": True, "verified": False}
+        el.locator_strategies = {"strategies": [new_strategy] + existing}
+        el.source = "ai_fixed"
+        el.confidence = round((confidence or 0) * 10)
+        await self.db.flush()
+        return {"element_id": el.element_id, "updated": True,
+                "cleaned_locator": cleaned}
