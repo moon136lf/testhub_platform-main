@@ -60,6 +60,7 @@ async def init_db():
     async with engine.begin() as conn:
         # Import all models to ensure they are registered
         from app.models import project, test_case, element, execution
+        from app.models import whitescan  # W9: code_scan/code_issue (test_case FK target)
 
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
