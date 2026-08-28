@@ -176,6 +176,12 @@ class CaseResponse(BaseModel):
     is_finalized: bool
     version: int
     hallucination_status: str
+    # W7 review fields on list items (avoids frontend N+1 detail fan-out;
+    # frontend hooks on review_status presence and skips detail pulls)
+    review_status: Optional[str] = None
+    feasibility_level: Optional[str] = None
+    refinement_report: Optional[dict] = None
+    refined_at: Optional[str] = None
     created_by: Optional[str] = None
     created_at: str
     updated_at: str

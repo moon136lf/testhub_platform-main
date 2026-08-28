@@ -86,20 +86,26 @@ class TestProjectRefinementReport:
         case_a = MagicMock()
         case_a.id = "aaaaaaaa-0000-0000-0000-000000000001"
         case_a.name = "登录正常流"
+        # review I2: report JSON has NO refined_at key (real engine shape);
+        # timestamp comes from the TestCase.refined_at COLUMN
         case_a.refinement_report = {
-            "score": 90, "refined_at": "2026-08-25T10:00:00",
+            "score": 90,
             "suggestions": [{"id": "s1", "dimension": "断言增强", "issue": "x",
                              "suggestion": "y", "status": "pending"}],
         }
+        from datetime import datetime as _dt
+        case_a.refined_at = _dt(2026, 8, 25, 10, 0, 0)
         case_b = MagicMock()
         case_b.id = "bbbbbbbb-0000-0000-0000-000000000002"
         case_b.name = "登出流"
         case_b.refinement_report = None  # not refined -> skipped
+        case_b.refined_at = None
         mock_db.execute.return_value = Mock(scalars=Mock(
             return_value=Mock(all=Mock(return_value=[case_a, case_b]))))
         svc = ReviewService(mock_db)
         result = await svc.get_project_refinement_report(str(uuid4()))
         assert result["case_count"] == 1
+        assert result["refined_at"] == "2026-08-25T10:00:00"  # from column, isoformat
         assert len(result["suggestions"]) == 1
         s = result["suggestions"][0]
         assert s["case_id"] == case_a.id
@@ -115,8 +121,32 @@ class TestBatchUpdateReview:
             return_value=Mock(all=Mock(return_value=[c1, c2, c3]))))
         svc = ReviewService(mock_db)
         result = await svc.batch_update_review(
-            str(uuid4()), ["1", "2", "3"], "passed", "LGTM")
+            str(uuid4()), [str(uuid4()), str(uuid4()), str(uuid4())], "passed", "LGTM")
         assert result == {"success_count": 3, "failure_count": 0}
         assert c1.review_status == "passed"
         assert c1.review_comment == "LGTM"
         assert mock_db.commit.called
+
+    @pytest.mark.asyncio
+    async def test_batch_review_malformed_ids_counted_as_failures(self, mock_db):
+        """Review I5: malformed ids must not silently no-op as 0/0."""
+        mock_db.execute.return_value = Mock(scalars=Mock(
+            return_value=Mock(all=Mock(return_value=[]))))
+        svc = ReviewService(mock_db)
+        result = await svc.batch_update_review(
+            str(uuid4()), ["not-a-uuid", "also-bad"], "passed")
+        assert result == {"success_count": 0, "failure_count": 2}
+
+    @pytest.mark.asyncio
+    async def test_batch_review_finalized_excluded_counts_failure(self, mock_db):
+        """Review I3(a): finalized cases are skipped (consistent with #3
+        single-case review path) and reported as failures."""
+        c_ok = MagicMock()
+        mock_db.execute.return_value = Mock(scalars=Mock(
+            return_value=Mock(all=Mock(return_value=[c_ok]))))
+        svc = ReviewService(mock_db)
+        # request 3, only 1 non-finalized matched -> 1 success, 2 failures
+        result = await svc.batch_update_review(
+            str(uuid4()), [str(uuid4()), str(uuid4()), str(uuid4())], "passed")
+        assert result == {"success_count": 1, "failure_count": 2}
+        assert c_ok.review_status == "passed"

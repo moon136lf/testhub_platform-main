@@ -66,7 +66,7 @@
       <el-card shadow="never" style="margin-top: 16px" v-if="report && report.suggestions.length">
         <template #header>
           <div style="display:flex;justify-content:space-between">
-            <span>E2E精修报告（{{ report.case_count }} 个用例已精修）</span>
+            <span>E2E精修报告（{{ report.case_count }} 个用例已精修<template v-if="report.refined_at">，{{ report.refined_at }}</template>）</span>
             <el-button type="primary" size="small" @click="onApplyAll">应用全部建议</el-button>
           </div>
         </template>

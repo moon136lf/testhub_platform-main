@@ -88,14 +88,17 @@ class ReviewService:
         )
         cases = (await self.db.execute(q)).scalars().all()
         suggestions = []
+        # refined_at comes from the COLUMN (refine_case sets it), not from
+        # inside the report JSON — CaseRefiner's report has no refined_at key
+        # (review I2: the JSON read was always None).
         refined_at = None
         # defensive: skip rows without an actual report (DB IS NOT NULL may
         # still yield empty dicts; plan test expects unrefined rows skipped)
         valid_cases = [c for c in cases if c.refinement_report]
         for c in valid_cases:
             report = c.refinement_report or {}
-            if refined_at is None and report.get("refined_at"):
-                refined_at = report.get("refined_at")
+            if refined_at is None and getattr(c, "refined_at", None):
+                refined_at = c.refined_at.isoformat() if hasattr(c.refined_at, "isoformat") else str(c.refined_at)
             for s in report.get("suggestions", []):
                 suggestions.append({
                     **s,
@@ -112,16 +115,29 @@ class ReviewService:
                                   review_status: str,
                                   review_comment: Optional[str] = None) -> dict:
         """Batch update review_status/comment (REVIEW-01 flow). Only touches
-        cases in the project."""
+        cases in the project. Skips finalized cases to stay consistent with
+        #3's single-case review path (review I3, decision (a))."""
         pid = UUID(project_id)
         try:
             id_list = [UUID(c) for c in case_ids]
         except (ValueError, TypeError):
+            # malformed id(s) poison the whole batch parse — count them and
+            # keep the valid remainder (review I5)
             id_list = []
+            malformed = 0
+            for c in case_ids:
+                try:
+                    id_list.append(UUID(c))
+                except (ValueError, TypeError):
+                    malformed += 1
+        else:
+            malformed = 0
+        requested = len(id_list)
         q = select(TestCase).where(
             TestCase.project_id == pid,
             TestCase.id.in_(id_list),
             TestCase.is_deleted.is_(False),
+            TestCase.is_finalized.is_(False),
         )
         cases = (await self.db.execute(q)).scalars().all()
         success = failure = 0
@@ -134,4 +150,7 @@ class ReviewService:
                 failure += 1
                 logger.error(f"batch review {c.id} failed: {e}")
         await self.db.commit()
+        # unmatched (malformed/foreign-project/finalized/deleted ids) count as
+        # failures so the caller sees the real outcome (review I5)
+        failure += malformed + (len(id_list) - success)
         return {"success_count": success, "failure_count": failure}

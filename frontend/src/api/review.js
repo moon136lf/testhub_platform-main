@@ -23,10 +23,10 @@ export const reviewAPI = {
 
   /**
    * 用例列表（含评审字段）。
-   * 后端 list 接口 items 为 CaseResponse（不含 review_status/feasibility_level/refinement_report，
-   * 评审字段仅在 CaseDetailResponse）。按 plan 注记「若 list 返回不含 review 字段，改用 detail
-   * 接口或在 api 层补充」：拉全量后对缺失评审字段的用例补拉 detail 合并；
-   * 后端补齐列表字段后此步自动跳过（前向兼容）。
+   * W7 review I1 修复后：后端 CaseResponse 列表项已含 4 个评审字段
+   * （review_status/feasibility_level/refinement_report/refined_at），
+   * 探测钩子（review_status === undefined）直接命中，detail 扇出不再触发。
+   * 保留兼容逻辑：若后端回退到不含字段的列表，仍自动补拉 detail。
    */
   async listCasesWithReview(projectId, pageSize = 100) {
     const res = await testCaseAPI.list({ project_id: projectId, page: 1, page_size: pageSize })
