@@ -382,7 +382,8 @@ const execIdFromSession = (sid) => `exec-${sid.slice(0, 8)}`
 const loadExecFails = async () => {
   if (!execSessionId.value) return
   try {
-    const resp = await axios.get(`/api/v1/reports/records/${execIdFromSession(execSessionId.value)}/details?status=fail`)
+    // axios baseURL 已含 /api/v1, url 不能再带 /api/v1 前缀 (否则拼成 /api/v1/api/v1 404)
+    const resp = await axios.get(`/reports/records/${execIdFromSession(execSessionId.value)}/details?status=fail`)
     lastExecFails.value = resp.data?.data ?? []
   } catch { lastExecFails.value = [] }
 }
