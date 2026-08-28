@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #3 — 2026-08-28 13:19（auto）
+
+**最近 8 条 commit**：
+- 6e003ea feat(whitescan): scan orchestration + Celery task + export service (W9)
+- f68f072 docs: session archive W9 #2 (auto)
+- 77a6544 feat(whitescan): AIFixService + RegressionCaseGenerator (W9)
+- 0707bbd feat(whitescan): CodeScanService semgrep(Docker)/issues/fingerprint (W9)
+- 9761bdd docs: session archive W9 #1
+- 2d0c705 feat(whitescan): CodeScan/CodeIssue models + migration (W9)
+- 66da905 plan(whitescan): #9 7-task implementation plan
+- 791a6c9 feat(diagnostics): #5c T3（master 基线）
+
+**未提交变更**：5 文件（schemas/whitescan.py + api/v1/whitescan.py + api/__init__.py 注册 + database.py 注册 model 到 create_all + 1 个临时建表脚本）——T5 API router 子代理收尾中
+
+**当前进度**：T1-T4 完成（T4 `6e003ea` 编排+Celery+导出，预计 423 passed）；T5 API 9 端点红绿循环收尾中。批次4（T6 前端）待派。
+
+---
+
 ## 快照 #2 — 2026-08-28 12:19（auto）
 
 **最近 8 条 commit**：
