@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #4 — 2026-08-28 09:09（auto）
+
+**最近 8 条 commit**：
+- 023ff63 docs: session archive W7 #3 (manual)
+- e31102b chore: update TODO_LIST (#7 review center done) (W7)
+- d5bf6aa fix(review): review fields merged from detail API in list load (W7)
+- 0327902 docs: session archive W7 #2 (auto)
+- f772f23 feat(review): ReviewCenter page + routes + menu fix (W7)
+- 54fae66 docs: session archive W7 #1 (T1+T2 done, T3 frontend in progress)
+- 0212588 feat(review): reviews API 4 endpoints + router registration (W7)
+- 0ba3332 feat(review): ReviewService stats/batch-refine/report/batch-review (W7)
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：#7 全部 4 task 完成，统一审查子代理曾因 API 错误中断，已恢复继续（正在核实 #3 复用说明），待审查 verdict → rebase 新 master 合回。master 现含 #6/#11（390 passed）。
+
+---
+
 ## 快照 #3 — 2026-08-27 17:48（手动触发）
 
 **最近 8 条 commit**：
