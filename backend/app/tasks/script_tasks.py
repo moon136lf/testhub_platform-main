@@ -56,7 +56,7 @@ def convert_scripts_task(self, session_id: str, case_ids: list, project_id: str,
     """Celery 入口: 查用例 -> 转换 -> 写 ScriptAsset + 自动化状态联动。"""
     import asyncio
     from sqlalchemy import select
-    from app.models.test_case import TestCase, ScriptAsset
+    from app.models.test_case import TestCase, ScriptAsset, TestPoint
 
     async def _run():
         async with AsyncSessionLocal() as db:
@@ -67,6 +67,15 @@ def convert_scripts_task(self, session_id: str, case_ids: list, project_id: str,
                 )
             )
             cases = [c.to_dict() for c in result.scalars().all()]
+            # #8 偏差 J: module 从 TestCase.point_id → TestPoint.page_name 推导
+            point_ids = {c.get("point_id") for c in cases if c.get("point_id")}
+            page_by_point = {}
+            if point_ids:
+                pres = await db.execute(
+                    select(TestPoint).where(TestPoint.id.in_([uuid.UUID(p) for p in point_ids])))
+                page_by_point = {str(p.id): p.page_name for p in pres.scalars().all()}
+            for c in cases:
+                c["module"] = page_by_point.get(c.get("point_id"))
             gateway = _CountingGateway(AIGateway())
             element_svc = ElementService(db)
             lookup = ElementLocatorLookup(element_svc)

@@ -11,6 +11,7 @@ from app.models.knowledge import KnowledgeDocument, KnowledgeChunk
 from app.models.test_rule import TestRule
 from app.models.generation import GenerationSession, HallucinationConfig
 from app.models.system import SystemSetting, TestEnv, TokenQuota, OperationLog
+from app.models.regression import RegressionSet
 
 __all__ = [
     "Project",
@@ -36,4 +37,5 @@ __all__ = [
     "TestEnv",
     "TokenQuota",
     "OperationLog",
+    "RegressionSet",
 ]

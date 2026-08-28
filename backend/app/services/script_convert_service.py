@@ -60,7 +60,8 @@ class ScriptConvertService:
             case_id=case_id, project_id=case.get("project_id"),
             name=normalized.title, description=case.get("expected_result"),
             content=gen.script, version=1, status=status,
-            category="uncategorized", step_mapping=gen.step_mapping,
+            category="uncategorized", module=case.get("module"),
+            step_mapping=gen.step_mapping,
             locator_source=gen.locator_source, last_status="never_run",
         )
         await sse.send_message(type="system", stage="convert_script",
