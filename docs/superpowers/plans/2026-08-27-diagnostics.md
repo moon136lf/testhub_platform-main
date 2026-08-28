@@ -575,7 +575,7 @@ git commit -m "feat(diagnostics): DiagnosticsService.analyze — fetch+pack+mult
 - Modify: `backend/app/models/element.py:84`（source 列注释加 ai_fixed）
 - Test: `backend/tests/test_diagnostics_service.py`（追加）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 追加：
 
@@ -639,12 +639,12 @@ class TestApply:
         assert el.confidence == 10
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_diagnostics_service.py -q -k Apply`
 Expected: FAIL — `AttributeError: 'DiagnosticsService' object has no attribute 'apply'`
 
-- [ ] **Step 3: 实现 apply**
+- [x] **Step 3: 实现 apply**
 
 追加到 `diagnostics_service.py` 的 DiagnosticsService 类内：
 
@@ -687,12 +687,12 @@ Expected: FAIL — `AttributeError: 'DiagnosticsService' object has no attribute
     source = Column(String(20), default="manual", comment="manual/auto/healed/ai_fixed")
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_diagnostics_service.py -q`
 Expected: PASS（11 + 4 = 15 passed）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/diagnostics_service.py backend/app/models/element.py backend/tests/test_diagnostics_service.py
@@ -709,7 +709,7 @@ git commit -m "feat(diagnostics): apply — clean locator + writeback ai_fixed (
 - Modify: `backend/app/api/__init__.py`（router 注册）
 - Test: `backend/tests/test_diagnostics_api.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `backend/tests/test_diagnostics_api.py`：
 
@@ -814,12 +814,12 @@ class TestApplyEndpoint:
         assert resp.status_code == 400
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_diagnostics_api.py -q`
 Expected: FAIL — 404 Not Found（路由不存在）或 ImportError
 
-- [ ] **Step 3: 实现 schemas + API + 注册**
+- [x] **Step 3: 实现 schemas + API + 注册**
 
 新建 `backend/app/schemas/diagnostics.py`：
 
@@ -930,17 +930,17 @@ from app.api.v1 import projects, health, elements, sse, ai_case_generation, test
 api_router.include_router(diagnostics.router, prefix="/diagnostics", tags=["diagnostics"])
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_diagnostics_api.py -q`
 Expected: PASS（6 passed）
 
-- [ ] **Step 5: 全量回归**
+- [x] **Step 5: 全量回归**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/ -q --ignore=tests/test_batch_import_fix.py`
 Expected: 全部 PASS（约 380+）
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/app/api/v1/diagnostics.py backend/app/schemas/diagnostics.py backend/app/api/__init__.py backend/tests/test_diagnostics_api.py
@@ -955,14 +955,16 @@ git commit -m "feat(diagnostics): /diagnostics/analyze + /apply endpoints (#5c T
 - Create: `frontend/src/api/diagnostics.js`
 - Create: `frontend/src/components/DiagnosisCard.vue`
 
-- [ ] **Step 1: API 封装**
+- [x] **Step 1: API 封装**
 
 新建 `frontend/src/api/diagnostics.js`：
 
 ```js
+// 实现偏差: BASE 不带 /api/v1 前缀 — axios.js baseURL 已是 /api/v1,
+// 逐字用 '/api/v1/diagnostics' 会拼成 /api/v1/api/v1/diagnostics 404 (同 report.js 相对路径风格)
 import axios from './axios.js'
 
-const BASE = '/api/v1/diagnostics'
+const BASE = 'diagnostics'
 
 export const diagnosticsAPI = {
   // TRANS-05: execution_id 自动取数诊断
@@ -981,7 +983,7 @@ export const diagnosticsAPI = {
 }
 ```
 
-- [ ] **Step 2: DiagnosisCard 组件**
+- [x] **Step 2: DiagnosisCard 组件**
 
 新建 `frontend/src/components/DiagnosisCard.vue`：
 
@@ -1025,12 +1027,12 @@ defineEmits(['apply'])
 </style>
 ```
 
-- [ ] **Step 3: build 验证**
+- [x] **Step 3: build 验证**
 
 Run: `cd /d/MoonTest/frontend && npx vite build 2>&1 | tail -3`
 Expected: `✓ built in Xs`（无编译错误）
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/api/diagnostics.js frontend/src/components/DiagnosisCard.vue
