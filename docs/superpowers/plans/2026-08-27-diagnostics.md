@@ -1047,7 +1047,7 @@ git commit -m "feat(diagnostics): frontend API + DiagnosisCard component (#5c T5
 - Modify: `frontend/src/views/reports/ReportDetail.vue`（失败明细表加诊断列+弹窗）
 - Modify: `frontend/src/views/ScriptConvert.vue`（执行结果失败行诊断）
 
-- [ ] **Step 1: ReportDetail.vue 失败明细加 [AI诊断]**
+- [x] **Step 1: ReportDetail.vue 失败明细加 [AI诊断]**
 
 失败明细 `<el-table>`（约 line 34-56）加操作列（在堆栈列后）：
 
@@ -1136,7 +1136,7 @@ const rerunScript = () => {
 
 注意：若 `detail.details` 的行里没有 `element_name`（ExecutionDetail 无此列），apply 的 element_name 需从后端拿——**Task 6a 补丁**：analyze 响应的 card 里带 `element_name`（后端 `_get_fail_detail` 后从 asset.step_mapping 推，加到 card）。本 Task 先按此依赖写，Task 7 落实后端字段。若不想跨 Task 依赖，`openDiagnose` 里 elementName 直接用 `diagCard.value.element_name`（Task 7 加上后即生效）。
 
-- [ ] **Step 2: ScriptConvert.vue 执行结果加诊断**
+- [x] **Step 2: ScriptConvert.vue 执行结果加诊断**
 
 ScriptConvert.vue 执行结果区（统计卡片下方）加失败明细区（当前无失败行展示——SSE 只有消息流）。最小接入：执行完成后拉失败明细 + 诊断按钮。
 
@@ -1194,12 +1194,12 @@ const openExecDiagnose = (row) => {
 
 其中 `openDiagnose`/`onApply` 与 Step 1 相同逻辑（弹窗 + DiagnosisCard 复用；`openDiagnose` 接受 row 里带 `execId` 时优先用——实现为 `row.execId || 默认`）。`currentProjectId` 用页面已有 `form.projectId`。批量运行 `handleBatchRun` 同样在 onDone 后调 `loadExecFails()`。
 
-- [ ] **Step 3: build 验证**
+- [x] **Step 3: build 验证**
 
 Run: `cd /d/MoonTest/frontend && npx vite build 2>&1 | tail -3`
 Expected: `✓ built in Xs`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/views/reports/ReportDetail.vue frontend/src/views/ScriptConvert.vue
