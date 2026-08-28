@@ -309,6 +309,7 @@ const handleRun = async (row) => {
   try {
     const resp = await scriptAPI.run(row.id, { ...runConfig })
     execSessionId.value = resp.data.session_id
+    execId.value = resp.data.exec_id
     lastExecFails.value = []
     startSSE(resp.data.session_id, {
       onDone: async () => {
@@ -326,6 +327,7 @@ const handleBatchRun = async () => {
     const ids = selected.value.map(s => s.id)
     const resp = await scriptAPI.batchRun(ids, { ...runConfig })
     execSessionId.value = resp.data.session_id
+    execId.value = resp.data.exec_id
     lastExecFails.value = []
     startSSE(resp.data.session_id, {
       onDone: async () => {
@@ -376,20 +378,19 @@ const runDiagnose = async () => {
 // 注意: #4 既有诊断弹窗已占用 diagVisible/diagCard/diagForm 等变量名, 本区全部用 aiDiag* 前缀
 const lastExecFails = ref([])
 const execSessionId = ref(null)
-// TODO(#5c T7): 后端 run 响应加 exec_id 后改用后端返回值, 删拼接
-const execIdFromSession = (sid) => `exec-${sid.slice(0, 8)}`
+const execId = ref(null) // 后端 run 响应带回 (#5c T7), 前端免拼
 
 const loadExecFails = async () => {
-  if (!execSessionId.value) return
+  if (!execId.value) return
   try {
     // axios baseURL 已含 /api/v1, url 不能再带 /api/v1 前缀 (否则拼成 /api/v1/api/v1 404)
-    const resp = await axios.get(`/reports/records/${execIdFromSession(execSessionId.value)}/details?status=fail`)
+    const resp = await axios.get(`/reports/records/${execId.value}/details?status=fail`)
     lastExecFails.value = resp.data?.data ?? []
   } catch { lastExecFails.value = [] }
 }
 
 const openExecDiagnose = (row) => {
-  openAiDiagnose({ ...row, execId: execIdFromSession(execSessionId.value) })
+  openAiDiagnose({ ...row, execId: execId.value })
 }
 
 // ---- AI 诊断 (#5c): 弹窗状态/分析/应用 (与 #4 diag* 变量隔离) ----

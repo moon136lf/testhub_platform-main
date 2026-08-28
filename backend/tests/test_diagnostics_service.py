@@ -225,6 +225,21 @@ class TestAnalyzeFetch:
         assert "await page.click" in prompt_text  # 整段脚本
 
 
+# ---- T7: card.element_name ----
+class TestAnalyzeCardExtras:
+    def test_card_carries_element_name(self):
+        """apply 需要 element_name — 诊断卡从 step_mapping 推并携带."""
+        detail = _make_detail()
+        asset = _make_asset()  # step_mapping[step=3].element_name = "登录按钮"
+        from uuid import UUID
+        db = FakeDB([MagicMock(id=UUID(int=1)), detail, asset])
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": '{"diagnosis": "d", "suggestion": "s", "new_locator": "#x", "confidence": 0.8}', "tokens": 50})
+        svc = DiagnosticsService(db=db, gateway=gw, storage=MagicMock())
+        result = asyncio_run(svc.analyze("exec-abc12345", step=3))
+        assert result["card"]["element_name"] == "登录按钮"
+
+
 # ---- T3: apply ----
 # 注意: ElementService.find_by_name 内部先 uuid.UUID(project_id) 再查库,
 # project_id 必须是合法 UUID 字符串 (与 T4 API 测试用例一致), 否则未到 FakeDB 即抛错.

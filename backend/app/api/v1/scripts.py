@@ -140,7 +140,8 @@ async def run_script(request: RunRequest, db: AsyncSession = Depends(get_db)):
         config=request.config.model_dump(),
     )
     return {"code": 0, "message": "Execution started",
-            "data": {"session_id": session_id, "sse_url": f"/api/sse/stream/{session_id}"}}
+            "data": {"session_id": session_id, "exec_id": f"exec-{session_id[:8]}",
+                     "sse_url": f"/api/sse/stream/{session_id}"}}
 
 
 @router.post("/batch-run")
@@ -161,7 +162,8 @@ async def batch_run_scripts(request: BatchRunRequest, db: AsyncSession = Depends
         config=request.config.model_dump(),
     )
     return {"code": 0, "message": "Batch execution started",
-            "data": {"session_id": session_id, "sse_url": f"/api/sse/stream/{session_id}"}}
+            "data": {"session_id": session_id, "exec_id": f"exec-{session_id[:8]}",
+                     "sse_url": f"/api/sse/stream/{session_id}"}}
 
 
 @router.post("/quick-run")

@@ -62,11 +62,12 @@ class DiagnosticsService:
         img_b64 = self._load_screenshot_b64(detail.screenshot_url)
 
         # -- LLM 调用 --
+        element_name = self._infer_element_name(asset, detail.step)
         card = await self._call_llm(
             error_type=error_type, error_msg=error_msg, step=detail.step,
             action=detail.action, script_fragment=script_fragment,
             dom_snapshot=dom_snapshot, stack_trace=stack_trace, img_b64=img_b64,
-            project_id=project_id,
+            project_id=project_id, element_name=element_name,
         )
 
         # -- 落库: append 诊断卡 (数组化, mode=multimodal) --
@@ -125,10 +126,19 @@ class DiagnosticsService:
             logger.warning(f"diagnosis screenshot load failed: {e}")
             return None
 
+    @staticmethod
+    def _infer_element_name(asset: Optional[ScriptAsset], step: Optional[int]) -> Optional[str]:
+        """step_mapping[step].element_name 推断 (apply 回写元素库需要)."""
+        if asset is None or step is None:
+            return None
+        sm = next((m for m in (asset.step_mapping or []) if m.get("step") == step), None)
+        return (sm or {}).get("element_name")
+
     async def _call_llm(self, *, error_type: str, error_msg: str, step: Optional[int],
                         action: Optional[str], script_fragment: str,
                         dom_snapshot: str, stack_trace: str,
-                        img_b64: Optional[str], project_id: Optional[str]) -> dict:
+                        img_b64: Optional[str], project_id: Optional[str],
+                        element_name: Optional[str] = None) -> dict:
         prompt = f"""你是 UI 自动化测试诊断专家。脚本执行失败信息如下，请分析根因并给出修复建议。
 
 失败步骤: 第 {step} 步 ({action or "unknown"})
@@ -156,13 +166,15 @@ class DiagnosticsService:
         )
         raw = resp.get("content") or ""
         card = self._parse_llm_card(raw, step=step, action=action,
-                                    error_type=error_type, error_msg=error_msg)
+                                    error_type=error_type, error_msg=error_msg,
+                                    element_name=element_name)
         return card
 
-    def _parse_llm_card(self, raw: str, *, step, action, error_type, error_msg) -> dict:
+    def _parse_llm_card(self, raw: str, *, step, action, error_type, error_msg,
+                        element_name=None) -> dict:
         """解析 LLM 输出 → 诊断卡. 非法 JSON 降级纯文本; new_locator 清洗防幻觉."""
         card: Dict[str, Any] = {
-            "step": step, "action": action,
+            "step": step, "action": action, "element_name": element_name,
             "error_type": error_type, "error_msg": (error_msg or "")[:500],
         }
         data = None
