@@ -126,17 +126,20 @@
 
 ---
 
-#### 9. 白盒代码体检 (0%)
-**状态**：待开始  
+#### 9. 白盒代码体检 (P0 完成) - 2026-08-28
+**状态**：✅ 骨架完成（worktree `worktree-module9-whitescan`，待合回 master；菜单名已改「白盒测试」）
 **预估时间**：4-5 小时  
-**依赖**：无（独立模块）
+**依赖**：#2 StepSchema / #3 TestCase / #5a Celery（均已落地，复用不重写）
 
-**核心功能**：
-- [ ] 代码上传/Git集成
-- [ ] 静态代码分析
-- [ ] 代码质量评分
-- [ ] 漏洞检测
-- [ ] 报告生成
+**核心功能（已落地）**：
+- [x] Git集成（repo_url+branch 浅克隆，Celery 异步扫描，broker 不可用 503 降级）
+- [x] 静态代码分析（semgrep Docker 方案B，subprocess+@patch 测试；ERROR/WARNING/INFO→high/mid/low）
+- [x] 漏洞检测（issue 管理：状态流转 open/fixed/false_positive + WHITE-04 误报指纹忽略）
+- [x] AI修复（AIGateway.chat stage=whitescan_ai_fix 埋点 + 坏 JSON 降级；修复建议弹窗含原/修复代码）
+- [x] 报告生成（BUG清单 xlsx + Markdown 导出；回归用例一键生成：#2 5 规则+禁用词+强制自动化形式，增量生成查重 source_issue_id）
+- [x] 前端 WhiteScan.vue（4 区块：扫描入口/扫描记录+概览/问题列表筛选/产出物下载，轮询 3s + onBeforeUnmount 清理）
+
+**诚实边界**：全 mock（无真实 Docker semgrep/LLM/DB）；semgrep 真实链路+git clone 留联调（需 Docker Desktop 运行）；API 8 端点（spec 9 个中单 issue /generate-case 由批量接口覆盖，计划自身遗漏已记录）；case_outdated 标记字段已建但前端标记展示待联调补。
 
 ---
 
@@ -174,8 +177,8 @@
 
 ## 📊 总体进度
 
-- **已完成**：7/11 模块（#1 元素库 / #2 AI生成 / #3 用例管理 / #4 转脚本 / #10 系统设置 / #6 执行记录与报告 / #11 仪表盘 全部在 master）
-- **待开始**：#5 UI执行 / #7 评审完整页 / #8 回归 / #9 白盒
+- **已完成**：8/11 模块（#1 元素库 / #2 AI生成 / #3 用例管理 / #4 转脚本 / #10 系统设置 / #6 执行记录与报告 / #11 仪表盘 在 master；#9 白盒测试 在 worktree 待合回）
+- **待开始**：#5 UI执行 / #7 评审完整页 / #8 回归
 
 ---
 
@@ -183,6 +186,7 @@
 
 **#6 执行记录与报告**：✅ 已合回 master（2026-08-27）。
 **#11 仪表盘优化**：✅ 已合回 master（2026-08-27）。
+**#9 白盒测试**：✅ 全部 7 task 完成（T1 models / T2 CodeScanService / T3 AI修复+回归生成器 / T4 编排+Celery+导出 / T5 API 8端点 / T6 前端+菜单改名 / T7 收尾）。worktree `worktree-module9-whitescan` 待合回 master。431 passed，前端 build 通过，8 个 /whitescan/* 路由注册。菜单名已改「白盒测试」。
 **集成策略（用户确认 2026-08-24）**：先完成全部模块开发（结构骨架 + 接口契约 + 单测），最后统一接入大模型；数据库迁移在真实联调前一次性执行，再真实测试。AI 模块当前用可插拔占位（ai_gateway 已抽象），不在开发期阻塞。
 
 ---
@@ -197,4 +201,4 @@
 
 ---
 
-**最后更新**：2026-08-27
+**最后更新**：2026-08-28
