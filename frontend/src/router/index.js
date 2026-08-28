@@ -104,6 +104,12 @@ const router = createRouter({
           name: 'ReportDetail',
           component: () => import('@/views/reports/ReportDetail.vue'),
           meta: { title: '报告详情' }
+        },
+        {
+          path: 'whitescan',
+          name: 'WhiteScan',
+          component: () => import('@/views/whitescan/WhiteScan.vue'),
+          meta: { title: '白盒测试' }
         }
       ]
     }
