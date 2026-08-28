@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #2 — 2026-08-28 12:19（auto）
+
+**最近 8 条 commit**：
+- 77a6544 feat(whitescan): AIFixService + RegressionCaseGenerator (W9)
+- 0707bbd feat(whitescan): CodeScanService semgrep(Docker)/issues/fingerprint (W9)
+- 9761bdd docs: session archive W9 #1
+- 2d0c705 feat(whitescan): CodeScan/CodeIssue models + migration + test_case.source_issue_id (W9)
+- 66da905 plan(whitescan): #9 7-task implementation plan
+- 791a6c9 feat(diagnostics): #5c T3（master 基线）
+- 50a2a31 feat(diagnostics): #5c T2
+- d988bbf feat(diagnostics): #5c T1
+
+**未提交变更**：4 文件（code_scan_service.py 追加 run_scan_sync 中 / scan_export_service.py + code_scan_tasks.py 已建 / 测试追加中）——T4 编排子代理红绿循环中
+
+**当前进度**：T1（2d0c705）+ T2（0707bbd，412 passed）+ T3（77a6544，419 passed）完成；T4+T5 批次3 子代理运行中。
+
+---
+
 ## 快照 #1 — 2026-08-28 11:19（建种子）
 
 **进度**：#9 spec（master 已有 ec4bf44+9eaa1b1）+ plan（66da905，7 task，菜单改名「白盒测试」）完成；**T1 已 commit**（`2d0c705` CodeScan/CodeIssue models + 迁移 + test_case.source_issue_id）；**T2 CodeScanService 进行中**（子代理红绿循环中：service+测试文件已创建未提交）。
