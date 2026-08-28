@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #6 — 2026-08-28 16:28（auto）
+
+**最近 8 条 commit**：
+- a514b9c chore: update TODO_LIST (#9 whitescan done, menu renamed 白盒测试) (W9)
+- 5e9c01e feat(whitescan): WhiteScan page + routes + menu rename 白盒测试 (W9)
+- 5690e91 docs: session archive W9 #5 (auto)
+- d319728 feat(whitescan): API endpoints + router registration (W9)
+- 8b10ce3 docs: session archive W9 #4 (auto)
+- 20c2e4c docs: session archive W9 #3 (auto)
+- 6e003ea feat(whitescan): scan orchestration + Celery task + export service (W9)
+- f68f072 docs: session archive W9 #2 (auto)
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：#9 全部 7 task 完成（T1-T7，431 passed + 前端 build 通过 + 菜单改名白盒测试）。统一代码审查子代理运行中，verdict 后修复或标记待合回（与 #7 一起等 #5c 完成后的合并窗口）。
+
+---
+
 ## 快照 #5 — 2026-08-28 15:48（auto）
 
 **最近 8 条 commit**：
