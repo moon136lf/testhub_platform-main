@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #6 — 2026-08-28 10:20（auto）
+
+**最近 8 条 commit**：
+- 090c7bf docs: session archive W7 #5 (auto)
+- 2a2bf92 docs: session archive W7 #4 (auto)
+- 023ff63 docs: session archive W7 #3 (manual)
+- e31102b chore: update TODO_LIST (#7 review center done) (W7)
+- d5bf6aa fix(review): review fields merged from detail API in list load (W7)
+- 0327902 docs: session archive W7 #2 (auto)
+- f772f23 feat(review): ReviewCenter page + routes + menu fix (W7)
+- 54fae66 docs: session archive W7 #1 (T1+T2 done, T3 frontend in progress)
+
+**未提交变更**：1 文件（`docs/review_w7_report.md`——统一审查报告已落盘待 commit）
+
+**当前进度**：统一审查完成（verdict：With fixes，无 Critical）。5 项 Important（N+1 扇出 / refined_at 恒空 / finalized 语义分叉 / 3 处 UI 裁剪待拍板 / 畸形 id 静默 0-0），审查建议合并前修 I1+I2（<30 行）。等 controller 拍板 I3/I4 后修复 → rebase 合回。
+
+---
+
 ## 快照 #5 — 2026-08-28 09:12（auto，间隔 3 分钟合并记录）
 
 **最近 8 条 commit**：
