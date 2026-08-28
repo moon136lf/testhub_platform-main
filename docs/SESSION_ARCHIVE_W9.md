@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #5 — 2026-08-28 15:48（auto）
+
+**最近 8 条 commit**：
+- d319728 feat(whitescan): API endpoints + router registration (W9)
+- 8b10ce3 docs: session archive W9 #4 (auto)
+- 20c2e4c docs: session archive W9 #3 (auto)
+- 6e003ea feat(whitescan): scan orchestration + Celery task + export service (W9)
+- f68f072 docs: session archive W9 #2 (auto)
+- 77a6544 feat(whitescan): AIFixService + RegressionCaseGenerator (W9)
+- 0707bbd feat(whitescan): CodeScanService semgrep(Docker)/issues/fingerprint (W9)
+- 9761bdd docs: session archive W9 #1
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：T1-T5 全部完成（T5 API `d319728` 8 端点，431 passed；批次3子代理曾停摆由主会话接手收尾——修 trigger_scan 缺 override 撞真实 DB 的问题）。批次4（T6 前端 WhiteScan + 菜单改名白盒测试）子代理运行中。
+
+---
+
 ## 快照 #4 — 2026-08-28 14:20（auto）
 
 **最近 8 条 commit**：
