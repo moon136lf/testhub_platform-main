@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #7 — 2026-08-28 17:29（auto）
+
+**最近 8 条 commit**：
+- 25b419c docs: session archive W9 #6 (auto)
+- a514b9c chore: update TODO_LIST (#9 done) (W9)
+- 5e9c01e feat(whitescan): WhiteScan page + routes + menu rename 白盒测试 (W9)
+- 5690e91 docs: session archive W9 #5 (auto)
+- d319728 feat(whitescan): API endpoints + router registration (W9)
+- 8b10ce3 docs: session archive W9 #4 (auto)
+- 20c2e4c docs: session archive W9 #3 (auto)
+- 6e003ea feat(whitescan): scan orchestration + Celery task + export service (W9)
+
+**未提交变更**：1 文件（`code_scan_service.py`——审查修复 C1 误报指纹按 project 查询 + C2 case_outdated 标记已改，测试补充中）
+
+**当前进度**：统一审查完成（With fixes：2C+7I+11M），C1/C2 代码已改待测试；环境盘点完成（PG16+moontest 库✅ Docker✅ chromium✅，缺 Redis+MinIO——用户提供 PG 密码 Admin@123 备部署用）。
+
+---
+
 ## 快照 #6 — 2026-08-28 16:28（auto）
 
 **最近 8 条 commit**：
