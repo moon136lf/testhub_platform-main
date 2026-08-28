@@ -1,6 +1,5 @@
 """Diagnostics (#5c) service tests (mock db/gateway/storage)."""
 import asyncio
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 
@@ -302,3 +301,106 @@ class TestApply:
         asyncio_run(svc.apply(project_id=_T3_PID, element_name="登录按钮",
                               new_locator="text=\"登录\"", confidence=1.0))
         assert el.confidence == 10
+
+
+# ---- T8 fixup: C1 503 转译 ----
+class TestGatewayUnavailableTranslation:
+    def test_gateway_valueerror_raises_connectionerror(self):
+        """C1: gateway provider 未配置 (ValueError) → 转译 ConnectionError → API 层 503."""
+        from uuid import UUID
+        detail = _make_detail()
+        asset = _make_asset()
+        db = FakeDB([MagicMock(id=UUID(int=1)), detail, asset])
+        gw = MagicMock()
+        gw.chat = AsyncMock(side_effect=ValueError("Provider 'moonshot' not available. Check API key configuration in settings."))
+        svc = DiagnosticsService(db=db, gateway=gw, storage=MagicMock())
+        try:
+            asyncio_run(svc.analyze("exec-abc12345", step=3))
+            assert False, "should raise"
+        except ConnectionError as e:
+            assert "not available" in str(e)
+
+
+# ---- T8 fixup: C2 detail_id 直取 ----
+class TestDetailIdDirectFetch:
+    def test_detail_id_takes_precedence(self):
+        """C2: batch 多脚本同 step — detail_id 直取正确行, 不按 (exec_id, step) 模糊匹配."""
+        from uuid import uuid4
+        detail = _make_detail(id=uuid4())  # detail_id 直取需要真实 UUID 主键
+        asset = _make_asset()
+        db = FakeDB([detail, asset])  # detail_id 路径: 一次查询 detail, 一次查 asset
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": '{"diagnosis": "d", "suggestion": "s", "new_locator": null, "confidence": null}', "tokens": 10})
+        svc = DiagnosticsService(db=db, gateway=gw, storage=MagicMock())
+        result = asyncio_run(svc.analyze("exec-abc12345", step=99, detail_id=str(detail.id)))
+        assert result["diagnosis"] == "d"
+        # 断言没走 (exec_id, step=99) 模糊路径: 若走了会因 step=99 找不到而 raise
+
+    def test_detail_id_invalid_returns_404_semantics(self):
+        db = FakeDB([None])
+        svc = DiagnosticsService(db=db, gateway=MagicMock(), storage=MagicMock())
+        try:
+            asyncio_run(svc.analyze("exec-x", detail_id="not-a-uuid"))
+            assert False, "should raise"
+        except ValueError:
+            pass
+
+
+# ---- T8 fixup: I1+I2 override ----
+class TestOverrideSemantics:
+    def test_partial_override_does_not_erase_fields(self):
+        """I1: 只覆盖 dom_snapshot — 其余字段保持取数原值, 不被 None 擦除."""
+        detail = _make_detail()
+        asset = _make_asset()
+        db = FakeDB([MagicMock(id=1), detail, asset])
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": '{"diagnosis": "d", "suggestion": "s", "new_locator": null, "confidence": null}', "tokens": 10})
+        svc = DiagnosticsService(db=db, gateway=gw, storage=MagicMock())
+        asyncio_run(svc.analyze("exec-abc12345", step=3,
+                                override={"dom_snapshot": "<html>fixed</html>"}))
+        prompt_text = gw.chat.call_args.args[0][0]["content"][0]["text"]
+        assert "<html>fixed</html>" in prompt_text
+        assert "locate_failed" in prompt_text  # 未覆盖字段不被擦
+        assert "None" not in prompt_text.replace("new_locator", "")  # 无裸 None
+
+    def test_override_screenshot_url_used(self):
+        """I2: override.screenshot_url 覆盖生效 (detail 无截图时也能传图)."""
+        detail = _make_detail(screenshot_url=None)
+        asset = _make_asset()
+        db = FakeDB([MagicMock(id=1), detail, asset])
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={"content": '{"diagnosis": "d", "suggestion": "s", "new_locator": null, "confidence": null}', "tokens": 10})
+        storage = MagicMock()
+        storage.get_object_bytes = MagicMock(return_value=b"png")
+        svc = DiagnosticsService(db=db, gateway=gw, storage=storage)
+        asyncio_run(svc.analyze("exec-abc12345", step=3,
+                                override={"screenshot_url": "custom.png"}))
+        storage.get_object_bytes.assert_called_with("custom.png")
+
+
+# ---- T8 fixup: M5 confidence clamp ----
+class TestApplyConfidenceClamp:
+    def test_apply_confidence_above_one_clamped(self):
+        """M5: LLM 幻觉 confidence=99 → clamp 到 1.0 → 元素库 10."""
+        el = TestApply()._element()
+        db = FakeDB([el])
+        svc = DiagnosticsService(db=db, gateway=MagicMock(), storage=MagicMock())
+        asyncio_run(svc.apply(project_id="1a2b3c4d-5e6f-4948-8276-000000000000",
+                              element_name="登录按钮", new_locator="#x", confidence=99))
+        assert el.confidence == 10
+
+
+# ---- T8 fixup: M7 fenced JSON ----
+class TestFencedJsonParse:
+    def test_fenced_json_with_trailing_text_parses(self):
+        """M7: ```json 围栏 + 尾随含 } 文本 → 围栏优先解析成功."""
+        detail = _make_detail()
+        asset = _make_asset()
+        db = FakeDB([MagicMock(id=1), detail, asset])
+        gw = MagicMock()
+        gw.chat = AsyncMock(return_value={
+            "content": '好的，诊断如下：\n```json\n{"diagnosis": "根因", "suggestion": "建议", "new_locator": "#x", "confidence": 0.9}\n```\n以上供参考（含 } 字符）', "tokens": 50})
+        svc = DiagnosticsService(db=db, gateway=gw, storage=MagicMock())
+        result = asyncio_run(svc.analyze("exec-abc12345", step=3))
+        assert result["diagnosis"] == "根因"
+        assert result["new_locator"] == "#x"

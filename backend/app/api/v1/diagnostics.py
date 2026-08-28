@@ -25,7 +25,8 @@ async def analyze(request: AnalyzeRequest,
     try:
         data = await svc.analyze(
             request.execution_id, step=request.step,
-            override=request.error_data.model_dump() if request.error_data else None,
+            detail_id=request.detail_id,
+            override=request.error_data.model_dump(exclude_none=True) if request.error_data else None,
         )
         return DiagResponse(data=data)
     except ValueError as e:

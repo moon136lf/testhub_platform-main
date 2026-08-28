@@ -14,7 +14,7 @@ class TestAnalyzeEndpoint:
         """§9.2.5 契约: 响应含 diagnosis/suggestion/new_locator/confidence/apply_url."""
         from app.api.v1 import diagnostics as diag_mod
 
-        async def fake_analyze(self, exec_id, step=None, override=None):
+        async def fake_analyze(self, exec_id, step=None, override=None, detail_id=None):
             return {"diagnosis": "d", "suggestion": "s", "new_locator": "#x",
                     "confidence": 0.9, "apply_url": "/api/v1/diagnostics/apply",
                     "card": {"mode": "multimodal"}}
@@ -32,7 +32,7 @@ class TestAnalyzeEndpoint:
     def test_analyze_detail_missing_404(self):
         from app.api.v1 import diagnostics as diag_mod
 
-        async def fake_analyze(self, exec_id, step=None, override=None):
+        async def fake_analyze(self, exec_id, step=None, override=None, detail_id=None):
             raise ValueError("未找到失败记录: exec_id=x")
 
         with patch.object(diag_mod.DiagnosticsService, "analyze", fake_analyze):
@@ -44,7 +44,7 @@ class TestAnalyzeEndpoint:
     def test_analyze_gateway_unavailable_503(self):
         from app.api.v1 import diagnostics as diag_mod
 
-        async def fake_analyze(self, exec_id, step=None, override=None):
+        async def fake_analyze(self, exec_id, step=None, override=None, detail_id=None):
             raise ConnectionError("Provider 'moonshot' not available.")
 
         with patch.object(diag_mod.DiagnosticsService, "analyze", fake_analyze):
@@ -57,6 +57,31 @@ class TestAnalyzeEndpoint:
         client = _client()
         resp = client.post("/api/v1/diagnostics/analyze", json={})
         assert resp.status_code == 422  # execution_id 必填
+
+    def test_analyze_detail_id_passthrough(self):
+        """T8 fixup C2: detail_id 透传给 service (batch 多脚本同 step 直取)."""
+        from app.api.v1 import diagnostics as diag_mod
+
+        captured = {}
+
+        async def fake_analyze(self, exec_id, step=None, override=None, detail_id=None):
+            captured["detail_id"] = detail_id
+            captured["override"] = override
+            return {"diagnosis": "d", "suggestion": "s", "new_locator": None,
+                    "confidence": None, "apply_url": "/api/v1/diagnostics/apply",
+                    "card": {}}
+
+        with patch.object(diag_mod.DiagnosticsService, "analyze", fake_analyze):
+            client = _client()
+            resp = client.post("/api/v1/diagnostics/analyze", json={
+                "execution_id": "exec-x", "step": 2,
+                "detail_id": "0f0e0d0c-0b0a-4948-8276-000000000001",
+                "error_data": {"error_type": "locate_failed", "dom_snapshot": "<html>x</html>"}})
+        assert resp.status_code == 200
+        assert captured["detail_id"] == "0f0e0d0c-0b0a-4948-8276-000000000001"
+        # I1: exclude_none — 未填字段不产生显式 None 键
+        assert captured["override"] == {"error_type": "locate_failed",
+                                        "dom_snapshot": "<html>x</html>"}
 
 
 class TestApplyEndpoint:

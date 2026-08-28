@@ -406,7 +406,7 @@ const openAiDiagnose = async (row) => {
   aiDiagVisible.value = true
   aiDiagLoading.value = true
   try {
-    const resp = await diagnosticsAPI.analyze(row.execId, row.step)
+    const resp = await diagnosticsAPI.analyze(row.execId, row.step, null, row.id)
     aiDiagCard.value = resp.data?.card ?? resp.data
     ElMessage.success('诊断完成')
   } catch (e) {

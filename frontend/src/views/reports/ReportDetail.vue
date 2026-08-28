@@ -122,7 +122,7 @@ const openDiagnose = async (row) => {
   diagVisible.value = true
   diagLoading.value = true
   try {
-    const resp = await diagnosticsAPI.analyze(route.params.execId, row.step)
+    const resp = await diagnosticsAPI.analyze(route.params.execId, row.step, null, row.id)
     diagCard.value = resp.data?.card ?? resp.data
     ElMessage.success('诊断完成')
   } catch (e) {
@@ -154,6 +154,7 @@ const onApply = async () => {
 
 const rerunHint = () => {
   diagVisible.value = false
+  window.open('/reports', '_blank')  // 重跑走脚本库页（SCRIPT-03 入口）
   ElMessage.info('请到脚本库或转脚本页重跑该脚本验证修复效果')
 }
 onMounted(load)

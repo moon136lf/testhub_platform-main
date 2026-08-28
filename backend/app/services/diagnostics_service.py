@@ -7,6 +7,7 @@
 import json
 import logging
 import re
+import uuid
 from typing import Any, Dict, Optional
 
 from sqlalchemy import select
@@ -28,15 +29,17 @@ class DiagnosticsService:
         self.storage = storage
 
     async def analyze(self, exec_id: str, step: Optional[int] = None,
-                      override: Optional[dict] = None) -> dict:
+                      override: Optional[dict] = None,
+                      detail_id: Optional[str] = None) -> dict:
         """TRANS-05: 截图+DOM+堆栈+script_fragment 打包发 AI.
 
         入参 exec_id 是 ExecutionRecord.exec_id (unique, 前端从 session_id 拼
         exec-{session_id[:8]}, 与 /reports 同款标识).
+        detail_id: ExecutionDetail.id 直取 (batch 多脚本同 step 场景, 优先于 exec_id+step).
         """
-        detail = await self._get_fail_detail(exec_id, step)
+        detail = await self._get_fail_detail(exec_id, step, detail_id)
         if not detail:
-            raise ValueError(f"未找到失败记录: exec_id={exec_id}, step={step}")
+            raise ValueError(f"未找到失败记录: exec_id={exec_id}, step={step}, detail_id={detail_id}")
 
         asset = None
         if detail.script_id:
@@ -57,9 +60,10 @@ class DiagnosticsService:
             error_msg = override.get("error_msg", error_msg)
             dom_snapshot = override.get("dom_snapshot", dom_snapshot)
             script_fragment = override.get("script_fragment", script_fragment)
+        screenshot_url = (override or {}).get("screenshot_url") or detail.screenshot_url
 
         # 截图: storage 读 → base64 (复用 #5b 压缩); 失败降级无图
-        img_b64 = self._load_screenshot_b64(detail.screenshot_url)
+        img_b64 = self._load_screenshot_b64(screenshot_url)
 
         # -- LLM 调用 --
         element_name = self._infer_element_name(asset, detail.step)
@@ -85,7 +89,17 @@ class DiagnosticsService:
             "card": card,
         }
 
-    async def _get_fail_detail(self, exec_id: str, step: Optional[int]) -> Optional[ExecutionDetail]:
+    async def _get_fail_detail(self, exec_id: str, step: Optional[int],
+                               detail_id: Optional[str] = None) -> Optional[ExecutionDetail]:
+        if detail_id:
+            # batch 场景: 前端传 detail 主键直取, 避免多脚本同 step 选错行
+            try:
+                did = uuid.UUID(detail_id)
+            except (ValueError, TypeError):
+                return None
+            r = await self.db.execute(
+                select(ExecutionDetail).where(ExecutionDetail.id == did))
+            return r.scalar_one_or_none()
         r = await self.db.execute(
             select(ExecutionRecord).where(ExecutionRecord.exec_id == exec_id))
         rec = r.scalar_one_or_none()
@@ -160,10 +174,15 @@ class DiagnosticsService:
                                   "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
         messages = [{"role": "user", "content": content_parts}]
 
-        resp = await self.gateway.chat(
-            messages, provider=DIAGNOSIS_PROVIDER,
-            project_id=project_id, stage="diagnosis",
-        )
+        try:
+            resp = await self.gateway.chat(
+                messages, provider=DIAGNOSIS_PROVIDER,
+                project_id=project_id, stage="diagnosis",
+            )
+        except ValueError as e:
+            # gateway provider 未配置 (moonshot 无 key) → 转译, 供 API 层映射 503
+            # (与 _get_fail_detail 的 ValueError/404 语义精确分离)
+            raise ConnectionError(str(e)) from e
         raw = resp.get("content") or ""
         card = self._parse_llm_card(raw, step=step, action=action,
                                     error_type=error_type, error_msg=error_msg,
@@ -178,11 +197,16 @@ class DiagnosticsService:
             "error_type": error_type, "error_msg": (error_msg or "")[:500],
         }
         data = None
-        # 去 markdown 围栏再试
-        m = re.search(r"\{.*\}", raw, re.DOTALL)
-        if m:
+        # 先试 ```json 围栏 (LLM 常见输出), 再试首个平衡 {...}; 非贪婪避免尾随 } 干扰
+        fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
+        candidates = [fence.group(1)] if fence else []
+        loose = re.search(r"\{.*\}", raw, re.DOTALL)
+        if loose:
+            candidates.append(loose.group(0))
+        for cand in candidates:
             try:
-                data = json.loads(m.group(0))
+                data = json.loads(cand)
+                break
             except (json.JSONDecodeError, ValueError):
                 data = None
         if isinstance(data, dict):
@@ -238,7 +262,7 @@ class DiagnosticsService:
                         "unique": True, "verified": False}
         el.locator_strategies = {"strategies": [new_strategy] + existing}
         el.source = "ai_fixed"
-        el.confidence = round((confidence or 0) * 10)
+        el.confidence = round(min(max((confidence or 0), 0), 1) * 10)
         await self.db.flush()
         return {"element_id": el.element_id, "updated": True,
                 "cleaned_locator": cleaned}

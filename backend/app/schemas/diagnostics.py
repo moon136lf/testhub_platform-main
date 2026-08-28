@@ -16,6 +16,8 @@ class AnalyzeRequest(BaseModel):
     execution_id: str = Field(..., min_length=1, max_length=50,
                               description="ExecutionRecord.exec_id")
     step: Optional[int] = Field(None, ge=1, description="失败步骤号, 缺省取第一个 fail")
+    detail_id: Optional[str] = Field(None, max_length=50,
+                                     description="ExecutionDetail.id 直取 (batch 多脚本同 step 场景, 优先于 execution_id+step)")
     error_data: Optional[ErrorDataOverride] = None
 
 
