@@ -120,7 +120,7 @@ class TestRegressionEndpoints:
             client = _client()
             resp = client.post(f"/api/v1/regression/{UUID1}/push")
         assert resp.json()["data"]["pushed"] is True
-        assert nr.assert_awaited_once
+        nr.assert_awaited_once()
 
     def test_report_summary(self):
         from app.api.v1 import regression as reg_mod

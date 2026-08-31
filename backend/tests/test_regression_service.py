@@ -1,6 +1,5 @@
 """Regression (#8) tests (mock db / pure-function rule engine)."""
 import asyncio
-from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 

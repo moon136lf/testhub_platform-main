@@ -288,13 +288,14 @@ const diagCard = ref(null)
 const diagRow = ref(null)
 
 const diagnose = async (f) => {
-  if (!execId.value) { ElMessage.info('请先执行回归'); return }
+  const eid = execId.value || summary.value?.record?.exec_id  // 刷新后兜底: 用最近一次回归记录
+  if (!eid) { ElMessage.info('请先执行回归'); return }
   diagRow.value = f
   diagCard.value = null
   diagVisible.value = true
   diagLoading.value = true
   try {
-    const resp = await diagnosticsAPI.analyze(execId.value, f.step, null, f.id)
+    const resp = await diagnosticsAPI.analyze(eid, f.step, null, f.id)
     diagCard.value = resp.data?.card ?? resp.data
     ElMessage.success('诊断完成')
   } catch (e) {

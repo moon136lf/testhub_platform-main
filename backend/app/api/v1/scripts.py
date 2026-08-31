@@ -243,9 +243,12 @@ async def confirm_script(script_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Script not found")
     asset.status = "confirmed"
     # #8: TRANS-02 确认入库 → 触发回归识别 (spec 偏差 H; 异常隔离不阻塞 confirm)
+    # savepoint 隔离: hook 失败时只回滚识别写入, asset.status 与 session 状态不受污染
     try:
-        from app.services.regression_service import RegressionService
-        await RegressionService(db).identify_for_script(str(asset.project_id), script_id)
+        async with db.begin_nested():
+            from app.services.regression_service import RegressionService
+            await RegressionService(db).identify_for_script(str(asset.project_id), script_id)
+        await db.flush()
     except Exception as e:
         import logging as _logging
         _logging.getLogger(__name__).warning(f"regression identify hook failed (non-blocking): {e}")

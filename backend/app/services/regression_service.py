@@ -173,7 +173,7 @@ class RegressionService:
         passed = sum(1 for s in scripts if s.last_status == "passed")
         failed = sum(1 for s in scripts if s.last_status == "failed")
         rate = round(passed / total * 100, 1) if total else 0
-        return {"total": total, "passed": passed, "failed": failed, "pass_rate": rate}
+        return {"total": total, "included": total, "passed": passed, "failed": failed, "pass_rate": rate}
 
     async def list_view(self, project_id: str, category: Optional[str] = None,
                         keyword: Optional[str] = None) -> list:
