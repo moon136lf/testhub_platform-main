@@ -1,6 +1,8 @@
 # backend/app/tasks/code_scan_tasks.py
 """Whitescan Celery task: async code scan (git clone -> semgrep -> issues)."""
 import logging
+import os
+import re
 import tempfile
 import shutil
 
@@ -24,12 +26,22 @@ def _run_async(coro):
 def run_scan_task(scan_id: str, project_id: str, repo_url: str, branch: str = "main"):
     """Clone repo (shallow) + semgrep + persist issues. DB writes reuse the
     sync-orchestrated service with its own session."""
+
+    # review I6: repo_url is user input — block git option injection (leading
+    # '-') and non-https/ssh transports (ext:: RCE). Defense-in-depth beyond
+    # the list-form subprocess call.
+    if not re.match(r"^(https?://|git@|ssh://)", repo_url):
+        raise ValueError(f"repo_url must be http(s)/ssh/git@ URL, got: {repo_url[:100]}")
+    if not re.match(r"^[A-Za-z0-9._/\\-]+$", branch):
+        raise ValueError(f"invalid branch name: {branch[:50]}")
     repo_path = tempfile.mkdtemp(prefix="whitescan_")
     try:
         import subprocess
+        # '--' separator: repo_url can never be parsed as a git option
         clone = subprocess.run(
-            ["git", "clone", "--depth", "1", "-b", branch, repo_url, repo_path],
-            capture_output=True, text=True, timeout=300,
+            ["git", "clone", "--depth", "1", "-b", branch, "--", repo_url, repo_path],
+            capture_output=True, text=True, timeout=240,
+            env={**os.environ, "GIT_ALLOW_PROTOCOL": "https:http:ssh"},
         )
         if clone.returncode != 0:
             raise RuntimeError(f"git clone failed: {clone.stderr[:500]}")

@@ -91,12 +91,14 @@ class CodeScanService:
         await self.db.commit()
         return issue.to_dict()
 
-    async def get_ignored_fingerprints(self, scan_id: str) -> List[str]:
-        """Fingerprints previously marked false_positive in this project's scans."""
+    async def get_ignored_fingerprints(self, project_id: str) -> List[str]:
+        """Fingerprints marked false_positive in ANY of this project's scans
+        (WHITE-04: same rule+scenario skipped on next scan). Scoped by project,
+        not by the current scan — a fresh scan has no issues yet."""
         q = (
             select(CodeIssue.fingerprint)
             .join(CodeScan, CodeIssue.scan_id == CodeScan.id)
-            .where(CodeScan.id == UUID(scan_id),
+            .where(CodeScan.project_id == UUID(project_id),
                    CodeIssue.status == "false_positive")
         )
         rows = (await self.db.execute(q)).all()
@@ -136,11 +138,19 @@ class CodeScanService:
         """Synchronous scan orchestration (called by Celery task with its own
         session). scan_dict: create_scan() output."""
         import time
+        from datetime import datetime, timezone
 
         scan_id = scan_dict["id"]
+        project_id = scan_dict["project_id"]
         started = time.time()
         try:
-            ignored = set(await self.get_ignored_fingerprints(scan_id))
+            # WHITE-04: ignored fingerprints come from ALL prior scans of this
+            # project (review C1 fix — was scoped to the current scan, which
+            # has no issues yet and thus never matched).
+            ignored = set(await self.get_ignored_fingerprints(project_id))
+            # Fingerprints of prior scans that already produced a regression
+            # case (review C2: cross-scan incremental + case_outdated).
+            case_bearing = await self.get_case_bearing_fingerprints(project_id)
             semgrep = _run_semgrep(repo_path)
             counts = {"high": 0, "mid": 0, "low": 0}
             files = set()
@@ -165,6 +175,10 @@ class CodeScanService:
                     description=(r.get("extra") or {}).get("message", ""),
                     example_code=(r.get("extra") or {}).get("lines", ""),
                     fingerprint=fp,
+                    # fingerprint seen in a prior scan whose issue already has
+                    # a regression case -> code may have changed; flag for
+                    # manual re-generation (spec §3.4/§3.5)
+                    case_outdated=fp in case_bearing,
                 )
                 self.db.add(issue)
             duration_ms = int((time.time() - started) * 1000)
@@ -181,3 +195,17 @@ class CodeScanService:
         except Exception as e:
             await self.mark_scan_failed(scan_id, str(e))
             raise
+
+    async def get_case_bearing_fingerprints(self, project_id: str) -> set:
+        """Fingerprints of this project's issues that already produced a
+        regression case (test_case.source_issue_id links back). Used to mark
+        re-scanned issues case_outdated (spec §3.4)."""
+        from app.models.test_case import TestCase
+        q = (
+            select(CodeIssue.fingerprint)
+            .join(TestCase, TestCase.source_issue_id == CodeIssue.id)
+            .join(CodeScan, CodeIssue.scan_id == CodeScan.id)
+            .where(CodeScan.project_id == UUID(project_id))
+        )
+        rows = (await self.db.execute(q)).all()
+        return {r[0] for r in rows if r[0]}

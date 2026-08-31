@@ -45,8 +45,47 @@ class RegressionCaseGenerator:
     def __init__(self, gateway):
         self.gateway = gateway
 
-    async def generate_case(self, issue: Dict, ai_suggestion: Dict) -> dict:
+    # allowed step verbs (spec §3.3 强制自动化形式)
+    ALLOWED_ACTIONS = {"navigate", "click", "input", "select", "check", "assert", "wait"}
+
+    def _validate_case(self, case: dict) -> None:
+        """Post-LLM validation (spec §3.3: 5 rules + forbidden words live in
+        prompt + VALIDATOR, prompt alone is not enforcement). Raises ValueError
+        on violation (review I5)."""
+        # 1. forbidden soft-assert words must not appear in name/action/expected
+        name = case.get("name", "") or ""
+        expected_result = case.get("expected_result", "") or ""
+        steps = case.get("steps") or []
+        blobs = [name, expected_result]
+        for s in steps:
+            if isinstance(s, dict):
+                blobs.append(s.get("action", "") or "")
+                blobs.append(s.get("expected", "") or "")
+        for word in FORBIDDEN_WORDS:
+            for b in blobs:
+                if word in b:
+                    raise ValueError(
+                        f"forbidden word '{word}' in generated case (soft-assert term)")
+        # 2. step shape + action whitelist
+        for i, s in enumerate(steps, 1):
+            if not isinstance(s, dict):
+                raise ValueError(f"step {i} is not an object")
+            action = (s.get("action", "") or "").strip().lower()
+            if action not in self.ALLOWED_ACTIONS:
+                raise ValueError(f"step {i} action '{action}' not in allowed verbs")
+        # 3. minimal required fields
+        if not name.strip():
+            raise ValueError("case name is empty")
+        if not steps:
+            raise ValueError("case has no steps")
+        if not expected_result.strip():
+            raise ValueError("case expected_result is empty")
+
+    async def generate_case(self, issue: Dict, ai_suggestion: Dict,
+                            project_id: Optional[str] = None) -> dict:
         """issue: code_issue.to_dict(); ai_suggestion: issue.ai_suggestion.
+        project_id forwarded to gateway.chat for ai_call_log token tracking
+        (review I7 — was dropped, fixes never reached ai_call_log).
         Returns TestCase-ready dict WITHOUT source_issue_id (caller sets it)."""
         messages = [{"role": "user", "content": _PROMPT.format(
             forbidden="、".join(FORBIDDEN_WORDS),
@@ -57,7 +96,8 @@ class RegressionCaseGenerator:
 【问题代码】{(issue.get('example_code') or '')[:1500]}
 【AI修复建议】{json.dumps(ai_suggestion or {}, ensure_ascii=False)[:1500]}"""}]
 
-        resp = await self.gateway.chat(messages, stage="whitescan_regression_case")
+        resp = await self.gateway.chat(messages, stage="whitescan_regression_case",
+                                       project_id=project_id or None)
         content = (resp or {}).get("content", "")
         try:
             case = json.loads(content)
@@ -68,8 +108,11 @@ class RegressionCaseGenerator:
         case.pop("source_issue_id", None)
         steps = case.get("steps") or []
         for i, s in enumerate(steps, 1):
-            s.setdefault("step", i)
+            if isinstance(s, dict):
+                s.setdefault("step", i)
         case["steps"] = steps
+        # spec §3.3: prompt + validator together enforce the case contract
+        self._validate_case(case)
         return case
 
     async def _case_exists(self, project_id: str, issue_id: str) -> bool:
@@ -89,7 +132,8 @@ class RegressionCaseGenerator:
                 if await self._case_exists(project_id, iid):
                     skipped += 1
                     continue
-                await self.generate_case(issue, issue.get("ai_suggestion") or {})
+                await self.generate_case(issue, issue.get("ai_suggestion") or {},
+                                         project_id=project_id)
                 generated += 1
             except Exception as e:
                 failed += 1

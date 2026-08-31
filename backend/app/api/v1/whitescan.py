@@ -118,8 +118,8 @@ async def generate_cases(scan_id: str, project_id: str = Query(...),
     # wrap generate_case to persist
     original = generator.generate_case
 
-    async def gen_and_persist(issue, suggestion):
-        case = await original(issue, suggestion)
+    async def gen_and_persist(issue, suggestion, project_id=None):
+        case = await original(issue, suggestion, project_id=project_id)
         await persist(case, issue)
         return case
 

@@ -122,13 +122,11 @@ class TestRunScanSync:
         scan = MagicMock()
         scan.id = uuid4()
         scan.to_dict = Mock(return_value={"id": str(scan.id), "status": "scanning"})
-        # Plan's side_effect only listed the mark_scan_done fetch, but
-        # run_scan_sync first calls get_ignored_fingerprints (db.execute().all())
-        # then mark_scan_done (db.execute().scalar_one_or_none()) — plan-internal
-        # ordering bug (deviation from plan, documented): prepend the fingerprints
-        # fetch so the plan's intended result lands on mark_scan_done.
+        # side_effect ordering: get_ignored_fingerprints + get_case_bearing_
+        # fingerprints (both .all()) then mark_scan_done (.scalar_one_or_none)
         mock_db.execute.side_effect = [
             Mock(all=Mock(return_value=[])),  # get_ignored_fingerprints
+            Mock(all=Mock(return_value=[])),  # get_case_bearing_fingerprints
             _mock_scalar_one(scan),           # mark_scan_done fetch
         ]
         with patch("app.services.code_scan_service._run_semgrep",
@@ -148,7 +146,7 @@ class TestRunScanSync:
     async def test_run_scan_skips_ignored_fingerprints(self, mock_db):
         svc = CodeScanService(mock_db)
         # both issues ignored -> 0 written
-        async def fake_ignored(scan_id):
+        async def fake_ignored(project_id):
             return {_compute_fingerprint(
                 SEMGREP_JSON["results"][0]["check_id"],
                 SEMGREP_JSON["results"][0]["path"],
@@ -160,16 +158,51 @@ class TestRunScanSync:
                 SEMGREP_JSON["results"][1]["start"]["line"],
                 SEMGREP_JSON["results"][1]["extra"]["lines"])}
         svc.get_ignored_fingerprints = fake_ignored
+        # get_case_bearing_fingerprints uses real impl -> mock its .all() rows;
         # mark_scan_done fetch must return a real Mock scan (AsyncMock auto-attr
         # scalar_one_or_none returns an unawaited coroutine whose .status write
         # would crash — plan-internal mock gap, deviation documented)
-        mock_db.execute.side_effect = [_mock_scalar_one(MagicMock())]
+        mock_db.execute.side_effect = [
+            Mock(all=Mock(return_value=[])),  # get_case_bearing_fingerprints
+            _mock_scalar_one(MagicMock()),    # mark_scan_done fetch
+        ]
         with patch("app.services.code_scan_service._run_semgrep",
                    return_value=SEMGREP_JSON):
             result = await svc.run_scan_sync(
                 {"id": str(uuid4()), "project_id": str(uuid4())},
                 repo_path="/tmp/repo")
         assert result["total_issues"] == 0
+
+    @pytest.mark.asyncio
+    async def test_run_scan_marks_case_outdated_on_fingerprint_match(self, mock_db):
+        """Review C2: a fingerprint whose prior issue already produced a
+        regression case gets case_outdated=True on re-scan (cross-scan)."""
+        svc = CodeScanService(mock_db)
+        scan = MagicMock()
+        scan.id = uuid4()
+        fp0 = _compute_fingerprint(
+            SEMGREP_JSON["results"][0]["check_id"],
+            SEMGREP_JSON["results"][0]["path"],
+            SEMGREP_JSON["results"][0]["start"]["line"],
+            SEMGREP_JSON["results"][0]["extra"]["lines"])
+        async def fake_ignored(project_id):
+            return set()
+        async def fake_case_bearing(project_id):
+            return {fp0}
+        svc.get_ignored_fingerprints = fake_ignored
+        svc.get_case_bearing_fingerprints = fake_case_bearing
+        added = []
+        mock_db.add = Mock(side_effect=added.append)
+        mock_db.execute.side_effect = [_mock_scalar_one(MagicMock())]  # mark_scan_done
+        with patch("app.services.code_scan_service._run_semgrep",
+                   return_value=SEMGREP_JSON):
+            await svc.run_scan_sync(
+                {"id": str(uuid4()), "project_id": str(uuid4())},
+                repo_path="/tmp/repo")
+        assert len(added) == 2
+        # first issue's fingerprint has a case -> outdated; second doesn't
+        assert added[0].case_outdated is True
+        assert added[1].case_outdated is False
 
 
 class TestScanExport:

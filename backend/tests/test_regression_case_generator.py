@@ -8,7 +8,7 @@ from app.services.regression_case_generator import RegressionCaseGenerator, FORB
 
 
 CASE_JSON = {
-    "name": "REG-SQLI_验证参数化查询修复后查询正常",
+    "name": "REG-SQLI_断言参数化查询修复后查询正常",
     "priority": "P0",
     "precondition": "测试环境就绪，账户 test_${uuid} 已创建",
     "steps": [
@@ -70,6 +70,49 @@ class TestGenerateCase:
                                            "line_no": 1, "description": "", "example_code": "",
                                            "severity": "high"},
                                     ai_suggestion={})
+
+    @pytest.mark.asyncio
+    async def test_forbidden_word_in_output_rejected(self):
+        """Review I5: prompt alone is not enforcement — the validator must
+        reject cases whose name/action/expected contains a forbidden word."""
+        bad_case = dict(CASE_JSON)
+        bad_case["name"] = "REG-X_验证某功能正常"
+        gw = _mock_gateway_with(bad_case)
+        gen = RegressionCaseGenerator(gw)
+        with pytest.raises(ValueError, match="forbidden word"):
+            await gen.generate_case(issue={"id": "x", "title": "t", "file_path": "f",
+                                           "line_no": 1, "description": "", "example_code": "",
+                                           "severity": "high"},
+                                    ai_suggestion={})
+
+    @pytest.mark.asyncio
+    async def test_invalid_step_action_rejected(self):
+        """Review I5: action whitelist enforced post-LLM (non-Chinese junk verb
+        hits the whitelist; forbidden-word check catches Chinese soft-asserts
+        first — both paths guarded)."""
+        bad_case = json.loads(json.dumps(CASE_JSON))
+        bad_case["steps"][0]["action"] = "teleport"  # not in whitelist
+        gw = _mock_gateway_with(bad_case)
+        gen = RegressionCaseGenerator(gw)
+        with pytest.raises(ValueError, match="not in allowed verbs"):
+            await gen.generate_case(issue={"id": "x", "title": "t", "file_path": "f",
+                                           "line_no": 1, "description": "", "example_code": "",
+                                           "severity": "high"},
+                                    ai_suggestion={})
+
+    @pytest.mark.asyncio
+    async def test_project_id_forwarded_to_gateway(self):
+        """Review I7: generate_case must pass project_id to gateway.chat so
+        token usage lands in ai_call_log."""
+        gw = _mock_gateway_with(CASE_JSON)
+        gen = RegressionCaseGenerator(gw)
+        await gen.generate_case(issue={"id": "x", "title": "t", "file_path": "f",
+                                       "line_no": 1, "description": "", "example_code": "",
+                                       "severity": "high"},
+                                ai_suggestion={}, project_id="proj-123")
+        kwargs = gw.chat.call_args[1]
+        assert kwargs.get("project_id") == "proj-123"
+        assert kwargs.get("stage") == "whitescan_regression_case"
 
 
 class TestBatchGenerate:
