@@ -205,6 +205,13 @@ async def confirm_script(script_id: str, db: AsyncSession = Depends(get_db)):
     if not asset:
         raise HTTPException(status_code=404, detail="Script not found")
     asset.status = "confirmed"
+    # #8: TRANS-02 确认入库 → 触发回归识别 (spec 偏差 H; 异常隔离不阻塞 confirm)
+    try:
+        from app.services.regression_service import RegressionService
+        await RegressionService(db).identify_for_script(str(asset.project_id), script_id)
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(f"regression identify hook failed (non-blocking): {e}")
     await db.commit()
     return {"code": 0, "message": "Script confirmed",
             "data": {"script_id": script_id, "status": "confirmed"}}

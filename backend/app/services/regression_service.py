@@ -200,3 +200,44 @@ class RegressionService:
                 "include_source": reg.include_source if reg else None,
             })
         return items
+
+    async def latest_execution(self, script_id: str) -> Optional[dict]:
+        """按 script_id 反查最近一次执行 (detail step=0 + 所属 record)."""
+        from app.models.execution import ExecutionRecord
+        r = await self.db.execute(
+            select(ExecutionDetail)
+            .where(ExecutionDetail.script_id == _uuid(script_id),
+                   ExecutionDetail.step == 0)
+            .order_by(ExecutionDetail.created_at.desc())
+            .limit(1))
+        detail = r.scalar_one_or_none()
+        if not detail:
+            return None
+        rr = await self.db.execute(
+            select(ExecutionRecord).where(ExecutionRecord.id == detail.execution_record_id))
+        rec = rr.scalar_one_or_none()
+        return {
+            "detail": detail.to_dict(),
+            "record": rec.to_dict() if rec else None,
+        }
+
+    async def report_summary(self, project_id: str) -> dict:
+        """最近一次 ui_regression 执行: record 摘要 + 失败 detail 行 (带 detail_id 供 #5c)."""
+        from app.models.execution import ExecutionRecord
+        r = await self.db.execute(
+            select(ExecutionRecord)
+            .where(ExecutionRecord.project_id == _uuid(project_id),
+                   ExecutionRecord.exec_type == "ui_regression")
+            .order_by(ExecutionRecord.started_at.desc())
+            .limit(1))
+        rec = r.scalar_one_or_none()
+        if not rec:
+            return {"record": None, "failed_details": []}
+        dr = await self.db.execute(
+            select(ExecutionDetail)
+            .where(ExecutionDetail.execution_record_id == rec.id,
+                   ExecutionDetail.status == "fail",
+                   ExecutionDetail.step != 0)  # 整体行不算失败步骤
+            .order_by(ExecutionDetail.step))
+        details = dr.scalars().all()
+        return {"record": rec.to_dict(), "failed_details": [d.to_dict() for d in details]}

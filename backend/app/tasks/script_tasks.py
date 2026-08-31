@@ -106,7 +106,7 @@ class _CountingGateway:
 
 @celery_app.task(bind=True, name="run_scripts_task")
 def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: list = None,
-                     config: dict = None, script_content: str = None,
+                     config: dict = None, exec_type: str = None, script_content: str = None,
                      target_url: str = None, headless: bool = True):
     """执行脚本任务: 建 execution_record → ScriptExecutor.execute → 写 detail → 更新 record → commit.
 
@@ -171,12 +171,14 @@ def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: l
             project_id = targets[0].project_id if targets else None
             er = ExecutionRecord(
                 exec_id=f"exec-{session_id[:8]}", project_id=project_id,
-                exec_type="batch" if script_ids else "single",
+                exec_type=exec_type or ("batch" if script_ids else "single"),
                 status="running", total_cases=len(targets),
             )
             db.add(er)
             await db.flush()
 
+            cfg_obj = config or {}
+            fail_fast = bool(cfg_obj.get("fail_fast", False))
             details = []
             for sa in targets:
                 detail = await executor.execute(
@@ -186,6 +188,8 @@ def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: l
                     # ExecutionDetail.case_id 写入 (关联到脚本所属用例)
                     detail.case_id = getattr(sa, "case_id", None)
                     details.append(detail)
+                    if fail_fast and detail.status == "fail":
+                        break  # 失败策略=停止: 脚本级 fail-fast (spec 偏差 K)
             # 持久化 detail (T6 遗留: execute 未 db.add, 这里补)
             for d in details:
                 db.add(d)
