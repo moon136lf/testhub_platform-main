@@ -43,8 +43,17 @@ def run_scan_task(scan_id: str, project_id: str, repo_url: str, branch: str = "m
             async def _p():
                 async with AsyncSessionLocal() as db:
                     await CodeScanService(db).update_progress(scan_id, progress, stage)
+
+            def _run():
+                _run_async(_p())
+
+            import threading
             try:
                 _run_async(_p())
+            except RuntimeError:
+                # run_scan_sync 的 callback 在 _impl() 的事件循环内被调用，
+                # 此处无法再嵌套 loop —— 用独立线程跑，主循环不阻塞等它
+                threading.Thread(target=_run, daemon=True).start()
             except Exception as e:
                 logger.warning(f"progress {progress}% report failed: {e}")
 

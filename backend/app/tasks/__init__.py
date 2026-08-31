@@ -27,4 +27,11 @@ celery_app.conf.update(
 )
 
 # Auto-discover tasks
-celery_app.autodiscover_tasks(['app.tasks'])
+# 显式 include：autodiscover 默认只找 <pkg>.tasks 模块，
+# 而本项目的任务文件是 code_scan_tasks/ai_case_tasks 等，autodiscover 永远找不到（NotRegistered 根因）
+celery_app.conf.update(include=[
+    'app.tasks.code_scan_tasks',
+    'app.tasks.ai_case_tasks',
+    'app.tasks.script_tasks',
+    'app.tasks.element_tasks',
+])
