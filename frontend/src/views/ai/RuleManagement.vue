@@ -178,8 +178,11 @@ const loadRules = async () => {
     const skip = (pagination.value.page - 1) * pagination.value.pageSize
     const result = await aiCaseAPI.getRules(skip, pagination.value.pageSize)
 
+    // 后端返回 {code, data:[...]}；兼容旧 result.rules 形状。空数据走 el-table 自带「暂无数据」
+    const ruleList = Array.isArray(result?.data) ? result.data : (Array.isArray(result?.rules) ? result.rules : [])
+
     // Filter by query params
-    let filteredRules = result.rules || []
+    let filteredRules = ruleList
     if (queryParams.value.ruleType) {
       filteredRules = filteredRules.filter(r => r.rule_type === queryParams.value.ruleType)
     }

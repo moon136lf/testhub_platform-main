@@ -1,6 +1,6 @@
-import axios from 'axios'
+import axios from './axios'
 
-const API_BASE = '/api/v1/ai-case-generation'
+const API_BASE = '/ai-case-generation'
 
 export const aiCaseAPI = {
   async uploadDocument(projectId, file, docType = 'prd') {

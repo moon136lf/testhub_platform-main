@@ -44,10 +44,11 @@
             <el-icon><Connection /></el-icon>
             <span>接口与执行</span>
           </template>
-          <el-menu-item index="/api/parse">接口文档解析</el-menu-item>
-          <el-menu-item index="/api/manage">接口管理</el-menu-item>
-          <el-menu-item index="/api/debug">单接口调试</el-menu-item>
-          <el-menu-item index="/api/oneclick">一键测试</el-menu-item>
+          <!-- 接口测试模块一期不在范围（菜单死链已移除，二期再启） -->
+          <el-menu-item index="/api/parse" disabled>接口文档解析（二期）</el-menu-item>
+          <el-menu-item index="/api/manage" disabled>接口管理（二期）</el-menu-item>
+          <el-menu-item index="/api/debug" disabled>单接口调试（二期）</el-menu-item>
+          <el-menu-item index="/api/oneclick" disabled>一键测试（二期）</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu index="auto">

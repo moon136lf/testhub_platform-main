@@ -1,6 +1,6 @@
 import axios from './axios'
 
-const API_BASE = '/api/v1/scripts'
+const API_BASE = '/scripts'
 
 export const scriptAPI = {
   async convert(projectId, caseIds, aiOptimize = false) {

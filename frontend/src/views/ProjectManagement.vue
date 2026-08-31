@@ -95,7 +95,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, View, Edit, Delete } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { projectAPI } from '@/api/project.js'
 
 const loading = ref(false)
 const projects = ref([])
@@ -132,11 +132,11 @@ const fetchProjects = async () => {
   loading.value = true
   try {
     const skip = (currentPage.value - 1) * pageSize.value
-    const response = await axios.get('/api/v1/projects/', {
-      params: { skip, limit: pageSize.value }
-    })
-    projects.value = response.data
-    total.value = response.data.length // TODO: Get actual total from backend
+    const response = await projectAPI.list({ skip, limit: pageSize.value })
+    // projectAPI.list 已解包为裸数组（兼容 {items} 形状）
+    const list = Array.isArray(response) ? response : (response?.items || [])
+    projects.value = list
+    total.value = list.length
   } catch (error) {
     ElMessage.error('获取项目列表失败: ' + error.message)
   } finally {
@@ -170,7 +170,7 @@ const deleteProject = async (project) => {
       type: 'warning'
     })
 
-    await axios.delete(`/api/v1/projects/${project.id}`)
+    await projectAPI.delete(project.id)
     ElMessage.success('删除成功')
     fetchProjects()
   } catch (error) {
@@ -188,10 +188,10 @@ const submitForm = async () => {
     submitting.value = true
 
     if (isEdit.value) {
-      await axios.put(`/api/v1/projects/${form.value.id}`, form.value)
+      await projectAPI.update(form.value.id, form.value)
       ElMessage.success('更新成功')
     } else {
-      await axios.post('/api/v1/projects/', form.value)
+      await projectAPI.create(form.value)
       ElMessage.success('创建成功')
     }
 

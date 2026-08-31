@@ -120,7 +120,6 @@
 import { ref, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import CaseStepEditor from './CaseStepEditor.vue'
-import axios from 'axios'
 
 const props = defineProps({
   modelValue: {

@@ -291,6 +291,8 @@ const fetchCases = async () => {
       skip,
       limit: pageSize.value
     }
+    // 空 project_id 不传（后端 UUID('') 会 400/422）——未选项目时靠后端返回全部或前端提示
+    if (!params.project_id) delete params.project_id
     const response = await testCaseAPI.list(params)
     cases.value = response.items || response
     total.value = response.total || cases.value.length
@@ -305,6 +307,11 @@ const fetchProjects = async () => {
   try {
     const response = await projectAPI.list()
     projects.value = response.items || response
+    // 默认选中第一个项目再查询（后端 project_id 必填，避免首载 422）
+    if (!filters.value.project_id && projects.value.length) {
+      filters.value.project_id = projects.value[0].id
+      fetchCases()
+    }
   } catch (error) {
     console.error('获取项目列表失败:', error)
   }
@@ -501,8 +508,8 @@ const resetForm = () => {
   currentCase.value = {}
 }
 
-onMounted(() => {
-  fetchProjects()
+onMounted(async () => {
+  await fetchProjects()
   fetchCases()
 })
 </script>
