@@ -54,8 +54,8 @@ DO $$ BEGIN
 END $$;
 
 -- 3a. default quota row for every existing project (idempotent)
-INSERT INTO token_quota (project_id, total_quota, alert_threshold)
-SELECT p.id, 100000, 10
+INSERT INTO token_quota (id, project_id, total_quota, alert_threshold)
+SELECT gen_random_uuid(), p.id, 100000, 10
 FROM project p
 WHERE NOT EXISTS (
   SELECT 1 FROM token_quota tq WHERE tq.project_id = p.id

@@ -27,6 +27,9 @@ from app.models import (
     HallucinationConfig,
 )
 
+# W9: whitescan tables (code_scan/code_issue) — test_case.source_issue_id FK target
+from app.models.whitescan import CodeScan, CodeIssue  # noqa: F401
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -60,8 +63,8 @@ async def init_database():
         if count == 0:
             await conn.execute(
                 text("""
-                    INSERT INTO project (name, code, description, target_url, created_by)
-                    VALUES ('默认项目', 'DEFAULT', 'MoonTest默认测试项目',
+                    INSERT INTO project (id, name, code, description, target_url, created_by)
+                    VALUES (gen_random_uuid(), '默认项目', 'DEFAULT', 'MoonTest默认测试项目',
                             'http://localhost:81', 'system')
                 """)
             )

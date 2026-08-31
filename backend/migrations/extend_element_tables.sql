@@ -255,32 +255,39 @@ COMMENT ON COLUMN fetch_history.duration_seconds IS '抓取耗时（秒）';
 -- ============================================================
 -- Step 4: Create change_detection table
 -- ============================================================
-CREATE TABLE IF NOT EXISTS change_detection (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    page_id UUID NOT NULL REFERENCES page_repository(id) ON DELETE CASCADE,
-    check_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    change_type VARCHAR(20),
-    element_id VARCHAR(100),
-    element_name VARCHAR(100),
-    old_locator JSONB,
-    new_locator JSONB,
-    affected_scripts JSONB,
-    impact_level VARCHAR(20),
-    status VARCHAR(20) DEFAULT 'pending',
-    reviewed_by VARCHAR(50),
-    reviewed_at TIMESTAMP WITH TIME ZONE
-);
-
-CREATE INDEX IF NOT EXISTS idx_change_detection_page_id ON change_detection(page_id);
-
-COMMENT ON COLUMN change_detection.check_time IS '检测时间';
-COMMENT ON COLUMN change_detection.change_type IS 'added/removed/modified';
-COMMENT ON COLUMN change_detection.element_id IS '涉及的元素ID';
-COMMENT ON COLUMN change_detection.element_name IS '元素名称';
-COMMENT ON COLUMN change_detection.old_locator IS '旧定位器';
-COMMENT ON COLUMN change_detection.new_locator IS '新定位器';
-COMMENT ON COLUMN change_detection.affected_scripts IS '受影响的脚本列表';
-COMMENT ON COLUMN change_detection.impact_level IS 'low/medium/high';
-COMMENT ON COLUMN change_detection.status IS 'pending/reviewed/fixed';
-COMMENT ON COLUMN change_detection.reviewed_by IS '审核人';
-COMMENT ON COLUMN change_detection.reviewed_at IS '审核时间';
+-- NOTE: change_detection 由 ORM 按新版模型建（added/removed/modified JSONB 结构）。
+-- 下方旧版 CREATE/COMMENT 与现行模型漂移，幂等跳过（表存在即不动）。
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'change_detection') THEN
+    CREATE TABLE change_detection (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        page_id UUID NOT NULL REFERENCES page_repository(id) ON DELETE CASCADE,
+        check_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        change_type VARCHAR(20),
+        element_id VARCHAR(100),
+        element_name VARCHAR(100),
+        old_locator JSONB,
+        new_locator JSONB,
+        affected_scripts JSONB,
+        impact_level VARCHAR(20),
+        status VARCHAR(20) DEFAULT 'pending',
+        reviewed_by VARCHAR(50),
+        reviewed_at TIMESTAMP WITH TIME ZONE
+    );
+    CREATE INDEX idx_change_detection_page_id ON change_detection(page_id);
+  END IF;
+END $$;
+-- 旧版列的 COMMENT 一并条件化（新版 ORM 表无这些列）
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='change_detection' AND column_name='new_locator') THEN
+    COMMENT ON COLUMN change_detection.new_locator IS '新定位器';
+    COMMENT ON COLUMN change_detection.affected_scripts IS '受影响的脚本列表';
+    COMMENT ON COLUMN change_detection.impact_level IS 'low/medium/high';
+    COMMENT ON COLUMN change_detection.status IS 'pending/reviewed/fixed';
+    COMMENT ON COLUMN change_detection.reviewed_by IS '审核人';
+    COMMENT ON COLUMN change_detection.reviewed_at IS '审核时间';
+  END IF;
+END $$;
