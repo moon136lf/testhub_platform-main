@@ -79,17 +79,45 @@ async def list_scripts(
     keyword: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    include_regression: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
-    """脚本列表 (SCRIPT-02: 分类筛选 + 名称搜索)."""
-    stmt = select(ScriptAsset)
+    """脚本列表 (SCRIPT-02: 分类筛选 + 名称搜索; #8 T6: include_regression 联查回归集)."""
     try:
-        if project_id:
-            stmt = stmt.where(ScriptAsset.project_id == uuid.UUID(project_id))
-        if case_id:
-            stmt = stmt.where(ScriptAsset.case_id == uuid.UUID(case_id))
+        project_uuid = uuid.UUID(project_id) if project_id else None
+        case_uuid = uuid.UUID(case_id) if case_id else None
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID format")
+    # 直接调用时默认值是 Query 对象 (truthy), 需归一化为 bool
+    reg_flag = include_regression if isinstance(include_regression, bool) else False
+    if isinstance(page, int) is False or isinstance(page_size, int) is False:
+        page = page if isinstance(page, int) else 1
+        page_size = page_size if isinstance(page_size, int) else 20
+    if not reg_flag:
+        # 既有单实体路径 (零破坏)
+        stmt = select(ScriptAsset)
+        if project_uuid:
+            stmt = stmt.where(ScriptAsset.project_id == project_uuid)
+        if case_uuid:
+            stmt = stmt.where(ScriptAsset.case_id == case_uuid)
+        if category:
+            stmt = stmt.where(ScriptAsset.category == category)
+        if keyword:
+            stmt = stmt.where(ScriptAsset.name.ilike(f"%{keyword}%"))
+        stmt = stmt.order_by(ScriptAsset.created_at.desc())
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(stmt)
+        scripts = result.scalars().all()
+        return {"code": 0, "data": [s.to_dict() for s in scripts]}
+    # include_regression=True: 双实体联查 (ScriptAsset LEFT JOIN RegressionSet)
+    from app.models.regression import RegressionSet
+    stmt = select(ScriptAsset, RegressionSet).outerjoin(
+        RegressionSet, RegressionSet.script_id == ScriptAsset.id
+    )
+    if project_uuid:
+        stmt = stmt.where(ScriptAsset.project_id == project_uuid)
+    if case_uuid:
+        stmt = stmt.where(ScriptAsset.case_id == case_uuid)
     if category:
         stmt = stmt.where(ScriptAsset.category == category)
     if keyword:
@@ -97,8 +125,17 @@ async def list_scripts(
     stmt = stmt.order_by(ScriptAsset.created_at.desc())
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
-    scripts = result.scalars().all()
-    return {"code": 0, "data": [s.to_dict() for s in scripts]}
+    items = []
+    for s, reg in result.all():
+        d = s.to_dict()
+        d.update({
+            "ai_suggested": bool(reg.ai_suggested) if reg else False,
+            "ai_reason": reg.ai_reason if reg else None,
+            "actual_included": bool(reg.actual_included) if reg else False,
+            "include_source": reg.include_source if reg else None,
+        })
+        items.append(d)
+    return {"code": 0, "data": items}
 
 
 @router.get("/stats")

@@ -80,10 +80,7 @@
         <el-card>
           <div class="lib-toolbar">
             <el-select v-model="filter.category" placeholder="分类筛选" clearable style="width: 160px" @change="loadScripts">
-              <el-option label="未分类" value="uncategorized" />
-              <el-option label="登录" value="login" />
-              <el-option label="冒烟" value="smoke" />
-              <el-option label="回归" value="regression" />
+              <el-option v-for="c in CATEGORIES" :key="c.value" :label="c.label" :value="c.value" />
             </el-select>
             <el-input v-model="filter.keyword" placeholder="关键词搜索脚本名" clearable style="width: 220px" @change="loadScripts" />
             <el-button @click="loadScripts" :icon="Refresh">刷新</el-button>
@@ -93,7 +90,7 @@
             <span class="run-cfg-label">运行配置：</span>
             <el-checkbox v-model="runConfig.headless">headless</el-checkbox>
             <el-input-number v-model="runConfig.timeout" :min="10" :max="600" controls-position="right" style="width: 110px" />s
-            <el-input-number v-model="runConfig.max_failures" :min="1" :max="50" controls-position="right" style="width: 110px" />最大失败
+            <el-input-number v-model="runConfig.max_failures" :min="1" :max="100" controls-position="right" style="width: 110px" />最大失败
           </div>
 
           <el-table :data="scripts" border style="margin-top: 12px" @selection-change="onSelectionChange">
@@ -106,6 +103,19 @@
                 <el-tag v-if="row.last_status === 'passed'" type="success" size="small">通过</el-tag>
                 <el-tag v-else-if="row.last_status === 'failed'" type="danger" size="small">失败</el-tag>
                 <el-tag v-else type="info" size="small">{{ row.last_status || 'never_run' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="AI建议" width="90">
+              <template #default="{ row }">
+                <el-tooltip v-if="row.ai_reason" :content="row.ai_reason">
+                  <el-tag :type="row.ai_suggested ? 'warning' : 'info'" size="small">{{ row.ai_suggested ? '是' : '否' }}</el-tag>
+                </el-tooltip>
+                <span v-else>—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="是否纳入" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.actual_included ? 'success' : 'info'" size="small">{{ row.actual_included ? '已纳入' : '未纳入' }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="run_count" label="运行次数" width="90" />
@@ -246,6 +256,13 @@ const loadStats = async () => {
 }
 
 // ---- 脚本库执行 ----
+const CATEGORIES = [
+  { value: 'uncategorized', label: '未分类' },
+  { value: 'ui_smoke', label: 'UI冒烟' },
+  { value: 'full_regression', label: '全量回归' },
+  { value: 'core_flow', label: '核心流程' },
+  { value: 'interface_auto', label: '接口自动化' },
+]
 const filter = reactive({ category: '', keyword: '' })
 const selected = ref([])
 const runningId = ref(null)
@@ -274,6 +291,7 @@ const loadScripts = async () => {
       project_id: form.projectId,
       category: filter.category || undefined,
       keyword: filter.keyword || undefined,
+      include_regression: true,
     })
     scripts.value = resp.data || []
   } catch (e) { ElMessage.error('脚本列表加载失败'); scripts.value = [] }
