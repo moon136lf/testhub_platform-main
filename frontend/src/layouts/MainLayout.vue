@@ -29,7 +29,7 @@
           <el-menu-item index="/ai/knowledge">知识库管理</el-menu-item>
           <el-menu-item index="/ai/rules">测试规则管理</el-menu-item>
           <el-menu-item index="/ai/history">生成历史</el-menu-item>
-          <el-menu-item index="/ai/review">用例评审与精修</el-menu-item>
+          <el-menu-item index="/reviews">用例评审与E2E精修</el-menu-item>
           <el-menu-item index="/ai/convert">用例转自动化脚本</el-menu-item>
           <el-menu-item index="/cases">用例管理</el-menu-item>
         </el-sub-menu>

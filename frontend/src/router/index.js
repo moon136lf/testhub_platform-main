@@ -115,6 +115,12 @@ const router = createRouter({
           name: 'ReportDetail',
           component: () => import('@/views/reports/ReportDetail.vue'),
           meta: { title: '报告详情' }
+        },
+        {
+          path: 'reviews',
+          name: 'ReviewCenter',
+          component: () => import('@/views/reviews/ReviewCenter.vue'),
+          meta: { title: '用例评审与E2E精修' }
         }
       ]
     }

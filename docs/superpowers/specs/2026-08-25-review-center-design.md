@@ -101,6 +101,8 @@ class ReviewService:
 
 ### 4.2 ReviewCenter.vue 结构（对齐 §3.2.2）
 
+> **本期裁剪备注（2026-08-28 审查后 controller 确认）**：①「模块下拉（按 page_name 分组）」、③「关联测试点」列、④「逐条 [拒绝]」三处**本期不实现**。前两处为纯展示增强，后续迭代补；「拒绝」需 #3 `apply_suggestions` 支持 rejected 状态（超出 #7 只读边界），移后续。
+
 **① 顶部筛选**：项目下拉 + 模块下拉（按 page_name 分组）+ 评审状态筛选（全部/待评审/已通过/需修改）+ 查询
 
 **② 汇总统计卡**：总用例 / 待评审 / 已通过 / 需修改（调 `GET /reviews/stats`），进度条显示各状态占比
@@ -111,8 +113,8 @@ class ReviewService:
 - 批量工具栏：选中 N → [批量精修][批量评审]
 
 **④ E2E 精修报告区**（项目级汇总）：
-- 精修时间戳 + 优化建议总表（`GET /reviews/refinement-report`，带 case 名透传）
-- [应用全部建议]（遍历调 #3 apply-suggestions）+ 每条 [确认]/[拒绝]
+- 精修时间戳 + 优化建议总表（`GET /reviews/refinement-report`，带 case 名透传；时间戳取 TestCase.refined_at 列）
+- [应用全部建议]（遍历调 #3 apply-suggestions）+ 每条 [确认]/[拒绝]（拒绝移后续）
 - 应用后刷新列表+统计
 
 ### 4.3 路由 + 菜单

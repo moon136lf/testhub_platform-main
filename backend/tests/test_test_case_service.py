@@ -99,6 +99,11 @@ class TestListCases:
         mock_case.is_finalized = False
         mock_case.version = 1
         mock_case.hallucination_status = "normal"
+        # W7: review fields now surfaced on list items (CaseResponse)
+        mock_case.review_status = "pending"
+        mock_case.feasibility_level = None
+        mock_case.refinement_report = None
+        mock_case.refined_at = None
         mock_case.created_by = "tester"
         mock_case.created_at = datetime.now()
         mock_case.updated_at = datetime.now()
