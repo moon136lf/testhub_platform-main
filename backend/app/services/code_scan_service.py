@@ -104,6 +104,22 @@ class CodeScanService:
         rows = (await self.db.execute(q)).all()
         return [r[0] for r in rows if r[0]]
 
+    async def update_progress(self, scan_id: str, progress: int, stage: str) -> None:
+        """分阶段进度更新 (10拉镜像/30 clone/30-90 semgrep/100 入库).
+
+        失败静默: 进度更新不该让扫描任务本身挂掉。
+        """
+        try:
+            q = select(CodeScan).where(CodeScan.id == UUID(scan_id))
+            scan = (await self.db.execute(q)).scalar_one_or_none()
+            if not scan:
+                return
+            scan.progress = max(0, min(progress, 100))
+            scan.stage = stage
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(f"update_progress failed (non-blocking): {e}")
+
     async def mark_scan_done(self, scan_id: str, *, total: int, high: int,
                              mid: int, low: int, file_count: int,
                              duration_ms: int) -> Optional[dict]:
@@ -112,6 +128,8 @@ class CodeScanService:
         if not scan:
             return None
         scan.status = "done"
+        scan.progress = 100
+        scan.stage = "done"
         scan.total_issues = total
         scan.high_count = high
         scan.mid_count = mid
@@ -134,9 +152,12 @@ class CodeScanService:
     # severity mapping: semgrep ERROR/WARNING/INFO -> high/mid/low
     _SEV_MAP = {"ERROR": "high", "WARNING": "mid", "INFO": "low"}
 
-    async def run_scan_sync(self, scan_dict: dict, repo_path: str) -> dict:
+    async def run_scan_sync(self, scan_dict: dict, repo_path: str,
+                            progress_cb=None) -> dict:
         """Synchronous scan orchestration (called by Celery task with its own
-        session). scan_dict: create_scan() output."""
+        session). scan_dict: create_scan() output.
+        progress_cb: callable(progress:int, stage:str) — 阶段进度上报 (semprep
+        本体阻塞不可拆, 扫描段 30→90 线性爬升作为近似)."""
         import time
         from datetime import datetime, timezone
 
@@ -144,6 +165,8 @@ class CodeScanService:
         project_id = scan_dict["project_id"]
         started = time.time()
         try:
+            if progress_cb:
+                progress_cb(30, "scanning")
             # WHITE-04: ignored fingerprints come from ALL prior scans of this
             # project (review C1 fix — was scoped to the current scan, which
             # has no issues yet and thus never matched).
@@ -151,7 +174,11 @@ class CodeScanService:
             # Fingerprints of prior scans that already produced a regression
             # case (review C2: cross-scan incremental + case_outdated).
             case_bearing = await self.get_case_bearing_fingerprints(project_id)
+            if progress_cb:
+                progress_cb(50, "scanning")
             semgrep = _run_semgrep(repo_path)
+            if progress_cb:
+                progress_cb(90, "parsing")
             counts = {"high": 0, "mid": 0, "low": 0}
             files = set()
             for r in semgrep.get("results", []):

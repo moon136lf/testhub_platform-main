@@ -29,9 +29,19 @@
         </el-table-column>
         <el-table-column prop="repo_url" label="仓库" min-width="200" show-overflow-tooltip />
         <el-table-column prop="branch" label="分支" width="90" />
-        <el-table-column label="状态" width="90">
+        <el-table-column label="状态" width="150">
           <template #default="{ row }">
-            <el-tag :type="{ done: 'success', failed: 'danger' }[row.status] || 'info'">{{ { done: '已完成', failed: '失败', scanning: '扫描中' }[row.status] || row.status }}</el-tag>
+            <el-tag v-if="row.status === 'scanning'" type="info" size="small">
+              扫描中 {{ row.progress ?? 0 }}%
+            </el-tag>
+            <el-tag v-else-if="row.status === 'done'" type="success" size="small">已完成</el-tag>
+            <el-tag v-else-if="row.status === 'failed'" type="danger" size="small">失败</el-tag>
+            <el-tag v-else type="info" size="small">{{ row.status }}</el-tag>
+            <div v-if="row.status === 'scanning'" style="margin-top: 4px">
+              <el-progress :percentage="row.progress ?? 0" :stroke-width="6" :show-text="false"
+                           style="width: 120px" />
+              <div style="font-size: 12px; color: #909399">{{ stageText(row.stage) }}</div>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="total_issues" label="问题" width="70" />
@@ -139,6 +149,22 @@ let pollTimer = null
 
 const statusLabel = (s) => ({ open: '待处理', fixed: '已修复', false_positive: '误报' }[s] || s)
 
+// 扫描阶段中文 (与后端 stage 对应)
+const stageText = (s) => ({
+  pulling: '拉取扫描镜像',
+  clone: '克隆仓库',
+  scanning: 'semgrep 扫描中',
+  parsing: '解析结果入库',
+  done: '',
+}[s] || '准备中')
+
+// 轮询中同步更新扫描列表的进度 (复用现有 pollTimer, 3s 一次)
+const refreshScanProgress = async () => {
+  try {
+    await loadScans()
+  } catch (e) { /* 静默, 下轮再试 */ }
+}
+
 const stopPolling = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
@@ -195,6 +221,11 @@ const onScan = async () => {
           scanning.value = false
           s.status === 'done' ? ElMessage.success(`扫描完成：${s.total_issues} 个问题`) : ElMessage.error('扫描失败')
           loadScans()
+        } else {
+          // 扫描中: 同步进度到列表行 (progress/stage)
+          const row = scans.value.find(x => x.id === s.id)
+          if (row) { row.progress = s.progress; row.stage = s.stage }
+          else await refreshScanProgress()
         }
       } catch (e) { console.error(e) }
     }, 3000)

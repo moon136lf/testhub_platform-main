@@ -18,6 +18,8 @@ class CodeScan(Base):
     repo_url = Column(String(500), nullable=False)
     branch = Column(String(100), default="main")
     status = Column(String(20), default="scanning", comment="scanning/done/failed")
+    progress = Column(Integer, default=0, comment="扫描进度百分比 0-100（分阶段：10拉镜像/30 clone/30-90 semgrep/100 入库）")
+    stage = Column(String(30), comment="当前阶段: pulling/clone/scanning/parsing")
     total_issues = Column(Integer, default=0)
     high_count = Column(Integer, default=0)
     mid_count = Column(Integer, default=0)
@@ -36,6 +38,8 @@ class CodeScan(Base):
             "repo_url": self.repo_url,
             "branch": self.branch,
             "status": self.status,
+            "progress": self.progress or 0,
+            "stage": self.stage,
             "total_issues": self.total_issues,
             "high_count": self.high_count,
             "mid_count": self.mid_count,
