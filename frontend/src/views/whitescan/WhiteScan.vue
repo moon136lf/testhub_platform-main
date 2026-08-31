@@ -24,12 +24,14 @@
       <!-- ② 扫描记录 + 概览 -->
       <el-table :data="scans" border style="margin-bottom: 16px" highlight-current-row
         @current-change="onScanSelect">
-        <el-table-column prop="created_at" label="时间" width="180" />
+        <el-table-column label="时间" width="180">
+          <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
+        </el-table-column>
         <el-table-column prop="repo_url" label="仓库" min-width="200" show-overflow-tooltip />
         <el-table-column prop="branch" label="分支" width="90" />
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag :type="{ done: 'success', failed: 'danger' }[row.status] || 'info'">{{ row.status }}</el-tag>
+            <el-tag :type="{ done: 'success', failed: 'danger' }[row.status] || 'info'">{{ { done: '已完成', failed: '失败', scanning: '扫描中' }[row.status] || row.status }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="total_issues" label="问题" width="70" />
@@ -110,6 +112,15 @@ import { ElMessage } from 'element-plus'
 import { whitescanAPI } from '@/api/whitescan.js'
 import { projectAPI } from '@/api/project.js'
 import axios from '@/api/axios.js'
+
+// 时间格式化: 年月日时分秒
+const fmtTime = (v) => {
+  if (!v) return '—'
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return v
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
 
 const loading = ref(false)
 const scanning = ref(false)

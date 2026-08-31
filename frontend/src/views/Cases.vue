@@ -510,7 +510,12 @@ const resetForm = () => {
 
 onMounted(async () => {
   await fetchProjects()
-  fetchCases()
+  // fetchProjects 内部已在默认选中首个项目时触发 fetchCases (带 project_id);
+  // 此处仅在项目列表为空 (无法默认选中) 时兜底提示, 不再无参调用 (后端 project_id 必填, 无参会 422)
+  if (!filters.value.project_id) {
+    cases.value = []
+    total.value = 0
+  }
 })
 </script>
 
