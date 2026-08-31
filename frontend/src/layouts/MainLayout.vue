@@ -64,7 +64,7 @@
             <el-icon><Document /></el-icon>
             <span>质量与报告</span>
           </template>
-          <el-menu-item index="/quality/whitebox">白盒代码体检</el-menu-item>
+          <el-menu-item index="/whitescan">白盒测试</el-menu-item>
           <el-menu-item index="/reports">执行记录与报告</el-menu-item>
         </el-sub-menu>
 

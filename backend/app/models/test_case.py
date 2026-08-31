@@ -76,6 +76,8 @@ class TestCase(Base):
     refinement_report = Column(JSONB, comment="精修报告 JSON")
     refined_at = Column(DateTime(timezone=True), comment="最后精修时间")
     is_deleted = Column(Boolean, default=False)
+    # W9: whitescan regression case source (NULL = not whitescan-generated)
+    source_issue_id = Column(UUID(as_uuid=True), ForeignKey("code_issue.id", ondelete="SET NULL"), nullable=True)
 
     def to_dict(self):
         return {
