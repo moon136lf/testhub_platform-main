@@ -29,7 +29,7 @@
 - Modify: `backend/app/tasks/script_tasks.py`（convert_scripts_task 里 module 推导）
 - Test: `backend/tests/test_regression_service.py`（新建，本任务先放模型测试）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `backend/tests/test_regression_service.py`：
 
@@ -62,12 +62,12 @@ class TestRegressionSetModel:
         from app.models import RegressionSet  # noqa: F401
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_regression_service.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'app.models.regression'`
 
-- [ ] **Step 3: 实现 RegressionSet 模型**
+- [x] **Step 3: 实现 RegressionSet 模型**
 
 新建 `backend/app/models/regression.py`：
 
@@ -112,12 +112,12 @@ from app.models.regression import RegressionSet
 ```
 （并加入 `__all__` 若该文件有。）
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_regression_service.py -q`
 Expected: PASS (2 passed)
 
-- [ ] **Step 5: module 回写（convert task）**
+- [x] **Step 5: module 回写（convert task）**
 
 `backend/app/tasks/script_tasks.py` 的 `convert_scripts_task` 内 `_run()` 中，`cases = [c.to_dict() for c in result.scalars().all()]` 之后加 module 推导（一次 JOIN 查 TestPoint）：
 
@@ -148,12 +148,12 @@ Expected: PASS (2 passed)
         )
 ```
 
-- [ ] **Step 6: 全量回归**
+- [x] **Step 6: 全量回归**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/ -q --ignore=tests/test_batch_import_fix.py`
 Expected: 全绿（420 基线 + 2 新）
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/app/models/regression.py backend/app/models/__init__.py backend/app/tasks/script_tasks.py backend/app/services/script_convert_service.py backend/tests/test_regression_service.py
@@ -185,7 +185,7 @@ git commit -m "feat(regression): RegressionSet model + module inference at conve
 }
 ```
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `backend/tests/test_regression_rules.py`：
 
@@ -286,12 +286,12 @@ class TestAggregate:
         assert MAX_REASON_LEN == 200
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_regression_rules.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'app.services.regression_rules'`
 
-- [ ] **Step 3: 实现规则引擎**
+- [x] **Step 3: 实现规则引擎**
 
 新建 `backend/app/services/regression_rules.py`：
 
@@ -380,12 +380,12 @@ def score_script(data: dict):
     return included, reason
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_regression_rules.py -q`
 Expected: PASS（11 passed 左右）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/regression_rules.py backend/tests/test_regression_rules.py
@@ -409,7 +409,7 @@ git commit -m "feat(regression): 6-rule scoring engine (pure functions) (#8 T2)"
 - `get_stats(project_id)` → {total(included数), passed, failed, pass_rate}（included ⋈ script_asset.last_status）
 - `list_view(project_id, category, keyword)` → 全量 confirmed 脚本 LEFT JOIN regression_set
 
-- [ ] **Step 1: 写失败测试（upsert 语义 + stats，mock db）**
+- [x] **Step 1: 写失败测试（upsert 语义 + stats，mock db）**
 
 追加到 `backend/tests/test_regression_service.py`：
 
@@ -522,12 +522,12 @@ class TestSetMembers:
         assert existing.include_source == "manual"
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_regression_service.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'app.services.regression_service'`
 
-- [ ] **Step 3: 实现 RegressionService**
+- [x] **Step 3: 实现 RegressionService**
 
 新建 `backend/app/services/regression_service.py`：
 
@@ -726,12 +726,12 @@ class RegressionService:
         return items
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_regression_service.py tests/test_regression_rules.py -q`
 Expected: PASS（T1 2 + T3 4 + T2 全部）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/regression_service.py backend/tests/test_regression_service.py
@@ -750,7 +750,7 @@ git commit -m "feat(regression): RegressionService — assemble/upsert/stats/lis
 - Modify: `backend/app/tasks/script_tasks.py`（run_scripts_task 扩 exec_type/fail_fast）
 - Test: `backend/tests/test_regression_api.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `backend/tests/test_regression_api.py`：
 
@@ -897,12 +897,12 @@ class TestConfirmHook:
 
 （注：confirm hook 测试的 mock 粒度较粗——confirm 既有测试 `test_script_api.py` 已锁定正常路径；本测试目的只是验证 hook 异常被 try/except 吞掉不影响 confirm 返回。实现时若发现过度 mock 难以维系，可改为直接单测 `RegressionService.identify_for_script` 被 confirm 调用一次（patch 计数），弃用 HTTP 层。）
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_regression_api.py -q`
 Expected: FAIL — 404（路由不存在）
 
-- [ ] **Step 3: 实现 schemas + API + hook + task 扩参**
+- [x] **Step 3: 实现 schemas + API + hook + task 扩参**
 
 新建 `backend/app/schemas/regression.py`：
 
@@ -1157,17 +1157,17 @@ def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: l
                         break  # 失败策略=停止: 脚本级 fail-fast (spec 偏差 K)
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/test_regression_api.py -q`
 Expected: PASS（8-9 个）
 
-- [ ] **Step 5: 全量回归**
+- [x] **Step 5: 全量回归**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/ -q --ignore=tests/test_batch_import_fix.py`
 Expected: 全绿（基线 420 + 新增；**注意既有 batch-run 测试可能断言 run_scripts_task.delay 的调用参数——exec_type 默认 None 时行为不变，理论上零破坏；若既有测试因 kwargs 变化失败，按最小改动修**）
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/app/api/v1/regression.py backend/app/schemas/regression.py backend/app/api/__init__.py backend/app/api/v1/scripts.py backend/app/tasks/script_tasks.py backend/app/services/regression_service.py backend/tests/test_regression_api.py
@@ -1183,7 +1183,7 @@ git commit -m "feat(regression): /regression endpoints + confirm hook + task exe
 - Create: `frontend/src/views/Regression.vue`
 - Modify: `frontend/src/router/index.js`（/auto/regression 路由 + /auto/ui redirect 顺手修）
 
-- [ ] **Step 1: API 封装**
+- [x] **Step 1: API 封装**
 
 新建 `frontend/src/api/regression.js`（**相对路径，axios baseURL 已含 /api/v1**）：
 
@@ -1233,7 +1233,7 @@ export const regressionAPI = {
 }
 ```
 
-- [ ] **Step 2: Regression.vue**
+- [x] **Step 2: Regression.vue**
 
 新建 `frontend/src/views/Regression.vue`。布局按 spec §5.1 四区块。关键实现点（完整组件由实现者按下列骨架+现有页面风格补全——参考 `ScriptConvert.vue` 的统计卡/SSE/表格写法）：
 
@@ -1369,7 +1369,7 @@ export const regressionAPI = {
 
 （骨架中 `...` 占位的 select 选项等由实现者按 ScriptConvert.vue 同款补全；script 逻辑 11 条要点必须全部实现，这是 T5 的验收核心。）
 
-- [ ] **Step 3: 路由**
+- [x] **Step 3: 路由**
 
 `frontend/src/router/index.js` 的 `scripts` 路由（67-71 行）之后加：
 
@@ -1388,12 +1388,12 @@ export const regressionAPI = {
 ```
 （注意：外层已有 path: '/' 根路由，子路由 'auto/regression' 挂进去即 /auto/regression；'auto/ui' 是 redirect 修菜单空转。）
 
-- [ ] **Step 4: build 验证**
+- [x] **Step 4: build 验证**
 
 Run: `cd /d/MoonTest/frontend && npx vite build 2>&1 | tail -3`
 Expected: `✓ built`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/api/regression.js frontend/src/views/Regression.vue frontend/src/router/index.js
@@ -1408,7 +1408,7 @@ git commit -m "feat(regression): Regression page + routes + API client (#8 T5)"
 - Modify: `backend/app/api/v1/scripts.py`（list 端点加 include_regression 参数）
 - Modify: `frontend/src/views/ScriptConvert.vue`（三列 + 分类下拉 + max_failures 上限）
 
-- [ ] **Step 1: 后端 list 加 include_regression**
+- [x] **Step 1: 后端 list 加 include_regression**
 
 `backend/app/api/v1/scripts.py` 的 list 端点（GET ""，约 74 行）：加可选参数 `include_regression: bool = Query(False)`；为 True 时对每条 script LEFT JOIN regression_set 取回归字段，响应 item 加：
 
@@ -1435,7 +1435,7 @@ class TestScriptsListIncludeRegression:
 ```
 （两个测试的 mock 模式照抄 `tests/test_script_api.py` 既有 list 测试；实现者读该文件后按同款写。）
 
-- [ ] **Step 2: 前端三列 + 顺手修**
+- [x] **Step 2: 前端三列 + 顺手修**
 
 `frontend/src/views/ScriptConvert.vue`：
 1. loadScripts 调 `scriptAPI.list(projectId, ...)` 时追加参数 `include_regression=true`（读 script.js 的 list 方法签名，加可选参数透传 query）
@@ -1471,12 +1471,12 @@ const CATEGORIES = [
 
 4. max_failures 上限 `:max="50"` → `:max="100"`（约 87 行）
 
-- [ ] **Step 3: build + 全量回归**
+- [x] **Step 3: build + 全量回归**
 
 Run: `cd /d/MoonTest/frontend && npx vite build 2>&1 | tail -2 && cd ../backend && python -m pytest tests/ -q --ignore=tests/test_batch_import_fix.py`
 Expected: ✓ built + 全绿
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/app/api/v1/scripts.py backend/tests/test_regression_api.py frontend/src/views/ScriptConvert.vue frontend/src/api/script.js
@@ -1489,21 +1489,21 @@ git commit -m "feat(regression): script list regression columns + category/max_f
 
 **Files:** 无新文件（审查任务，沿用 #5c 终审模式）
 
-- [ ] **Step 1: 全量后端测试**
+- [x] **Step 1: 全量后端测试**
 
 Run: `cd /d/MoonTest/backend && python -m pytest tests/ -q --ignore=tests/test_batch_import_fix.py`
 Expected: 全绿
 
-- [ ] **Step 2: 前端 build**
+- [x] **Step 2: 前端 build**
 
 Run: `cd /d/MoonTest/frontend && npx vite build 2>&1 | tail -2`
 Expected: ✓ built
 
-- [ ] **Step 3: 派终审子代理**
+- [x] **Step 3: 派终审子代理**
 
 Base: T1 前 HEAD（a13137e 之后第一个 T1 commit 的父），Head: T6 提交。审查范围：spec §1.4 偏差 7 条 + 验收 11 条 + 规则引擎口径 + 复用面不重造 + 常规质量。用户已确认全任务完成后一次性审查。
 
-- [ ] **Step 4: 审查问题修复 + 收尾提交**
+- [x] **Step 4: 审查问题修复 + 收尾提交**
 
 ```bash
 git add -A && git commit -m "fix(regression): final review fixes (#8 T7)"  # 若有
