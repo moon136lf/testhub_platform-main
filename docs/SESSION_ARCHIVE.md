@@ -1,7 +1,182 @@
 # MoonTest 会话存档
 
 > 由定时任务（每小时 :50）自动追加。最新快照在最上方，旧的在下。
-> 自动过期：recurring 任务 7 天后失效（见 `03985124`）。
+> 自动过期：recurring 任务 7 天后失效（定时任务 ID 见 `.claude/scheduled_tasks.json`，durable）。
+
+---
+
+## 快照 #37 — 2026-08-28（17:50 下班快照）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+- `docs/superpowers/plans/2026-08-28-regression.md`（T1 checkbox 已勾选）
+- `docs/SESSION_HANDOFF_2026-08-26.md`（未跟踪，历史文档）
+
+### 最近 5 条提交
+```
+9a4f273 feat(regression): 6-rule scoring engine (pure functions) (#8 T2)
+cc2edf0 feat(regression): RegressionSet model + module inference at convert (#8 T1)
+056b6d5 docs(regression): module #8 implementation plan (7 tasks, TDD)
+a13137e docs(regression): module #8 spec after dual-agent requirement check
+9114f95 docs(diagnostics): tick plan checkboxes T7-T8 (#5c complete)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ 全完成（#5a 主干 + #5b 自愈 + #5c 诊断，420 测试基线）。
+6. **执行记录与报告** — ✅ 已合 master。
+7. **用例评审与E2E精修** — 🚧 worktree（worktree-module7-review-center）开发完未合 master。
+8. **回归测试** — 🚧 实施中：spec（a13137e）+ plan（056b6d5）已提交，T1 ✅（cc2edf0 数据层）+ T2 ✅（9a4f273 规则引擎），T3-T7 待做。
+9. **白盒代码体检** — 🚧 另一会话进行中（未完）。
+10. **系统设置** — ✅ 已合 master。
+11. **仪表盘优化** — ✅ 已合 master。
+
+### 本会话进展（自快照 #36）
+- **#8 brainstorm + spec**（a13137e）：双核对子代理（页面字段/规则 + DDL/Redis/API/SSE）完成，7 条偏差定案（F ui_regression/H confirm hook/I upsert 不覆盖 manual/J module 推导/K fail_fast/O push stub + R3/R4/R6 量化口径）。
+- **#8 plan**（056b6d5）：7 任务 TDD 计划，沿用 subagent-driven + 全任务完成后一次性终审。
+- **T1 完成**（cc2edf0）：RegressionSet 表 + convert task 里 module 推导（TestCase.point_id→TestPoint.page_name）+ ScriptAsset 构造带 module。422 passed。
+- **T2 完成**（9a4f273）：六规则打分引擎（纯函数：R1 优先级/R2 通过率≥80%/R3 核心覆盖/R4 模块代表/R5 稳定性/R6 依赖，阈值≥3 纳入，ai_reason 拼接≤200）。
+- **用户决策**：今天 18:00 下班，17:50 存档；下班前目标后端全绿（T1-T4），T5/T6/终审明天收尾。
+- **部署环境备忘**（另一会话产出，memory）：PG16/Docker/chromium 就绪，缺 Redis+MinIO+backend/.env；登录模块明确不做。
+
+### 下一步建议
+1. 明天继续：T3（RegressionService）→ T4（/regression 8 端点 + confirm hook + task 扩参）→ T5（前端页）→ T6（ScriptConvert 三列）→ 一次性终审。
+2. #7 worktree 待合 master；#9 另一会话完成后同理。
+3. 全模块骨架后统一真实化（大模型 + 迁移 + 真 DB 集成 + #10 scope 配模型待办）。
+
+---
+
+## 快照 #36 — 2026-08-27（用户手动触发）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+- `docs/superpowers/plans/2026-08-27-diagnostics.md`（T1 步骤 checkbox 已勾选）
+- `docs/SESSION_HANDOFF_2026-08-26.md`（未跟踪，历史交接文档）
+
+### 最近 5 条提交
+```
+d988bbf feat(diagnostics): ai_diagnosis array-ized with #4 compat (#5c T1)
+1cb3849 docs(diagnostics): #5c implementation plan (8 tasks, TDD)
+0890813 docs(diagnostics): #5c AI diagnosis spec after dual-agent requirement check
+b831e64 Merge #11 dashboard into master (W11)
+3a59c3e Merge #6 execution reports into master (W6)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a/#5b 完成；🚧 #5c（AI 诊断）实施中：spec + plan 已提交，subagent-driven 执行中，T1 完成（d988bbf，ai_diagnosis 数组化 + #4 兼容，393 测试全绿），T2（DiagnosticsService.analyze）子代理运行中。剩 T3-T7 → 一次性终审。
+6. **执行记录与报告** — ✅ 已合 master（3a59c3e）。
+7. **用例评审与E2E精修** — ⏳ spec 已写，待实现。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⏳ spec 已写，待实现。
+10. **系统设置** — ✅ 已合 master。
+11. **仪表盘优化** — ✅ 已合 master（b831e64）。
+
+### 本会话进展（自快照 #35）
+- **#5c spec 提交**（0890813）：双子代理需求核对（8 个决策点定案：A 数组化/B fragment 拼装/C source=ai_fixed/D 路线1 moonshot/E confidence×10/F quick-run 不做/G apply 回写元素库/H 清洗防幻觉/I 双入口），8 处偏差入 spec §1.4。
+- **plan 提交**（1cb3849）：8 任务 TDD 计划。
+- **执行模式**：用户选 subagent-driven + **全部任务完成后一次性审查**（不逐任务审）。
+- **T1 完成**（d988bbf）：`ScriptAsset.diagnosis_list` property + `append_diagnosis(card, mode)`；#4 写入处改 append；既有测试 MagicMock→真实 ScriptAsset 实例（append_diagnosis 被 mock 吞的问题，计划未预判，实现者自纠）。393 passed。
+- **T2 派发**：DiagnosticsService.analyze（execution_id 取数→四要素打包→kimi2.6 多模态→JSON 解析降级→清洗防幻觉→卡 append）。子代理运行中。
+
+### 下一步建议
+1. T2 返回后串行派 T3（apply）→ T4（API）→ T5（前端组件）→ T6（双入口）→ T7（element_name+exec_id）。
+2. T1-T7 全完成后一次性终审（spec 合规 + 代码质量 + 验收 11 条），修复后 #5c 收官。
+3. #7/#9 spec 就绪可并行；全模块骨架后统一真实化。
+
+---
+
+## 快照 #35 — 2026-08-27（第 35 次快照，:50 触发）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+- `docs/SESSION_HANDOFF_2026-08-26.md`（未跟踪，下班交接文档）
+
+### 最近 5 条提交
+```
+b831e64 Merge #11 dashboard into master (W11)
+3a59c3e Merge #6 execution reports into master (W6)
+07495fa docs(heal): spec — locator contract + review fixes recorded (#5b T8 fixup)
+65693b0 fix(heal): review fixes — selector contract, dedup fail-record, failed heal_status (#5b T8 fixup)
+56ad225 docs: session archive W11 #4 (auto)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；✅ #5b 完成（审查修复收官，362 测试绿）；🚧 #5c brainstorming 中：设计决策已定（并存 #4 诊断 / execution_id 自动取数 / kimi2.6 多模态 / apply 回写元素库+前端重跑 / KB-AUTO-01 归 #7），2 个需求核对子代理后台运行中。
+6. **执行记录与报告** — ✅ 已合 master（3a59c3e，W6）。
+7. **用例评审与E2E精修** — ⏳ spec 已写，待实现。
+8. **回归测试** — ⬜ 未开始。
+9. **白盒代码体检** — ⏳ spec 已写，待实现。
+10. **系统设置** — ✅ 已合 master（+待办增强记 memory）。
+11. **仪表盘优化** — ✅ 已合 master（b831e64，W11）。
+
+### 本会话进展（自快照 #34）
+- **#5c brainstorming 启动**：需求梳理完成（§9.2.5 /diagnostics/analyze+apply、TRANS-05/06、SCRIPT-06、§3.3.3 失败诊断字段组）。摸清现状：#4 有脚本级诊断（四分类+重生成，手填参数）、#5a ExecutionDetail 已存全套失败采集、#6 报告前端已有失败明细表格（ReportDetail.vue 可加诊断按钮）。
+- **4 个设计决策用户已确认**：①与 #4 两个并存；②analyze 收 execution_id 自动取数+可选手填覆盖；③多模态 kimi2.6 看截图（复用 #5b MoonshotProvider）；④apply 只做回写元素库（source="ai_fixed"）+前端应用/重跑，KB-AUTO-01 归 #7（knowledge_record 表未建），step_mapping 同步是伪需求（执行走元素库，step_mapping 不存定位器）。
+- **§三 需求核对进行中**：2 个并行子代理（第一部分字段/规则 + 第二部分 DDL/流程/机制）后台运行，重点关注 script_fragment 来源、confidence 语义（0-1 浮点 vs 元素库 0-10 整数）、§10.2 诊断触发位置。
+- **快照 #34 后无新提交**（#5b 已收官，#5c 在 spec 阶段）。
+
+### 下一步建议
+1. 2 个核对子代理返回后处理发现项 → 写 #5c spec（docs/superpowers/specs/2026-08-27-diagnostics-design.md）→ 自检 → 用户 review → writing-plans。
+2. #7/#9 spec 已就绪，可新会话 worktree 并行。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（含 #10 待办）。
+
+---
+
+## 快照 #34 — 2026-08-27（第 34 次快照，:50 触发）
+
+**当前分支**：master
+
+### 未提交改动
+- `docs/SESSION_HANDOFF_2026-08-26.md`（未跟踪，下班交接文档）
+- `docs/SESSION_ARCHIVE.md`（本存档文件自身）
+
+### 最近 5 条提交
+```
+07495fa docs(heal): spec — locator contract + review fixes recorded (#5b T8 fixup)
+65693b0 fix(heal): review fixes — selector contract, dedup fail-record, failed heal_status (#5b T8 fixup)
+7a09172 docs(heal): spec update — Level4 visual in-scope (#5b T9)
+529f91e feat(heal): Level4 visual self-heal via kimi2.6 multimodal (#5b T8)
+0d1a1b6 feat(heal): MoonshotProvider kimi2.6 multimodal + GLM upgrade glm5.2 (#5b T7)
+```
+
+### 11 模块状态（一句话）
+1. **元素库** — 框架完成；P0 未确认。
+2. **AI智能用例生成** — W6 已提交。
+3. **用例管理** — W1~W4 + W4/W5 + `converted` 已提交。
+4. **用例转自动化脚本** — ✅ 骨架完成。
+5. **UI自动化测试执行** — ✅ #5a 完成；✅ #5b 完成（T1-T9 + 合并审查 + 审查修复）：四级自愈链 L1-4 全就位，审查 10 项（1 Critical 定位器契约 + 2 Important）全部修复，362 测试全绿（含 4 个真 chromium 守门测试）。剩 #5c（AI 诊断）未开始。
+6-11. — ⬜/#10已完成。
+
+### 本会话进展（自快照 #33）
+- **T8 完成**（529f91e）：Level4 视觉自愈（截图→base64→多模态→provider="moonshot"→kimi2.6→定位器→验证），heal() 链 L1→L2→L3→L4。
+- **T9 完成**（7a09172）：spec 全面更新为 Level2-4（删 §1.2 不做项、偏差表改"本期实现"、§3 补视觉伪代码、验收 11 条更新）。
+- **合并审查**（子代理）：发现 10 项——Critical #1：Level2/3/4 返回 `page.get_by_*()` Python 表达式字符串传给 `page.locator()`，真实浏览器抛 Unknown engine（mock 测试全掩盖）；#2 失败双计 record_heal_failure；#3 失败 heal_log 丢失且 heal_status 无 "failed"。本机装真 chromium 实证验证了 Critical。
+- **审查修复**（65693b0）：定位器契约统一为选择器字符串（text=/[aria-label]/role=），Level2 按命中属性构造，Level3/4 提示词改选择器格式，新增 `_clean_llm_locator` 清洗；删重复失败记录；ENF 携带 heal_log + heal_status="failed"；截图 >1280px 缩放+JPEG；MOONSHOT_MODEL 接通；heal_log 带 locator；新增负测试。**新增 test_self_heal_real_browser.py 真浏览器守门**（无浏览器自动 skip）。362 passed（原 345）。
+- **spec 更新**（07495fa）：定位器契约定案 + 审查修复落 spec。
+- **定时存档任务重建**：原 03985124 会话级已丢，新建 durable 任务（每小时 :50，7 天过期）。
+- **环境备忘**：Playwright chromium 本机已装（C:\Users\moon1\AppData\Local\ms-playwright）；下载需 unset PLAYWRIGHT_DOWNLOAD_HOST（azureedge 网关 400）；pytest-cov 与 numpy 冲突（`--cov` 不可用，覆盖率由审查代理单独验证 81%/80%/80%）。
+
+### 下一步建议
+1. #5b 已收官。下一个模块二选一：#5c（AI 诊断，需先写 spec 走需求核对）或直接 #6（执行记录与报告，spec 已就绪）。
+2. #6/#7/#9 spec 已就绪，可新会话 worktree 并行。
+3. 全模块骨架完成后统一接大模型 + 跑迁移 + 真实 DB 集成测试（含 #10 待办）。
 
 ---
 
