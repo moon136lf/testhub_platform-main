@@ -70,6 +70,17 @@ const router = createRouter({
           meta: { title: '用例转脚本' }
         },
         {
+          path: 'auto/ui',
+          name: 'AutoUI',
+          redirect: '/scripts',
+        },
+        {
+          path: 'auto/regression',
+          name: 'Regression',
+          component: () => import('@/views/Regression.vue'),
+          meta: { title: '回归测试' }
+        },
+        {
           path: 'settings/ai',
           name: 'AISettings',
           component: () => import('@/views/system/AISettings.vue'),
