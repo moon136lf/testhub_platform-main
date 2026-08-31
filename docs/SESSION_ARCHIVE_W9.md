@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #11 — 2026-08-31 09:23（auto，跨日）
+
+**最近 8 条 commit**：
+- 01156ac fix(whitescan): address code review (C1/C2/I5/I6/I7) (W9)
+- d499191 docs: session archive W9 #10 (auto)
+- 718a4dc docs: session archive W9 #9 (auto)
+- 547cfca docs: session archive W9 #8 (manual)
+- 3f9d5c7 docs: session archive W9 #7 (auto)
+- 25b419c docs: session archive W9 #6 (auto)
+- a514b9c chore: update TODO_LIST (#9 done) (W9)
+- 5e9c01e feat(whitescan): WhiteScan page + routes + menu rename 白盒测试 (W9)
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：**审查反馈修复完成**（commit 01156ac：C1 误报指纹按项目查 / C2 case_outdated 标记 / I5 生成器校验器 / I6 git clone 加固 / I7 token 埋点；435 passed，+4 测试）。**#9 全部完成，就绪挂起**——周一合并窗口与 #7 一起合。
+
+---
+
 ## 快照 #10 — 2026-08-30 09:59（auto，跨日）
 
 **最近 8 条 commit**：
