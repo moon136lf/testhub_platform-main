@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #12 — 2026-08-31 10:20（auto）
+
+**最近 8 条 commit**：
+- a766f7e docs: session archive W9 #11 (auto)
+- 01156ac fix(whitescan): address code review (C1/C2/I5/I6/I7) (W9)
+- d499191 docs: session archive W9 #10 (auto)
+- 718a4dc docs: session archive W9 #9 (auto)
+- 547cfca docs: session archive W9 #8 (manual)
+- 3f9d5c7 docs: session archive W9 #7 (auto)
+- 25b419c docs: session archive W9 #6 (auto)
+- a514b9c chore: update TODO_LIST (#9 done) (W9)
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：#9 全部完成就绪挂起（435 passed）。部署环境已全通：Redis+MinIO docker 容器已起（moontest bucket 已建验证），backend/.env 已建（DATABASE_URL 密码已改，GLM/Moonshot key 待用户填——.env.example 缺这两变量已在 .env 补段）。用户正在填 key，填完即 init_db + 迁移 + 起服务。
+
+---
+
 ## 快照 #11 — 2026-08-31 09:23（auto，跨日）
 
 **最近 8 条 commit**：
