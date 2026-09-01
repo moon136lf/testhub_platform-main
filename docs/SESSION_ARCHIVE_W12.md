@@ -6,6 +6,19 @@
 
 ---
 
+## 快照 #2 — 2026-09-01 16:42（auto）
+
+**最近 commit**：
+- d29270d feat(ui): review fixes — flat cards / one-row table actions / Chinese dist labels
+- 49dcde0 feat(ui): batch-1 modern light theme
+- 2165274 docs: session archive W12 #1
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：批次 1 + 用户 3 条反馈修复完成（卡片扁平化/操作栏一排/分布图中文标签），build 通过，等用户继续验收或拍板进批二。
+
+---
+
 ## 快照 #1 — 2026-09-01 15:00（建种子）
 
 **进度**：spec 完成（用户确认：现代浅色风 Linear 风格，主色 #6366F1 靛蓝紫，全站 19 页分批改造）；**批次 1 完成**（commit `49dcde0`：theme.css 设计令牌 + charts.js ECharts 统一主题 + MainLayout 浅色侧边栏 + Dashboard 重设计 6 统计卡+环形图）。build 通过。
