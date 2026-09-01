@@ -116,13 +116,20 @@ let elementChart = null
 let caseChart = null
 let trendChart = null
 
+// 分布类型英→中映射（元素类型 button/input/link/select/other；用例类型 functional/api）
+const TYPE_LABELS = {
+  button: '按钮', input: '输入框', link: '链接', select: '下拉框', other: '其他',
+  functional: '功能用例', api: '接口用例', unknown: '未知',
+}
+const distLabel = (t) => TYPE_LABELS[t] || t
+
 const donutOption = (data) => ({
   tooltip: { trigger: 'item', ...TOOLTIP_STYLE,
     formatter: (p) => `${p.name}：${p.value}（${p.percent}%）` },
   legend: { bottom: 0, icon: 'circle', itemWidth: 8, itemHeight: 8,
     textStyle: { color: CHART_TEXT, fontSize: 12 } },
   color: CHART_COLORS,
-  series: [donutPiece('dist', data.map(i => ({ value: i.count, name: i.type })),
+  series: [donutPiece('dist', data.map(i => ({ value: i.count, name: distLabel(i.type) })),
     String(data.reduce((s, i) => s + i.count, 0)))],
 })
 

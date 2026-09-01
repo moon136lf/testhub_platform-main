@@ -64,11 +64,11 @@ body {
   font-family: var(--el-font-family);
 }
 
-/* ---- 卡片：圆角 + 柔和阴影 + 去内边框 ---- */
+/* ---- 卡片：圆角、无边框无阴影（扁平） ---- */
 .el-card {
   border-radius: var(--mt-radius);
-  border: 1px solid var(--mt-border);
-  box-shadow: var(--mt-shadow) !important;
+  border: none;
+  box-shadow: none !important;
   transition: box-shadow .2s ease, transform .2s ease;
 }
 .el-card__header {
@@ -98,6 +98,30 @@ body {
 }
 .el-table th.el-table__cell {
   font-weight: 600;
+}
+
+/* ---- 操作列：按钮一排不换行（缩小字体+去内边距，列内 flex 不换行） ---- */
+.el-table td.el-table__cell .cell > .el-button + .el-button {
+  margin-left: 4px;
+}
+/* 操作按钮通用紧凑化：小字号、紧凑内边距，保证一行放得下 */
+.el-table .el-button--small,
+.el-table .el-button.is-link,
+.el-table .el-button {
+  font-size: 12px;
+  height: auto;
+  padding: 2px 4px;
+}
+.el-table .el-button + .el-button {
+  margin-left: 4px;
+}
+/* 操作列单元格：不换行（全局生效——所有表格操作按钮一排展示） */
+.el-table td.el-table__cell:last-child .cell,
+.el-table .operation-cell .cell {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
 }
 
 /* ---- 分页 / 输入 / 选择器圆角 ---- */
