@@ -144,15 +144,15 @@ body {
   border-radius: 4px;
 }
 
-/* ---- 查询条件区：整体右对齐（与页头主操作同侧） ---- */
+/* ---- 查询条件区：标签右对齐（标签文字靠右贴控件，对内整齐列对齐） ---- */
 .el-form--inline.el-form .el-form-item {
   margin-right: 12px;
 }
-/* 所有 el-form inline 查询条右对齐（flex 化 + 主轴反向） */
-.el-form--inline.el-form {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
+/* 每个「标签-控件」对内部：label 文字右对齐（label 宽度=文字宽度时
+   需设固定宽度才有效——inline 场景 label 是 auto 宽，右对齐靠 text-align） */
+.el-form--inline.el-form .el-form-item__label {
+  text-align: right;
+  padding-right: 8px;
 }
 /* 页面级筛选行（Dashboard 用 .header-filters）右对齐 */
 .page-header .header-filters,
