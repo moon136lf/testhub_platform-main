@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+import './styles/theme.css' // MoonTest 主题 — 必须在 element css 之后覆盖
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 import App from './App.vue'

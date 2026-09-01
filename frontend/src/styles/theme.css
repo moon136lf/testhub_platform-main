@@ -1,0 +1,159 @@
+/* ============================================================
+   MoonTest 主题 — 现代浅色风（Linear 风格）
+   主色 #6366F1 靛蓝紫 | 全站唯一主题源，main.js 中最后 import
+   ============================================================ */
+
+:root {
+  /* ---- 品牌色 ---- */
+  --mt-primary: #6366F1;
+  --mt-primary-hover: #4F46E5;
+  --mt-primary-light: #EEF2FF;
+  --mt-secondary: #0EA5E9;
+
+  /* ---- 状态色 ---- */
+  --mt-success: #10B981;
+  --mt-danger: #EF4444;
+  --mt-warning: #F59E0B;
+
+  /* ---- 表面与文字 ---- */
+  --mt-bg: #F8FAFC;
+  --mt-surface: #FFFFFF;
+  --mt-text: #0F172A;
+  --mt-text-secondary: #64748B;
+  --mt-border: #E2E8F0;
+
+  /* ---- 侧边栏 ---- */
+  --mt-sidebar: #FFFFFF;
+  --mt-sidebar-text: #64748B;
+  --mt-sidebar-active-bg: #EEF2FF;
+  --mt-sidebar-active-text: #6366F1;
+  --mt-sidebar-hover-bg: #F1F5F9;
+
+  /* ---- 几何 ---- */
+  --mt-radius: 10px;
+  --mt-radius-sm: 6px;
+  --mt-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 1px 2px rgba(15, 23, 42, .04);
+  --mt-shadow-hover: 0 4px 12px rgba(99, 102, 241, .10);
+
+  /* =========================================================
+     Element Plus 变量覆盖（主色 5 档手工派生）
+     ========================================================= */
+  --el-color-primary: #6366F1;
+  --el-color-primary-dark-2: #4F46E5;
+  --el-color-primary-light-3: #818CF8;
+  --el-color-primary-light-5: #A5B4FC;
+  --el-color-primary-light-7: #C7D2FE;
+  --el-color-primary-light-8: #E0E7FF;
+  --el-color-primary-light-9: #EEF2FF;
+  --el-border-radius-base: 6px;
+  --el-border-color: #E2E8F0;
+  --el-border-color-light: #E2E8F0;
+  --el-border-color-lighter: #EEF2F6;
+  --el-fill-color-light: #F8FAFC;
+  --el-text-color-primary: #0F172A;
+  --el-text-color-regular: #334155;
+  --el-text-color-secondary: #64748B;
+  --el-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+/* ---- body 基底 ---- */
+body {
+  background: var(--mt-bg);
+  color: var(--mt-text);
+  font-family: var(--el-font-family);
+}
+
+/* ---- 卡片：圆角 + 柔和阴影 + 去内边框 ---- */
+.el-card {
+  border-radius: var(--mt-radius);
+  border: 1px solid var(--mt-border);
+  box-shadow: var(--mt-shadow) !important;
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+.el-card__header {
+  border-bottom: 1px solid var(--mt-border);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--mt-text);
+}
+
+/* ---- 按钮：圆角 ---- */
+.el-button {
+  border-radius: var(--mt-radius-sm);
+  font-weight: 500;
+}
+.el-button--primary {
+  --el-button-hover-bg-color: var(--mt-primary-hover);
+  --el-button-active-bg-color: #4338CA;
+}
+
+/* ---- 表格：浅色表头 + 行 hover 主色浅底 ---- */
+.el-table {
+  --el-table-header-bg-color: #F8FAFC;
+  --el-table-header-text-color: #64748B;
+  --el-table-row-hover-bg-color: #EEF2FF;
+  --el-table-border-color: var(--mt-border);
+  border-radius: var(--mt-radius-sm);
+}
+.el-table th.el-table__cell {
+  font-weight: 600;
+}
+
+/* ---- 分页 / 输入 / 选择器圆角 ---- */
+.el-pagination .el-pager li,
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: var(--mt-radius-sm);
+}
+
+/* ---- 对话框圆角 ---- */
+.el-dialog {
+  border-radius: 12px;
+}
+.el-dialog__header {
+  font-weight: 600;
+}
+
+/* ---- 标签圆角 ---- */
+.el-tag {
+  border-radius: 4px;
+}
+
+/* ---- 通用页面容器（各页复用） ---- */
+.page-container {
+  padding: 24px;
+}
+
+/* ---- 页头模式：标题 + 右侧主操作 ---- */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.page-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--mt-text);
+}
+
+/* ---- 统计卡模式（Dashboard 等复用） ---- */
+.stat-card {
+  cursor: default;
+}
+.stat-card:hover {
+  box-shadow: var(--mt-shadow-hover) !important;
+  transform: translateY(-2px);
+}
+.stat-card .stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
