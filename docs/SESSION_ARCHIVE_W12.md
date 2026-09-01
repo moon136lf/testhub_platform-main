@@ -6,6 +6,24 @@
 
 ---
 
+## 快照 #5 — 2026-09-01 18:19（auto）
+
+**最近 8 条 commit**：
+- 75e500f docs: session archive W12 #4 (final close)
+- bd0a31b feat(ui): inline form label right-align
+- 73ca315 docs: session archive W12 #3 (session close)
+- 31aa555 feat(ui): review tweaks — larger action button text
+- f5878dc docs: session archive W12 #2
+- d29270d feat(ui): review fixes — flat cards / one-row table actions
+- 2165274 docs: session archive W12 #1
+- 49dcde0 feat(ui): batch-1 modern light theme
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：与快照 #4 一致——批次 1 + 6 条反馈全部修复完成，会话已收工（用户关机），无新活动。
+
+---
+
 ## 快照 #4 — 2026-09-01 17:37（收工前补一笔）
 
 **新增 commit**：
