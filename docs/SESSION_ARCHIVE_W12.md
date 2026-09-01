@@ -6,6 +6,19 @@
 
 ---
 
+## 快照 #6 — 2026-09-01 19:20（auto）
+
+**最近 3 条 commit**：
+- 61c69dd docs: session archive W12 #5 (auto)
+- 75e500f docs: session archive W12 #4 (final close)
+- bd0a31b feat(ui): inline form label right-align
+
+**未提交变更**：无（worktree clean）
+
+**当前进度**：与快照 #5 一致——收工后无任何新活动（夜间空转快照）。
+
+---
+
 ## 快照 #5 — 2026-09-01 18:19（auto）
 
 **最近 8 条 commit**：
