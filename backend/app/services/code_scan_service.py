@@ -19,16 +19,28 @@ logger = logging.getLogger(__name__)
 
 def _run_semgrep(repo_path: str, timeout: int = 300) -> dict:
     """Run semgrep via Docker (spec 方案 B: works on Windows Desktop + Linux).
-    First run pulls returntocorp/semgrep image automatically."""
+    First run pulls returntocorp/semgrep image automatically.
+
+    Windows 路径修正 (两个坑):
+    1. Git Bash/MSYS 会把 "/src" 参数改写成本机路径 (D:/Program Files/Git/src)
+       → 设 MSYS_NO_PATHCONV=1 禁用改写
+    2. subprocess 传 Windows 绝对路径 (D:\...) 时 docker -v 挂载正常,
+       但仓库路径来自 tempfile.mkdtemp() 返回值, 直接可用;
+       容器内目标路径用 //src (双斜杠) 避免 MSYS 二次转换
+    """
+    import os
+    env = {**os.environ, "MSYS_NO_PATHCONV": "1"}
     result = subprocess.run(
         ["docker", "run", "--rm",
          "-v", f"{repo_path}:/src",
          "returntocorp/semgrep",
          "semgrep", "scan", "--config", "auto", "--json", "/src"],
-        capture_output=True, text=True, timeout=timeout,
+        capture_output=True, timeout=timeout, env=env, encoding="utf-8", errors="replace",
     )
     if result.returncode != 0:
         raise RuntimeError(f"semgrep failed (rc={result.returncode}): {result.stderr[:500]}")
+    if not result.stdout:
+        raise RuntimeError(f"semgrep produced no JSON output (stderr: {result.stderr[:500]})")
     return json.loads(result.stdout)
 
 
