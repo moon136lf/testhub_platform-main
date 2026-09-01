@@ -6,6 +6,22 @@
 
 ---
 
+## 快照 #3 — 2026-09-01 17:33（手动·收工存档）
+
+**最近 6 条 commit**：
+- 31aa555 feat(ui): review tweaks — larger action button text + right-aligned filter bars
+- f5878dc docs: session archive W12 #2 (auto)
+- d29270d feat(ui): review fixes — flat cards / one-row table actions / Chinese dist labels
+- 2165274 docs: session archive W12 #1 (auto)
+- 49dcde0 feat(ui): batch-1 modern light theme — tokens + MainLayout + Dashboard
+- 6aaf419 fix: bat scripts（master 基线）
+
+**未提交变更**：无（worktree clean）
+
+**当前进度（收工）**：批次 1 完成 + 用户 5 条反馈全部修复（扁平卡片/操作栏一排/分布图中文/按钮字号恢复/查询条右对齐），build 通过。**待办**：用户拍板后进批二（项目管理/用例管理/用例详情 3 页）。worktree 与 node_modules junction 均保留，明天直接 `npm run dev` 接着看。
+
+---
+
 ## 快照 #2 — 2026-09-01 16:42（auto）
 
 **最近 commit**：
