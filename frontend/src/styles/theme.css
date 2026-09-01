@@ -100,15 +100,14 @@ body {
   font-weight: 600;
 }
 
-/* ---- 操作列：按钮一排不换行（缩小字体+去内边距，列内 flex 不换行） ---- */
+/* ---- 操作列：按钮一排不换行（紧凑内边距，列内 flex 不换行） ---- */
 .el-table td.el-table__cell .cell > .el-button + .el-button {
   margin-left: 4px;
 }
-/* 操作按钮通用紧凑化：小字号、紧凑内边距，保证一行放得下 */
+/* 操作按钮：保持默认字号（13-14px），仅紧凑内边距，一排放得下靠列宽 */
 .el-table .el-button--small,
 .el-table .el-button.is-link,
 .el-table .el-button {
-  font-size: 12px;
   height: auto;
   padding: 2px 4px;
 }
@@ -143,6 +142,23 @@ body {
 /* ---- 标签圆角 ---- */
 .el-tag {
   border-radius: 4px;
+}
+
+/* ---- 查询条件区：整体右对齐（与页头主操作同侧） ---- */
+.el-form--inline.el-form .el-form-item {
+  margin-right: 12px;
+}
+/* 所有 el-form inline 查询条右对齐（flex 化 + 主轴反向） */
+.el-form--inline.el-form {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+/* 页面级筛选行（Dashboard 用 .header-filters）右对齐 */
+.page-header .header-filters,
+.filter-bar {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* ---- 通用页面容器（各页复用） ---- */
