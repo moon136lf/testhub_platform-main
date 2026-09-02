@@ -42,6 +42,10 @@ class FakeSession:
         return self  # 极简 stub
     def scalar_one_or_none(self):
         return None
+    def scalars(self):
+        return self  # select(ScriptAsset.name) 查重结果 stub: 空集合
+    def all(self, *a, **kw):
+        return []
     async def add(self, obj):
         if hasattr(obj, "case_id"):
             self.scripts.append(obj)

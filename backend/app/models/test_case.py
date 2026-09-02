@@ -136,6 +136,8 @@ class ScriptAsset(Base):
     category = Column(String(20), default="uncategorized")
     module = Column(String(50))
     last_status = Column(String(20), default="never_run")
+    # 所属用例生成批次名（冗余，脚本库展示来源）
+    batch_name = Column(String(200))
     run_count = Column(Integer, default=0)
     last_run_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -180,6 +182,7 @@ class ScriptAsset(Base):
             "category": self.category,
             "module": self.module,
             "last_status": self.last_status,
+            "batch_name": self.batch_name,
             "run_count": self.run_count,
             "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
