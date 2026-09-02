@@ -191,7 +191,7 @@ const deleteBatch = async (row) => {
   }
 }
 
-// ---- 新建用例（保留原有能力，用例归属到项目，出现在「手工创建」类记录中）----
+// ---- 新建用例（保留原有能力，用例归属到项目）----
 const dialogVisible = ref(false)
 const caseFormRef = ref(null)
 const currentCase = ref({})
