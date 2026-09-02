@@ -463,24 +463,42 @@ const identifyTestPoints = async () => {
       eventSource = aiCaseAPI.subscribeSSE(sessionId, onSSEMessage, onSSEError)
     }
 
-    // 轮询/拉取测试点列表（任务异步，这里用 getTestPoints 拉取已识别的点）
-    setTimeout(async () => {
-      try {
-        const tpRes = await aiCaseAPI.getTestPoints(formData.value.projectId, 0, 500)
-        const tpData = tpRes.data || tpRes
-        testPoints.value = tpData.items || tpData || []
-        expandedPages.value = [...new Set(testPoints.value.map(p => p.page_name || '未分组'))]
-        ElMessage.success(`识别到 ${testPoints.value.length} 个测试点`)
-      } catch (e) {
-        ElMessage.warning('测试点识别中，请稍后查看')
-      } finally {
-        identifying.value = false
-        sseProgress.value = 1
-      }
-    }, 2500)
+    // 轮询拉取测试点：不再盲等 2.5s 一次——轮询到 SSE progress>=1（任务完成信号）
+    // 或测试点列表非空为止，最长 5 分钟（大文档 AI 识别可达数分钟）
+    await pollIdentifyResult()
   } catch (error) {
     ElMessage.error('测试点识别失败: ' + (error.message || error))
     identifying.value = false
+  }
+}
+
+const pollIdentifyResult = async (maxWaitMs = 300000) => {
+  const start = Date.now()
+  try {
+    while (Date.now() - start < maxWaitMs) {
+      await new Promise(r => setTimeout(r, 3000))
+      try {
+        const tpRes = await aiCaseAPI.getTestPoints(formData.value.projectId, 0, 500)
+        const tpData = tpRes.data || tpRes
+        const items = tpData.items || tpData || []
+        if (items.length > 0 && sseProgress.value >= 1) {
+          testPoints.value = items
+          expandedPages.value = [...new Set(testPoints.value.map(p => p.page_name || '未分组'))]
+          ElMessage.success(`识别到 ${testPoints.value.length} 个测试点`)
+          return
+        }
+        if (items.length > 0 && !testPoints.value.length) {
+          // 先展示已到的点，进度未完继续等
+          testPoints.value = items
+          expandedPages.value = [...new Set(testPoints.value.map(p => p.page_name || '未分组'))]
+        }
+      } catch { /* 任务未完成，继续等 */ }
+    }
+    ElMessage.warning('识别耗时较长，结果稍后可在「勾选测试点」步骤或测试点列表查看')
+  } finally {
+    identifying.value = false
+    sseProgress.value = 1
+    if (eventSource) { eventSource.close(); eventSource = null }
   }
 }
 
@@ -539,23 +557,38 @@ const generateTestCases = async () => {
     if (sessionId) {
       eventSource = aiCaseAPI.subscribeSSE(sessionId, onSSEMessage, onSSEError)
     }
-    // 拉取生成结果
-    setTimeout(async () => {
-      try {
-        const tcRes = await aiCaseAPI.getTestCases(formData.value.projectId, 0, 500)
-        const tcData = tcRes.data || tcRes
-        generatedCases.value = tcData.items || tcData || []
-        ElMessage.success(`生成完成，共 ${generatedCases.value.length} 条用例`)
-      } catch (e) {
-        ElMessage.warning('用例生成中，请稍后查看')
-      } finally {
-        generating.value = false
-        sseProgress.value = 1
-      }
-    }, 3000)
+    // 轮询生成结果：同识别——等到进度完成或用例非空，最长 5 分钟
+    await pollGenerateResult()
   } catch (error) {
     ElMessage.error('用例生成失败: ' + (error.message || error))
     generating.value = false
+  }
+}
+
+const pollGenerateResult = async (maxWaitMs = 300000) => {
+  const start = Date.now()
+  try {
+    while (Date.now() - start < maxWaitMs) {
+      await new Promise(r => setTimeout(r, 3000))
+      try {
+        const tcRes = await aiCaseAPI.getTestCases(formData.value.projectId, 0, 500)
+        const tcData = tcRes.data || tcRes
+        const items = tcData.items || tcData || []
+        if (items.length > 0 && sseProgress.value >= 1) {
+          generatedCases.value = items
+          ElMessage.success(`生成完成，共 ${generatedCases.value.length} 条用例`)
+          return
+        }
+        if (items.length > 0 && !generatedCases.value.length) {
+          generatedCases.value = items
+        }
+      } catch { /* 任务未完成，继续等 */ }
+    }
+    ElMessage.warning('生成耗时较长，结果稍后可在「结果预览」步骤或用例管理查看')
+  } finally {
+    generating.value = false
+    sseProgress.value = 1
+    if (eventSource) { eventSource.close(); eventSource = null }
   }
 }
 
