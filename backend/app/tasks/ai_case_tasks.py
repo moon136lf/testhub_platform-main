@@ -518,8 +518,15 @@ async def _generate_test_cases_async(
             batch = await batch_svc.create_batch(project_id, "ai_generate",
                                                  requirement=req_text)
             batch_id = batch.id
+            # 逐用例 commit 模式下, 批次行必须先落库 commit——否则后续某条
+            # 用例失败 rollback 会把未提交的批次行一起回滚, 造成 batch_id FK 悬空
+            await db.commit()
         except Exception as e:
             logger.warning(f"create ai_generate batch failed, continue without batch: {e}")
+            try:
+                await db.rollback()  # 清理会话失败态, 避免影响后续逐用例保存
+            except Exception:
+                pass
 
         for index, point_id in enumerate(point_ids):
             progress = (index + 1) / total

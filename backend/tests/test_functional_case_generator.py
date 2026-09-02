@@ -208,8 +208,42 @@ class TestGenerateFromRepo:
         assert _added_cases(db)[1].steps == []  # 全非法 → 空
         assert _added_cases(db)[1].expected_result == ""
 
+    def test_integrity_error_does_not_kill_subsequent_batches(self, tmp_path):
+        """批 flush IntegrityError 后, 后续批仍能正常落库（savepoint 隔离）. #T2 review Critical1"""
+        from contextlib import asynccontextmanager
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        from sqlalchemy.exc import IntegrityError
+        rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text(
+            "{ path: '/a', meta: { title: 'A' } },\n{ path: '/b', meta: { title: 'B' } },\n"
+            "{ path: '/c', meta: { title: 'C' } },\n{ path: '/d', meta: { title: 'D' } },\n"
+            "{ path: '/e', meta: { title: 'E' } },\n{ path: '/f', meta: { title: 'F' } },",
+            encoding="utf-8")  # 6 菜单 → 2 批
+        db = _make_db()
+        rolled_back = []
+        call_count = [0]
+        async def _flush():
+            call_count[0] += 1
+            # 批次建行 flush(2次) 放行; 第一批用例 flush 抛 IntegrityError, 之后成功
+            if len(db.added) > 2 and call_count[0] == 3:
+                raise IntegrityError("dup", None, Exception())
+        db.flush = _flush
+        db.rollback = lambda: rolled_back.append(True)
+        @asynccontextmanager
+        async def _nested():
+            yield
+        db.begin_nested = _nested
+        gw = _gw_ok([MENU_JSON, MENU_JSON.replace("仪表盘", "页面")])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        # 第一批失败计 failed, 第二批仍成功落库; 不应调用全局 rollback
+        assert result["generated"] >= 1
+        assert result["failed"] == 1
+        assert rolled_back == []
+        assert len(_added_cases(db)) >= 2  # 第二批用例仍被 add
+
     def test_flush_integrity_error_rolls_back(self, tmp_path):
-        """flush 抛 IntegrityError → rollback 被调用, 批计 failed."""
+        """flush 抛 IntegrityError → savepoint 隔离, 批计 failed, 不调全局 rollback. #T2 review"""
         from app.services.functional_case_generator import FunctionalCaseGenerator
         from sqlalchemy.exc import IntegrityError
         rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
@@ -229,10 +263,10 @@ class TestGenerateFromRepo:
         gw = _gw_ok([MENU_JSON])
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
-        # mock add 仍记录了对象, 但 flush 失败 → 真实 DB 已回滚; 断言 generated=0 + rollback 被调
+        # flush 失败 → 该批计 failed; savepoint 隔离, 不应回滚外层事务
         assert result["generated"] == 0
         assert result["failed"] >= 1
-        assert rolled_back == [True]
+        assert rolled_back == []
 
 
 class TestPromptEnhancement:

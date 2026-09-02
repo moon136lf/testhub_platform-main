@@ -135,10 +135,11 @@ class FunctionalCaseGenerator:
             seen_titles.add(title)
             n += 1
         try:
-            await self.db.flush()
+            # savepoint 隔离: 单批 flush 失败只回滚本批, 不影响外层事务(批次行/已落库批)
+            async with self.db.begin_nested():
+                await self.db.flush()
         except IntegrityError as e:
             logger.warning(f"{kind} batch flush failed (duplicate title): {e}")
-            await self.db.rollback()
             return False, 0
         return True, n
 

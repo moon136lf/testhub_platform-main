@@ -2,6 +2,8 @@
 import logging
 from datetime import datetime
 
+from sqlalchemy import select
+
 from app.models.case_batch import CaseBatch
 from app.services.batch_naming import build_batch_name
 
@@ -29,7 +31,6 @@ class CaseBatchService:
         return batch
 
     async def _name_exists(self, project_id, name) -> bool:
-        from sqlalchemy import select
         r = await self.db.execute(
             select(CaseBatch.id).where(CaseBatch.project_id == project_id,
                                        CaseBatch.batch_name == name).limit(1))
