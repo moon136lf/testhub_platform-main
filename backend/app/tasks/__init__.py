@@ -37,8 +37,17 @@ celery_app.conf.update(include=[
 ])
 
 # Worker 日志落 backend/logs/app-worker.log (与 API 的 app.log 分进程, 避免多进程轮转交错)
-from celery.signals import worker_ready
+from celery.signals import worker_process_init, worker_ready
 from app.core.logging_setup import setup_worker_logging
+
+
+@worker_process_init.connect
+def _init_worker_redis(**_kwargs):
+    # Celery worker 不经过 FastAPI lifespan，redis_client.redis 恒为 None，
+    # 任务里的 SSE send_message 会静默失败（'NoneType' has no attribute 'lpush'）
+    import asyncio
+    from app.core.redis import redis_client
+    asyncio.run(redis_client.connect())
 
 
 @worker_ready.connect

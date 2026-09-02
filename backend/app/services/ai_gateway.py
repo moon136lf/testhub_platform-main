@@ -60,7 +60,7 @@ class GLMProvider(AIProvider):
             }
 
             payload = {
-                "model": kwargs.get("model", "glm5.2"),
+                "model": kwargs.get("model", "glm-5.2"),
                 "messages": messages,
                 "temperature": kwargs.get("temperature", 0.7),
                 "max_tokens": kwargs.get("max_tokens", 2000)
@@ -82,7 +82,7 @@ class GLMProvider(AIProvider):
                 return {"content": content, "tokens": tokens}
 
         except Exception as e:
-            logger.error(f"GLM chat failed: {e}")
+            logger.error(f"GLM chat failed | provider=glm model={payload.get('model')} messages_len={len(messages)}: {e}")
             raise
 
 
@@ -129,7 +129,7 @@ class QwenProvider(AIProvider):
                 return {"content": content, "tokens": tokens}
 
         except Exception as e:
-            logger.error(f"Qwen chat failed: {e}")
+            logger.error(f"Qwen chat failed | provider=qwen model={payload.get('model')}: {e}")
             raise
 
     async def generate_embedding(self, text: str) -> List[float]:
@@ -160,7 +160,7 @@ class QwenProvider(AIProvider):
                 return embedding
 
         except Exception as e:
-            logger.error(f"Qwen embedding failed: {e}")
+            logger.error(f"Qwen embedding failed | provider=qwen model=text-embedding-v3 text_len={len(text)}: {e}")
             raise
 
     def _build_prompt(self, messages: List[Dict]) -> str:
@@ -212,7 +212,7 @@ class DeepSeekProvider(AIProvider):
                 return {"content": content, "tokens": tokens}
 
         except Exception as e:
-            logger.error(f"DeepSeek chat failed: {e}")
+            logger.error(f"DeepSeek chat failed | provider=deepseek model={payload.get('model')} messages_len={len(messages)}: {e}")
             raise
 
 
@@ -264,7 +264,7 @@ class ClaudeProvider(AIProvider):
                 return {"content": content, "tokens": tokens}
 
         except Exception as e:
-            logger.error(f"Claude chat failed: {e}")
+            logger.error(f"Claude chat failed | provider=claude model={payload.get('model')} messages_len={len(messages)}: {e}")
             raise
 
 
@@ -299,7 +299,7 @@ class MoonshotProvider(AIProvider):
                 logger.info(f"Moonshot chat completed, tokens: {tokens}")
                 return {"content": content, "tokens": tokens}
         except Exception as e:
-            logger.error(f"Moonshot chat failed: {e}")
+            logger.error(f"Moonshot chat failed | provider=moonshot model={payload.get('model')} messages_len={len(messages)}: {e}")
             raise
 
 
@@ -393,7 +393,7 @@ class AIGateway:
                     status="success",
                 )
             except Exception as e:
-                logger.warning(f"AI call logging failed (non-blocking): {e}")
+                logger.warning(f"AI call logging failed (non-blocking) | project_id={project_id} provider={provider_name} stage={stage}: {e}")
 
         return result
 
@@ -423,7 +423,7 @@ class AIGateway:
             provider_name = provider_name.strip()
 
             if provider_name not in self._providers:
-                logger.warning(f"Provider '{provider_name}' not available, skipping")
+                logger.warning(f"Provider '{provider_name}' not available, skipping | messages_len={len(messages)}")
                 continue
 
             try:
@@ -433,7 +433,7 @@ class AIGateway:
                 return result
 
             except Exception as e:
-                logger.warning(f"Provider '{provider_name}' failed: {e}")
+                logger.warning(f"Provider '{provider_name}' failed | messages_len={len(messages)}: {e}")
                 last_error = e
                 continue
 
