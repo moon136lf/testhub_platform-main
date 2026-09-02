@@ -116,11 +116,14 @@ class TestRegressionEndpoints:
     def test_push_calls_notifier(self):
         from app.api.v1 import regression as reg_mod
 
-        with patch("app.services.notifier.notify_report_ready", AsyncMock()) as nr:
+        async def fake_notify(exec_id, meta):
+            return {"pushed": True, "channels": {"dingtalk": "ok"}}
+
+        with patch("app.services.notifier.notify_report_ready", fake_notify):
             client = _client()
             resp = client.post(f"/api/v1/regression/{UUID1}/push")
         assert resp.json()["data"]["pushed"] is True
-        nr.assert_awaited_once()
+        assert resp.json()["data"]["channels"] == {"dingtalk": "ok"}
 
     def test_report_summary(self):
         from app.api.v1 import regression as reg_mod

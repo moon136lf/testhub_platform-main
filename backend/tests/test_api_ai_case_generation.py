@@ -364,7 +364,10 @@ class TestGenerateCasesEndpoint:
         mock_result_points = MagicMock()
         mock_result_points.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=mock_points)))
 
-        mock_db.execute.side_effect = [mock_result_project, mock_result_points]
+        # 会话查询（session 行存在分支）→ 加一个返回 None 的结果
+        mock_result_session = MagicMock()
+        mock_result_session.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db.execute.side_effect = [mock_result_project, mock_result_points, mock_result_session]
 
         # Mock Celery task - patch the module attribute referenced by the API
         with patch('app.api.v1.ai_case_generation.generate_test_cases_task') as mock_task:

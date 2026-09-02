@@ -3,6 +3,7 @@
 Rule layer (free, no tokens) runs first; LLM layer (optional) supplements.
 Rules adapted from docs/skills-reference/testcase-to-script-skill.md (case-layer).
 """
+import json
 import logging
 from typing import Dict, List, Optional, Any
 
@@ -40,7 +41,10 @@ class CaseRefiner:
 
     def refine_sync(self, case: Dict, page_elements: Optional[List] = None,
                     llm_enhance: bool = True) -> Dict:
-        """同步精修。返回 refinement_report dict。"""
+        """同步精修。返回 refinement_report dict。
+
+        异常路径维度若 llm_enhance=False 则跳过（LLM 建议为 async）。
+        """
         suggestions: List[Dict] = []
         sid = 0
 
@@ -58,9 +62,7 @@ class CaseRefiner:
         suggestions.extend(self._check_assertions(case))
         # 维度4 数据准备/清理
         suggestions.extend(self._check_data_setup(case))
-        # 维度3 异常路径（LLM，此处占位简化）
-        if llm_enhance:
-            suggestions.extend(self._suggest_exception_paths_sync(case))
+        # 维度3 异常路径：LLM 版为 async，由 refine_case 调用后合并
         # 维度5 可行性
         feas = self._assess_feasibility(case, page_elements)
 
@@ -135,13 +137,51 @@ class CaseRefiner:
             })
         return out
 
-    # 维度3（LLM 占位 — 真实 LLM 调用在异步/扩展时接入）
-    def _suggest_exception_paths_sync(self, case) -> List[Dict]:
-        return [{
-            "id": "S_e1", "dimension": "异常路径补充", "severity": "low",
-            "target_step": None, "issue": "主流程未覆盖异常分支",
-            "suggestion": "补充密码错误/超时/空值等异常路径", "status": "pending",
-        }]
+    # 维度3：异常路径建议（LLM 真实化——按用例内容定制；LLM 失败降级为通用提示）
+    async def _suggest_exception_paths(self, case) -> List[Dict]:
+        try:
+            from app.services.ai_gateway import ai_gateway
+
+            steps_text = "\n".join(
+                f"{i+1}. [{s.get('action','')}] {s.get('target','')} → {s.get('expected','')}"
+                for i, s in enumerate(case.get("steps", []))
+            )
+            system_prompt = "你是测试用例评审专家。只输出 JSON，不要其他文字。"
+            user_prompt = f"""分析以下测试用例，找出主流程未覆盖的异常分支，给出最多 3 条补充建议。
+
+用例名称：{case.get('name', '')}
+前置条件：{case.get('precondition', '')}
+步骤：
+{steps_text}
+预期结果：{case.get('expected_result', '')}
+
+输出 JSON 数组，每项: {{"issue": "缺少的异常分支描述", "suggestion": "具体补充建议"}}
+只输出 JSON 数组。"""
+
+            response = await ai_gateway.chat(
+                [{"role": "system", "content": system_prompt},
+                 {"role": "user", "content": user_prompt}],
+                stage="refine",
+                max_tokens=1000,
+            )
+            data = json.loads(response["content"])
+            out = []
+            for i, item in enumerate(data if isinstance(data, list) else []):
+                out.append({
+                    "id": f"S_e{i+1}", "dimension": "异常路径补充", "severity": "low",
+                    "target_step": None, "issue": item.get("issue", ""),
+                    "suggestion": item.get("suggestion", ""), "status": "pending",
+                })
+            return out
+        except Exception as e:
+            # LLM 不可用/格式异常 → 降级为通用提示（不阻塞精修主流程）
+            logger.warning(f"LLM exception-path suggestion failed, fallback to generic: {e}")
+            return [{
+                "id": "S_e1", "dimension": "异常路径补充", "severity": "low",
+                "target_step": None, "issue": "主流程未覆盖异常分支",
+                "suggestion": "补充异常输入、超时、网络异常等路径（AI 分析暂不可用，此为通用建议）",
+                "status": "pending",
+            }]
 
     # 维度5
     def _assess_feasibility(self, case, page_elements: Optional[List]) -> Dict:

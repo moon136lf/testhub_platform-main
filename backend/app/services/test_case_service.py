@@ -447,6 +447,16 @@ class TestCaseService:
             }
             refiner = CaseRefiner()
             report = refiner.refine_sync(case_dict, page_elements=None)
+            # 维度3 异常路径：LLM 分析（失败降级为通用提示，不阻塞）
+            try:
+                llm_suggestions = await refiner._suggest_exception_paths(case_dict)
+                report["suggestions"] = (report.get("suggestions") or []) + llm_suggestions
+                # 建议增加会拉低评分，重算
+                report["score"] = refiner._calculate_score(
+                    report["suggestions"], report.get("normativity", {})
+                )
+            except Exception as llm_err:
+                logger.warning(f"LLM exception-path merge failed (non-blocking): {llm_err}")
             case.refinement_report = report
             case.feasibility_level = report.get("feasibility_level")
             case.cannot_automate_reason = report.get("cannot_automate_reason")
