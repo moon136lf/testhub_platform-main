@@ -27,6 +27,7 @@ powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='py
 
 REM 3. backend api
 echo [3/6] start backend api (port 8000)...
+set LOG_LEVEL=INFO
 start "MoonTest-API" cmd /k "cd /d D:\MoonTest\backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 REM 4. celery worker

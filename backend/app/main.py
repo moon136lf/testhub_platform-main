@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import time
 import logging
 
 from app.core.config import settings
@@ -60,10 +61,25 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - start) * 1000
+    line = f"{request.method} {request.url.path} -> {response.status_code} ({ms:.0f}ms)"
+    if response.status_code >= 500:
+        logger.error(line)
+    elif ms >= 3000:
+        logger.warning(line)
+    else:
+        logger.info(line)
+    return response
+
+
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global exception: {exc}", exc_info=True)
+    logger.exception(f"Unhandled exception | {request.method} {request.url.path}: {exc}")
     return JSONResponse(
         status_code=500,
         content={
