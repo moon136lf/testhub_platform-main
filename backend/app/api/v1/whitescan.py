@@ -103,7 +103,7 @@ async def generate_cases(scan_id: str, project_id: str = Query(...),
         from app.services.functional_case_generator import FunctionalCaseGenerator
         from app.services.ai_gateway import AIGateway
         gen = FunctionalCaseGenerator(db=db, gateway=AIGateway())
-        result = await gen.generate_from_repo(project_id, repo_path)
+        result = await gen.generate_from_repo(project_id, repo_path, source_id=scan_id)
         return {"code": 0, "data": result}
     finally:
         shutil.rmtree(repo_path, ignore_errors=True)

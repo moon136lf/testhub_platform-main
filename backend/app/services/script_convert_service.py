@@ -1,12 +1,16 @@
 # backend/app/services/script_convert_service.py
 """转脚本编排: ConvertSession 生命周期 + 5 步调用 + SSE + Token。"""
 import logging
+from datetime import datetime
+
+from sqlalchemy import select
 
 from app.services.script_pipeline import (
     step0_normalize, step1_to_actions, step2_to_assertions,
     step3_match_locators, step4_generate_code, NormalizeError,
 )
 from app.services.script_validator import validate_script
+from app.services.batch_naming import build_script_name
 from app.models.test_case import ScriptAsset
 
 logger = logging.getLogger(__name__)
@@ -56,13 +60,28 @@ class ScriptConvertService:
                                    progress=0.9)
 
         status = "generated" if report.all_pass() else "draft"
+        # #case-batch T4: 命名联动 — 有批次名用 批次名-自动化脚本HHmmss, 否则回退用例标题;
+        # project_id+name 唯一约束, 撞名追加 -2/-3 (逐个查重)
+        batch_name = case.get("batch_name")
+        taken = set()
+        if case.get("project_id"):
+            base = (f"{batch_name}-自动化脚本{datetime.now().strftime('%H%M%S')}"
+                    if batch_name else normalized.title)
+            r = await self.db.execute(
+                select(ScriptAsset.name).where(
+                    ScriptAsset.project_id == case["project_id"],
+                    ScriptAsset.name.like(f"{base}%")))
+            taken = set(r.scalars().all())
+        name = build_script_name(batch_name, normalized.title,
+                                 datetime.now(), taken=taken)
         asset = ScriptAsset(
             case_id=case_id, project_id=case.get("project_id"),
-            name=normalized.title, description=case.get("expected_result"),
+            name=name, description=case.get("expected_result"),
             content=gen.script, version=1, status=status,
             category="uncategorized", module=case.get("module"),
             step_mapping=gen.step_mapping,
             locator_source=gen.locator_source, last_status="never_run",
+            batch_name=batch_name,
         )
         await sse.send_message(type="system", stage="convert_script",
                                content="转换完成，脚本已生成", progress=1.0,

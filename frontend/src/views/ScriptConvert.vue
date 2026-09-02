@@ -96,6 +96,7 @@
           <el-table :data="scripts" border style="margin-top: 12px" @selection-change="onSelectionChange">
             <el-table-column type="selection" width="45" />
             <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="batch_name" label="来源批次" min-width="200" show-overflow-tooltip />
             <el-table-column prop="category" label="分类" width="110" />
             <el-table-column prop="status" label="状态" width="100" />
             <el-table-column prop="last_status" label="上次结果" width="100">

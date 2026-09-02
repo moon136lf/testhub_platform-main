@@ -78,6 +78,8 @@ class TestCase(Base):
     is_deleted = Column(Boolean, default=False)
     # W9: whitescan regression case source (NULL = not whitescan-generated)
     source_issue_id = Column(UUID(as_uuid=True), ForeignKey("code_issue.id", ondelete="SET NULL"), nullable=True)
+    # 批次归属（用例管理记录层, case_batch.id）; NULL=历史遗留(将被清理)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("case_batch.id", ondelete="SET NULL"), nullable=True)
 
     def to_dict(self):
         return {
@@ -103,7 +105,9 @@ class TestCase(Base):
             "cannot_automate_reason": self.cannot_automate_reason,
             "refinement_report": self.refinement_report,
             "refined_at": self.refined_at.isoformat() if self.refined_at else None,
-            "is_deleted": self.is_deleted
+            "is_deleted": self.is_deleted,
+            "source_issue_id": str(self.source_issue_id) if self.source_issue_id else None,
+            "batch_id": str(self.batch_id) if self.batch_id else None
         }
 
 
@@ -132,6 +136,8 @@ class ScriptAsset(Base):
     category = Column(String(20), default="uncategorized")
     module = Column(String(50))
     last_status = Column(String(20), default="never_run")
+    # 所属用例生成批次名（冗余，脚本库展示来源）
+    batch_name = Column(String(200))
     run_count = Column(Integer, default=0)
     last_run_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -176,6 +182,7 @@ class ScriptAsset(Base):
             "category": self.category,
             "module": self.module,
             "last_status": self.last_status,
+            "batch_name": self.batch_name,
             "run_count": self.run_count,
             "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,

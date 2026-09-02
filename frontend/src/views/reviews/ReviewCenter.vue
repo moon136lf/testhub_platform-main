@@ -27,16 +27,20 @@
         </el-form-item>
       </el-form>
 
-      <!-- ② 汇总统计 -->
-      <el-row :gutter="16" style="margin-bottom: 16px" v-if="stats">
-        <el-col :span="5"><div class="stat"><div class="num">{{ stats.total_cases }}</div><div class="lbl">总用例</div></div></el-col>
-        <el-col :span="5"><div class="stat"><div class="num">{{ stats.review_status.pending || 0 }}</div><div class="lbl">待评审</div></div></el-col>
-        <el-col :span="5"><div class="stat"><div class="num pass">{{ stats.review_status.passed || 0 }}</div><div class="lbl">已通过</div></div></el-col>
-        <el-col :span="5"><div class="stat"><div class="num fail">{{ stats.review_status.needs_revision || 0 }}</div><div class="lbl">需修改</div></div></el-col>
-        <el-col :span="4"><div class="stat"><div class="num rate">{{ stats.automation_rate }}%</div><div class="lbl">可自动化率</div></div></el-col>
-      </el-row>
-      <el-progress v-if="stats" :percentage="stats.automation_rate" :stroke-width="8"
-        :format="() => `可自动化 ${stats.automation_rate}%`" style="margin-bottom: 16px" />
+      <!-- ② 汇总统计（预筛选模式下项目级统计与筛选列表语义不符，隐藏并注明来源） -->
+      <template v-if="!isPreFiltered">
+        <el-row :gutter="16" style="margin-bottom: 16px" v-if="stats">
+          <el-col :span="5"><div class="stat"><div class="num">{{ stats.total_cases }}</div><div class="lbl">总用例</div></div></el-col>
+          <el-col :span="5"><div class="stat"><div class="num">{{ stats.review_status.pending || 0 }}</div><div class="lbl">待评审</div></div></el-col>
+          <el-col :span="5"><div class="stat"><div class="num pass">{{ stats.review_status.passed || 0 }}</div><div class="lbl">已通过</div></div></el-col>
+          <el-col :span="5"><div class="stat"><div class="num fail">{{ stats.review_status.needs_revision || 0 }}</div><div class="lbl">需修改</div></div></el-col>
+          <el-col :span="4"><div class="stat"><div class="num rate">{{ stats.automation_rate }}%</div><div class="lbl">可自动化率</div></div></el-col>
+        </el-row>
+        <el-progress v-if="stats" :percentage="stats.automation_rate" :stroke-width="8"
+          :format="() => `可自动化 ${stats.automation_rate}%`" style="margin-bottom: 16px" />
+      </template>
+      <el-alert v-else type="info" :closable="false" title="已按生成记录筛选"
+        description="当前列表为来源页面勾选/批内的用例，项目级汇总统计与精修报告已隐藏。" style="margin-bottom: 16px" />
 
       <!-- ③ 用例列表 + 批量 -->
       <div style="margin-bottom: 12px">
@@ -117,9 +121,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { reviewAPI } from '@/api/review.js'
 import { projectAPI } from '@/api/project.js'
+
+const route = useRoute()
 
 const loading = ref(false)
 const refining = ref(false)
@@ -138,8 +145,17 @@ const statusTag = (s) => ({ passed: 'success', needs_revision: 'danger', pending
 const statusLabel = (s) => ({ passed: '已通过', needs_revision: '需修改', pending: '待评审' }[s] || s || '待评审')
 
 // 评审状态筛选在前端做（后端列表接口无 review_status 筛选参数）
+// #case-batch T3: 支持路由 query 预筛选 —— case_ids（优先）/ batch_id（前端过滤批内用例）
+const preCaseIds = ref(null)
+const preBatchId = ref(null)
+// #case-batch T3 (I2): 预筛选模式下隐藏项目级统计/报告
+const isPreFiltered = computed(() => !!(preCaseIds.value || preBatchId.value))
 const filteredCases = computed(() =>
-  cases.value.filter(c => !reviewFilter.value || c.review_status === reviewFilter.value)
+  cases.value.filter(c => {
+    if (preCaseIds.value && !preCaseIds.value.includes(c.id)) return false
+    if (!preCaseIds.value && preBatchId.value && c.batch_id !== preBatchId.value) return false
+    return !reviewFilter.value || c.review_status === reviewFilter.value
+  })
 )
 
 const loadProjects = async () => {
@@ -230,7 +246,41 @@ const onApplyAll = async () => {
   } catch (e) { ElMessage.error('应用失败') } finally { loading.value = false }
 }
 
-onMounted(loadProjects)
+onMounted(async () => {
+  // #case-batch T3: 路由 query 预筛选（CaseDetail 勾选用例跳转而来）
+  if (route.query.case_ids) {
+    preCaseIds.value = String(route.query.case_ids).split(',').filter(Boolean)
+  }
+  if (route.query.batch_id) {
+    preBatchId.value = String(route.query.batch_id)
+  }
+  if (!preCaseIds.value && !preBatchId.value) {
+    loadProjects()
+    return
+  }
+  // 预筛选模式：加载项目下拉但不自动触发全量加载
+  try {
+    const res = await projectAPI.list()
+    projects.value = Array.isArray(res) ? res : (res?.items || [])
+  } catch (e) { console.error(e) }
+  if (preCaseIds.value) {
+    // 优先用来源页面传入的 project_id（CaseDetail goReview），避免只拉到第一个项目的用例
+    const targetProject = route.query.project_id || projects.value[0]?.id
+    if (targetProject) projectId.value = targetProject
+    await loadCasesForPreFilter()
+  } else {
+    // 仅 batch_id：走现有项目加载流程，computed 内按 batch_id 过滤
+    if (projects.value.length) { projectId.value = projects.value[0].id; loadAll() }
+  }
+})
+
+// 预筛选 case_ids：绕过项目维度限制，直接加载列表后由 computed 过滤
+const loadCasesForPreFilter = async () => {
+  loading.value = true
+  try {
+    cases.value = await reviewAPI.listCasesWithReview(projectId.value)
+  } catch (e) { console.error(e) } finally { loading.value = false }
+}
 </script>
 
 <style scoped>

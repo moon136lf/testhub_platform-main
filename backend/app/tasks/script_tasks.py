@@ -57,16 +57,24 @@ def convert_scripts_task(self, session_id: str, case_ids: list, project_id: str,
     import asyncio
     from sqlalchemy import select
     from app.models.test_case import TestCase, ScriptAsset, TestPoint
+    from app.models.case_batch import CaseBatch
 
     async def _run():
         async with AsyncSessionLocal() as db:
+            # #case-batch T4: 联查批次名 (脚本命名 + 脚本库来源列)
             result = await db.execute(
-                select(TestCase).where(
+                select(TestCase, CaseBatch.batch_name)
+                .outerjoin(CaseBatch, TestCase.batch_id == CaseBatch.id)
+                .where(
                     TestCase.id.in_([uuid.UUID(c) for c in case_ids]),
                     TestCase.is_finalized.is_(True),
                 )
             )
-            cases = [c.to_dict() for c in result.scalars().all()]
+            cases = []
+            for tc, batch_name in result.all():
+                d = tc.to_dict()
+                d["batch_name"] = batch_name
+                cases.append(d)
             # #8 偏差 J: module 从 TestCase.point_id → TestPoint.page_name 推导
             point_ids = {c.get("point_id") for c in cases if c.get("point_id")}
             page_by_point = {}

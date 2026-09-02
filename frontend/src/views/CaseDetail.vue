@@ -1,6 +1,84 @@
 <template>
   <div class="case-detail-page">
-    <el-card v-loading="loading">
+    <!-- 批内用例模式（#case-batch T3）：来自生成记录列表的「查看」入口 -->
+    <el-card v-if="batchMode" v-loading="loading">
+      <template #header>
+        <div class="detail-header">
+          <div class="header-left">
+            <el-button :icon="ArrowLeft" @click="goBack">返回</el-button>
+            <span class="page-title">批内用例</span>
+          </div>
+          <div class="header-actions">
+            <el-button
+              type="success" plain :icon="Check"
+              :disabled="!selectedCases.length"
+              :loading="finalizing"
+              @click="handleBatchFinalize"
+            >
+              批量定稿
+            </el-button>
+            <el-button
+              type="primary" plain :icon="View"
+              :disabled="!selectedCases.length"
+              @click="goReview"
+            >
+              用例评审
+            </el-button>
+            <el-button
+              type="warning" plain :icon="MagicStick"
+              :disabled="!selectedCases.length"
+              :loading="converting"
+              @click="goConvert"
+            >
+              用例转自动化脚本
+            </el-button>
+          </div>
+        </div>
+      </template>
+
+      <el-alert type="info" :closable="false" style="margin-bottom: 16px">
+        生成记录：{{ batchName }}（共 {{ cases.length }} 条用例）
+      </el-alert>
+
+      <el-table :data="cases" stripe @selection-change="s => (selectedCases = s)">
+        <el-table-column type="selection" width="50" />
+        <el-table-column prop="name" label="用例名称" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link type="primary" @click="openCase(row)">{{ row.name }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column prop="priority" label="优先级" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getPriorityType(row.priority)">{{ row.priority }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="case_type" label="用例类型" width="110">
+          <template #default="{ row }">{{ getCaseTypeLabel(row.case_type) }}</template>
+        </el-table-column>
+        <el-table-column prop="is_finalized" label="定稿状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.is_finalized ? 'success' : 'info'">
+              {{ row.is_finalized ? '已定稿' : '草稿' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="automation_status" label="自动化状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="getAutomationStatusType(row.automation_status)">
+              {{ getAutomationStatusLabel(row.automation_status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="openCase(row)">详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <!-- 单用例详情模式（原有逻辑，路由 /cases/:id） -->
+    <el-card v-else v-loading="loading">
       <!-- 顶部操作栏 -->
       <template #header>
         <div class="detail-header">
@@ -288,10 +366,11 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Edit, Delete, Check, Close } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Delete, Check, Close, View, MagicStick } from '@element-plus/icons-vue'
 import CaseForm from '@/components/testCase/CaseForm.vue'
 import { testCaseAPI } from '@/api/testCase.js'
 import { projectAPI } from '@/api/project.js'
+import { scriptAPI } from '@/api/script.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -303,6 +382,92 @@ const caseData = ref(null)
 const editData = ref({})
 const projects = ref([])
 const caseFormRef = ref(null)
+
+// ---- 批内用例模式（#case-batch T3）----
+const batchMode = ref(false)
+const batchId = ref('')
+const batchName = ref('')
+const cases = ref([])
+const selectedCases = ref([])
+const finalizing = ref(false)
+const converting = ref(false)
+
+const loadBatchCases = async () => {
+  loading.value = true
+  try {
+    const res = await testCaseAPI.listBatchCases(batchId.value)
+    const data = (res && res.data) || res
+    cases.value = Array.isArray(data) ? data : (data.items || [])
+  } catch (error) {
+    ElMessage.error('加载批内用例失败: ' + (error.message || error))
+  } finally {
+    loading.value = false
+  }
+}
+
+const openCase = (row) => {
+  router.push({ name: 'CaseDetail', params: { id: row.id } })
+}
+
+const handleBatchFinalize = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定将选中的 ${selectedCases.value.length} 个用例标记为已定稿吗？`,
+      '确认批量定稿',
+      { type: 'info' }
+    )
+    finalizing.value = true
+    const res = await testCaseAPI.batchOperation({
+      action: 'finalize',
+      case_ids: selectedCases.value.map(c => c.id)
+    })
+    ElMessage.success(`成功定稿 ${res.success_count} 个用例`)
+    await loadBatchCases()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('批量定稿失败: ' + (error.message || error))
+    }
+  } finally {
+    finalizing.value = false
+  }
+}
+
+const goReview = () => {
+  // 传 project_id 供 ReviewCenter 预筛选拉取正确项目的用例列表
+  router.push({
+    name: 'ReviewCenter',
+    query: {
+      batch_id: batchId.value,
+      case_ids: selectedCases.value.map(c => c.id).join(','),
+      project_id: cases.value[0]?.project_id
+    }
+  })
+}
+
+const goConvert = async () => {
+  const caseIds = selectedCases.value.map(c => c.id)
+  if (!caseIds.length) return
+  converting.value = true
+  try {
+    const projectId = cases.value[0]?.project_id
+    if (!projectId) {
+      ElMessage.warning('无法确定项目，请从用例详情发起转换')
+      return
+    }
+    const res = await scriptAPI.convert(projectId, caseIds, false)
+    if (res?.data?.session_id) {
+      // subscribe 建立真实 EventSource 连接（/api/sse/stream/{id}），保活会话流；
+      // 转换结果由后端自动入脚本库，前端无需处理消息，故回调为空
+      scriptAPI.subscribe(res.data.session_id, () => {}, () => {})
+    }
+    ElMessage.success('转换任务已提交，脚本将自动入脚本库')
+    await loadBatchCases()
+  } catch (error) {
+    ElMessage.error('提交转换失败: ' + (error.message || error))
+  } finally {
+    converting.value = false
+  }
+}
 
 // W3/W5 状态
 const versions = ref([])
@@ -423,6 +588,7 @@ const loadProjects = async () => {
 }
 
 const goBack = () => {
+  // 批内用例模式与单用例模式均返回用例管理页
   router.push({ name: 'Cases' })
 }
 
@@ -539,6 +705,15 @@ const handleRollback = async (version) => {
 }
 
 onMounted(() => {
+  // #case-batch T3: 有 batch_id query 时进入批内用例模式
+  if (route.query.batch_id) {
+    batchMode.value = true
+    batchId.value = String(route.query.batch_id)
+    batchName.value = String(route.query.batch_name || '未命名记录')
+    loadProjects()
+    loadBatchCases()
+    return
+  }
   loadProjects()
   loadCaseDetail()
 })

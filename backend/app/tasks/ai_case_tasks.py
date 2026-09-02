@@ -519,6 +519,32 @@ async def _generate_test_cases_async(
         generator = TestCaseGenerator()
         detector = HallucinationDetector(UUID(project_id), hallucination_strategy)
 
+        # 挂生成批次: 取最近 GenerationSession 的需求文本前50字做批次名
+        from app.services.case_batch_service import CaseBatchService
+        from app.models.generation import GenerationSession
+        batch_id = None
+        batch_generated = 0
+        batch_svc = None
+        try:
+            r = await db.execute(select(GenerationSession).where(
+                GenerationSession.project_id == UUID(project_id)).order_by(
+                GenerationSession.created_at.desc()).limit(1))
+            gs = r.scalar_one_or_none()
+            req_text = (gs.document_content or "")[:50] if gs else None
+            batch_svc = CaseBatchService(db)
+            batch = await batch_svc.create_batch(project_id, "ai_generate",
+                                                 requirement=req_text)
+            batch_id = batch.id
+            # 逐用例 commit 模式下, 批次行必须先落库 commit——否则后续某条
+            # 用例失败 rollback 会把未提交的批次行一起回滚, 造成 batch_id FK 悬空
+            await db.commit()
+        except Exception as e:
+            logger.warning(f"create ai_generate batch failed, continue without batch: {e}")
+            try:
+                await db.rollback()  # 清理会话失败态, 避免影响后续逐用例保存
+            except Exception:
+                pass
+
         for index, point_id in enumerate(point_ids):
             progress = (index + 1) / total
 
@@ -585,11 +611,13 @@ async def _generate_test_cases_async(
                         steps=case_data.get("steps", []),
                         expected_result=case_data.get("expected_result", ""),
                         hallucination_status=hallucination_result.get("status", "unknown"),
-                        is_finalized=False
+                        is_finalized=False,
+                        batch_id=batch_id
                     )
                     db.add(test_case)
                     await db.commit()  # Commit each case individually
                     success_count += 1
+                    batch_generated += 1
 
                 except Exception as e:
                     logger.error(f"Database save failed for point {point_id}: {e}")
@@ -610,6 +638,13 @@ async def _generate_test_cases_async(
                 failed_count += 1
                 await db.rollback()
                 continue
+
+        # 回填批次用例数
+        if batch_svc is not None and batch_id is not None:
+            try:
+                await batch_svc.update_case_count(batch_id, batch_generated)
+            except Exception as e:
+                logger.warning(f"update case batch count failed: {e}")
 
         # Send completion message
         if failed_count > 0:

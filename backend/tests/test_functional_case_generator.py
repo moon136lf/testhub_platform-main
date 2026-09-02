@@ -7,6 +7,7 @@ def asyncio_run(coro): return asyncio.run(coro)
 
 
 def _make_db(existing_titles=()):
+    from app.models.case_batch import CaseBatch
     db = MagicMock()
     # execute 用于查重; added 收集落库对象
     results = []
@@ -18,6 +19,11 @@ def _make_db(existing_titles=()):
     db.added = []
 
     async def execute(q):
+        # CaseBatch 查重 → 不存在; 其余按队列 (title 查重)
+        if "case_batch" in str(q):
+            r = MagicMock()
+            r.scalar_one_or_none.return_value = None
+            return r
         if db._results:
             return db._results.pop(0)
         r = MagicMock()
@@ -28,7 +34,21 @@ def _make_db(existing_titles=()):
     db.add = lambda o: db.added.append(o)
     async def _flush(): pass
     db.flush = _flush
+    async def _get(cls, bid):
+        return None
+    db.get = _get
     return db
+
+
+def _added_cases(db):
+    """db.added 中的 TestCase（前两项是 CaseBatch）。"""
+    from app.models.test_case import TestCase
+    return [o for o in db.added if isinstance(o, TestCase)]
+
+
+def _added_batches(db):
+    from app.models.case_batch import CaseBatch
+    return [o for o in db.added if isinstance(o, CaseBatch)]
 
 
 def _gw_ok(batches):
@@ -66,8 +86,8 @@ class TestGenerateFromRepo:
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
         assert result["generated"] >= 2
-        assert len(db.added) >= 2
-        tc = db.added[0]
+        assert len(_added_cases(db)) >= 2
+        tc = _added_cases(db)[0]
         assert tc.project_id == "p1"
         assert "回归" in tc.name
         assert tc.case_type == "functional"
@@ -97,13 +117,21 @@ class TestGenerateFromRepo:
         db.added = []
         async def _flush(): pass
         db.flush = _flush
+        async def _execute(q):
+            r = MagicMock()
+            r.scalar_one_or_none.return_value = None
+            return r
+        db.execute = _execute
+        async def _get(cls, bid):
+            return None
+        db.get = _get
         gw = _gw_ok([MENU_JSON])
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         # 查重按生成的 title: monkeypatch _case_title_exists 返回 True
         gen._case_title_exists = AsyncMock(return_value=True)
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
         assert result["generated"] == 0
-        assert len(db.added) == 0
+        assert len(_added_cases(db)) == 0
 
     def test_non_dict_elements_skipped(self, tmp_path):
         """JSON 数组混入非 dict 元素 → 跳过不崩溃."""
@@ -119,8 +147,8 @@ class TestGenerateFromRepo:
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
         assert result["generated"] == 1
-        assert len(db.added) == 1
-        assert db.added[0].name.startswith("[回归]")
+        assert len(_added_cases(db)) == 1
+        assert _added_cases(db)[0].name.startswith("[回归]")
 
     def test_same_batch_duplicate_titles(self, tmp_path):
         """同批两个相同 title → 只落库一条."""
@@ -136,7 +164,7 @@ class TestGenerateFromRepo:
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
         assert result["generated"] == 1
-        assert len(db.added) == 1
+        assert len(_added_cases(db)) == 1
 
     def test_invalid_priority_defaults_p2(self, tmp_path):
         """priority 为非法值 → 默认 P2."""
@@ -151,7 +179,7 @@ class TestGenerateFromRepo:
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
         assert result["generated"] == 1
-        assert db.added[0].priority == "P2"
+        assert _added_cases(db)[0].priority == "P2"
 
     def test_garbage_steps_normalized(self, tmp_path):
         """LLM steps 含垃圾项 → 过滤+重编号; 全非法 → []."""
@@ -174,22 +202,60 @@ class TestGenerateFromRepo:
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
         assert result["generated"] == 2
-        s1 = db.added[0].steps
+        s1 = _added_cases(db)[0].steps
         assert [s["step"] for s in s1] == [1, 2]  # 过滤+重编号
         assert s1[0]["action"] == "合法动作"
-        assert db.added[1].steps == []  # 全非法 → 空
-        assert db.added[1].expected_result == ""
+        assert _added_cases(db)[1].steps == []  # 全非法 → 空
+        assert _added_cases(db)[1].expected_result == ""
+
+    def test_integrity_error_does_not_kill_subsequent_batches(self, tmp_path):
+        """批 flush IntegrityError 后, 后续批仍能正常落库（savepoint 隔离）. #T2 review Critical1"""
+        from contextlib import asynccontextmanager
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        from sqlalchemy.exc import IntegrityError
+        rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text(
+            "{ path: '/a', meta: { title: 'A' } },\n{ path: '/b', meta: { title: 'B' } },\n"
+            "{ path: '/c', meta: { title: 'C' } },\n{ path: '/d', meta: { title: 'D' } },\n"
+            "{ path: '/e', meta: { title: 'E' } },\n{ path: '/f', meta: { title: 'F' } },",
+            encoding="utf-8")  # 6 菜单 → 2 批
+        db = _make_db()
+        rolled_back = []
+        call_count = [0]
+        async def _flush():
+            call_count[0] += 1
+            # 批次建行 flush(2次) 放行; 第一批用例 flush 抛 IntegrityError, 之后成功
+            if len(db.added) > 2 and call_count[0] == 3:
+                raise IntegrityError("dup", None, Exception())
+        db.flush = _flush
+        db.rollback = lambda: rolled_back.append(True)
+        @asynccontextmanager
+        async def _nested():
+            yield
+        db.begin_nested = _nested
+        gw = _gw_ok([MENU_JSON, MENU_JSON.replace("仪表盘", "页面")])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        # 第一批失败计 failed, 第二批仍成功落库; 不应调用全局 rollback
+        assert result["generated"] >= 1
+        assert result["failed"] == 1
+        assert rolled_back == []
+        assert len(_added_cases(db)) >= 2  # 第二批用例仍被 add
 
     def test_flush_integrity_error_rolls_back(self, tmp_path):
-        """flush 抛 IntegrityError → rollback 被调用, 批计 failed."""
+        """flush 抛 IntegrityError → savepoint 隔离, 批计 failed, 不调全局 rollback. #T2 review"""
         from app.services.functional_case_generator import FunctionalCaseGenerator
         from sqlalchemy.exc import IntegrityError
         rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
         (rdir / "index.js").write_text("{ path: '/r', meta: { title: 'R' } }", encoding="utf-8")
         db = _make_db()
         rolled_back = []
+        call_count = [0]
         async def _flush():
-            raise IntegrityError("dup", None, Exception())
+            # 批次建行 flush(2次) 放行, 用例落库 flush 抛错
+            call_count[0] += 1
+            if len(db.added) > 2:
+                raise IntegrityError("dup", None, Exception())
         async def _rollback():
             rolled_back.append(True)
         db.flush = _flush
@@ -197,9 +263,10 @@ class TestGenerateFromRepo:
         gw = _gw_ok([MENU_JSON])
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        # flush 失败 → 该批计 failed; savepoint 隔离, 不应回滚外层事务
         assert result["generated"] == 0
         assert result["failed"] >= 1
-        assert rolled_back == [True]
+        assert rolled_back == []
 
 
 class TestPromptEnhancement:
@@ -247,4 +314,4 @@ class TestPromptEnhancement:
         gw = _gw_ok([API_JSON])
         gen = FunctionalCaseGenerator(db=db, gateway=gw)
         asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
-        assert db.added[0].name.startswith("[回归-接口]")
+        assert _added_cases(db)[0].name.startswith("[回归-接口]")

@@ -35,8 +35,10 @@ def test_task_runs_all_cases_and_writes_assets(monkeypatch):
     db.add = MagicMock()
     db.flush = AsyncMock()
     db.commit = AsyncMock()
-    # session lookup returns the case itself
-    db.execute = AsyncMock()
+    # session lookup returns the case itself; name-dup query -> no rows
+    dup_result = MagicMock()
+    dup_result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=dup_result)
     db.scalar_one_or_none = MagicMock(return_value=None)
 
     session_id = "s1"
@@ -67,7 +69,9 @@ def test_bad_llm_case_does_not_abort_batch(monkeypatch):
     db.add = MagicMock()
     db.flush = AsyncMock()
     db.commit = AsyncMock()
-    db.execute = AsyncMock()
+    dup_result = MagicMock()
+    dup_result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=dup_result)
     db.scalar_one_or_none = MagicMock(return_value=None)
 
     result = asyncio.run(script_tasks.convert_scripts_task_impl(

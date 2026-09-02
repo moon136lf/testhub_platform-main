@@ -4,10 +4,14 @@ Test Case API endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+from uuid import UUID
 
 from app.core.database import get_db
+from app.models.case_batch import CaseBatch
+from app.models.test_case import TestCase
 from app.services.test_case_service import get_test_case_service, TestCaseService
 from app.services.import_export_service import ImportExportService
 from app.schemas.test_case import (
@@ -76,6 +80,62 @@ async def import_test_cases(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/batches")
+async def list_case_batches(
+    project_id: UUID = Query(...),
+    batch_type: str | None = Query(None, pattern="^(whitescan_api|whitescan_ui|ai_generate|manual)$"),
+    keyword: str | None = Query(None, max_length=100),
+    page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """生成记录列表（用例管理记录层）。"""
+    try:
+        q = select(CaseBatch).where(CaseBatch.project_id == project_id)
+        if batch_type:
+            q = q.where(CaseBatch.batch_type == batch_type)
+        if keyword:
+            q = q.where(CaseBatch.batch_name.ilike(f"%{keyword}%"))
+        total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar() or 0
+        q = q.order_by(CaseBatch.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        rows = (await db.execute(q)).scalars().all()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    return {"code": 0, "data": {"items": [b.to_dict() for b in rows],
+                                "total": total, "page": page, "page_size": page_size}}
+
+
+@router.get("/batches/{batch_id}/cases")
+async def list_batch_cases(batch_id: UUID, db: AsyncSession = Depends(get_db)):
+    """批内用例列表（查看页数据源）。"""
+    try:
+        r = await db.execute(
+            select(TestCase).where(TestCase.batch_id == batch_id,
+                                   TestCase.is_deleted.is_(False))
+            .order_by(TestCase.created_at))
+        cases = r.scalars().all()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    return {"code": 0, "data": [c.to_dict() for c in cases]}
+
+
+@router.delete("/batches/{batch_id}", status_code=204)
+async def delete_case_batch(batch_id: UUID, db: AsyncSession = Depends(get_db)):
+    """删批次：软删批内全部用例 + 物理删批次行。"""
+    try:
+        batch = await db.get(CaseBatch, batch_id)
+        if not batch:
+            raise HTTPException(status_code=404, detail="批次不存在")
+        await db.execute(update(TestCase).where(TestCase.batch_id == batch_id)
+                         .values(is_deleted=True))
+        await db.delete(batch)
+        await db.commit()  # 显式提交: 批次行物理删除需立即生效
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
