@@ -5,6 +5,28 @@
 
 ---
 
+## 快照 #41 — 2026-09-02 20:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- 49e8018 feat(sse): reconnect limit — close after 3 consecutive failures (was infinite auto-reconnect)
+- 8df658f docs(logging): tick plan checkboxes T1-T5 (#logging complete)
+- 124d5df feat(logging): request log middleware + unhandled exception handler (#logging T4)
+- 0376202 test: update GLM default model assertion to glm-5.2 (follows 4b1bca7 real fix)
+- a1b7283 feat(logging): error logs carry context (ids/provider/model) + no silent swallows (#logging T3)
+- 4b1bca7 fix(sse): two-part fix for 'NoneType' has no attribute 'lrange' / empty SSE stream
+- 5c7dbbd docs: session archive #40 (auto)
+- c1652fe feat(logging): celery worker logs to app-worker.log (#logging T2)
+
+### 未提交变更
+- 未跟踪：`backend/.en`、`docs/REQUIREMENTS_V1.1.md`、`docs/SESSION_HANDOFF_2026-08-26.md`（暂不纳入版本管理）
+
+### 进度
+日志规范化 5 任务全部收官（T1 落文件+轮转、T2 worker 日志、T3 报错带上下文、T4 请求日志+异常兜底、T5 真实验证通过）；SSE 自动重连改为 3 次失败即关闭。
+
+---
+
 ## 快照 #40 — 2026-09-02 19:50（auto）
 
 **当前分支**：master（主仓）
