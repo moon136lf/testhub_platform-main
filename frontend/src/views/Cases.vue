@@ -1,42 +1,47 @@
 <template>
-  <div class="cases-management">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>用例管理</span>
-          <div class="header-actions">
-            <el-button type="primary" :icon="Plus" @click="showCreateDialog">新建用例</el-button>
-            <el-dropdown split-button type="success" @click="handleExport('xlsx')" @command="handleExport">
-              导出
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="xlsx">Excel (.xlsx)</el-dropdown-item>
-                  <el-dropdown-item command="json">JSON (.json)</el-dropdown-item>
-                  <el-dropdown-item command="xmind">XMind (.xmind)</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <el-button :icon="Upload" @click="triggerImport">导入</el-button>
-            <input ref="importInput" type="file" accept=".csv,.xlsx,.md" style="display:none" @change="handleImport" />
-            <el-button
-              type="danger"
-              :icon="Delete"
-              :disabled="selectedCases.length === 0"
-              @click="handleBatchDelete"
-            >
-              批量删除
-            </el-button>
-            <el-button
-              type="success"
-              :icon="Check"
-              :disabled="selectedCases.length === 0"
-              @click="handleBatchFinalize"
-            >
-              批量定稿
-            </el-button>
-          </div>
-        </div>
-      </template>
+  <div class="cases-management page-container">
+    <!-- 页头：标题 + 主操作组 -->
+    <div class="page-header">
+      <div>
+        <h2>用例管理</h2>
+        <div class="page-subtitle">管理测试用例：新建、导入导出、批量操作</div>
+      </div>
+      <div class="header-actions">
+        <el-button type="primary" :icon="Plus" @click="showCreateDialog">新建用例</el-button>
+        <el-dropdown split-button type="success" @click="handleExport('xlsx')" @command="handleExport">
+          导出
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="xlsx">Excel (.xlsx)</el-dropdown-item>
+              <el-dropdown-item command="json">JSON (.json)</el-dropdown-item>
+              <el-dropdown-item command="xmind">XMind (.xmind)</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button :icon="Upload" @click="triggerImport">导入</el-button>
+        <input ref="importInput" type="file" accept=".csv,.xlsx,.md" style="display:none" @change="handleImport" />
+        <el-button
+          type="danger"
+          plain
+          :icon="Delete"
+          :disabled="selectedCases.length === 0"
+          @click="handleBatchDelete"
+        >
+          批量删除
+        </el-button>
+        <el-button
+          type="success"
+          plain
+          :icon="Check"
+          :disabled="selectedCases.length === 0"
+          @click="handleBatchFinalize"
+        >
+          批量定稿
+        </el-button>
+      </div>
+    </div>
+
+    <el-card shadow="never">
 
       <!-- 筛选区域 -->
       <CaseFilter
@@ -520,14 +525,10 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.cases-management {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .header-actions {
@@ -545,14 +546,10 @@ onMounted(async () => {
   padding: 12px 0;
 }
 
-.steps-section {
-  margin-top: 24px;
-}
-
 .steps-section h3 {
   margin-bottom: 16px;
   font-size: 16px;
-  font-weight: 500;
-  color: #303133;
+  font-weight: 600;
+  color: var(--mt-text);
 }
 </style>

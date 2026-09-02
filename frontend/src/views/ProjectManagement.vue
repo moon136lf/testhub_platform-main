@@ -1,13 +1,15 @@
 <template>
-  <div class="project-management">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>项目管理</span>
-          <el-button type="primary" :icon="Plus" @click="showCreateDialog">新建项目</el-button>
-        </div>
-      </template>
+  <div class="project-management page-container">
+    <!-- 页头：标题 + 主操作 -->
+    <div class="page-header">
+      <div>
+        <h2>项目管理</h2>
+        <div class="page-subtitle">管理被测项目与目标应用</div>
+      </div>
+      <el-button type="primary" :icon="Plus" @click="showCreateDialog">新建项目</el-button>
+    </div>
 
+    <el-card shadow="never">
       <el-table :data="projects" v-loading="loading" stripe>
         <el-table-column prop="name" label="项目名称" min-width="150" />
         <el-table-column prop="code" label="项目编码" width="120" />
@@ -223,14 +225,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.project-management {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .pagination {

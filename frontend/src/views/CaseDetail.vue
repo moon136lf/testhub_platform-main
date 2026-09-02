@@ -105,12 +105,12 @@
             <div class="refine-header">
               <h3>评审与精修</h3>
               <div>
-                <el-button type="primary" size="small" :loading="refining" @click="handleRefine">
+                <el-button type="primary" :loading="refining" @click="handleRefine">
                   触发精修
                 </el-button>
                 <el-button
                   v-if="refinementReport && refinementReport.refined_case && refinementReport.refined_case.steps"
-                  type="success" size="small" :loading="applying" @click="handleApplyAll"
+                  type="success" plain :loading="applying" @click="handleApplyAll"
                 >
                   应用全部建议
                 </el-button>
@@ -563,8 +563,8 @@ onMounted(() => {
 
 .page-title {
   font-size: 18px;
-  font-weight: 500;
-  color: #303133;
+  font-weight: 600;
+  color: var(--mt-text);
 }
 
 .header-actions {
@@ -578,7 +578,7 @@ onMounted(() => {
 
 .info-card {
   margin-bottom: 20px;
-  border: 1px solid #EBEEF5;
+  border: 1px solid var(--mt-border);
 }
 
 .info-card:last-child {
@@ -588,19 +588,19 @@ onMounted(() => {
 .info-card h3 {
   margin: 0;
   font-size: 16px;
-  font-weight: 500;
-  color: #303133;
+  font-weight: 600;
+  color: var(--mt-text);
 }
 
 .text-content {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.6;
-  color: #606266;
+  color: var(--mt-text-secondary);
 }
 
 .empty-text {
-  color: #909399;
+  color: var(--mt-text-secondary);
   font-style: italic;
 }
 
@@ -621,13 +621,13 @@ onMounted(() => {
 .refine-score {
   margin-bottom: 8px;
   font-size: 14px;
-  color: #303133;
+  color: var(--mt-text);
 }
 
 .refine-norm {
   margin-top: 8px;
   font-size: 12px;
-  color: #909399;
+  color: var(--mt-text-secondary);
 }
 
 .version-item {
@@ -636,13 +636,13 @@ onMounted(() => {
 
 .version-meta {
   margin-left: 12px;
-  color: #909399;
+  color: var(--mt-text-secondary);
   font-size: 12px;
 }
 
 .version-diff {
   margin: 6px 0;
-  color: #606266;
+  color: var(--mt-text-secondary);
   font-size: 13px;
 }
 
