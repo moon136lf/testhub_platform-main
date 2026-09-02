@@ -176,6 +176,15 @@ async def upload_document(
             detail="Either file_bytes or text_content must be provided"
         )
 
+    # 前端以 base64 str 传输文件（JSON 数字数组会被 pydantic bytes 拒绝）；
+    # pydantic 收到 str 时按 utf-8 编码为 bytes（并非 base64 解码），此处还原
+    if request.file_bytes:
+        import base64 as _b64
+        try:
+            request.file_bytes = _b64.b64decode(request.file_bytes)
+        except Exception:
+            raise HTTPException(status_code=400, detail="file_bytes 不是合法的 base64")
+
     # Generate session_id
     session_id = str(uuid.uuid4())
 
