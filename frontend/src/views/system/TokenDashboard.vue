@@ -1,7 +1,14 @@
 <template>
-  <div class="token-dashboard">
-    <el-card style="margin-bottom: 16px">
-      <template #header><span>Token 成本管理</span></template>
+  <div class="token-dashboard page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>Token 成本管理</h2>
+        <div class="page-subtitle">配额用量与成本分布监控</div>
+      </div>
+    </div>
+
+    <el-card shadow="never" style="margin-bottom: 16px">
       <el-row :gutter="20" v-loading="loading">
         <el-col :span="12">
           <div class="stat">
@@ -163,7 +170,11 @@ onMounted(loadProjects)
 </script>
 
 <style scoped>
-.token-dashboard { padding: 20px; }
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
 .stat { text-align: center; }
 .stat-label { color: #909399; font-size: 13px; margin-bottom: 8px; }
 .stat-value { font-size: 24px; font-weight: 600; color: #303133; }

@@ -1,7 +1,14 @@
 <template>
-  <div class="review-center" v-loading="loading">
-    <el-card>
-      <template #header><span>用例评审与E2E精修</span></template>
+  <div class="review-center page-container" v-loading="loading">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>用例评审与 E2E 精修</h2>
+        <div class="page-subtitle">评审定稿用例，触发 AI 精修并应用建议</div>
+      </div>
+    </div>
+
+    <el-card shadow="never">
 
       <!-- ① 筛选 -->
       <el-form inline>
@@ -56,8 +63,8 @@
         </el-table-column>
         <el-table-column label="操作" width="140">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="onRefine(row)">精修</el-button>
-            <el-button link size="small" @click="onApply(row)">应用建议</el-button>
+            <el-button link type="primary" @click="onRefine(row)">精修</el-button>
+            <el-button link @click="onApply(row)">应用建议</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -78,7 +85,7 @@
           <el-table-column prop="status" label="状态" width="90" />
           <el-table-column label="操作" width="100">
             <template #default="{ row }">
-              <el-button v-if="row.status === 'pending'" link type="primary" size="small"
+              <el-button v-if="row.status === 'pending'" link type="primary"
                 @click="onApplyOne(row)">确认</el-button>
               <span v-else>-</span>
             </template>
@@ -227,7 +234,11 @@ onMounted(loadProjects)
 </script>
 
 <style scoped>
-.review-center { padding: 20px; }
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
 .stat { text-align: center; border: 1px solid #ebeef5; border-radius: 4px; padding: 12px; }
 .stat .num { font-size: 22px; font-weight: 600; }
 .stat .pass { color: #67c23a; } .stat .fail { color: #f56c6c; } .stat .rate { color: #409eff; }

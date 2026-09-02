@@ -1,15 +1,17 @@
 <template>
-  <div class="knowledge-management">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>知识库管理</span>
-          <el-button type="primary" :icon="Plus" @click="showUploadDialog">
-            上传文档
-          </el-button>
-        </div>
-      </template>
+  <div class="knowledge-management page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>知识库管理</h2>
+        <div class="page-subtitle">上传 PRD / 接口文档 / 测试规范，供 AI 生成时参考</div>
+      </div>
+      <el-button type="primary" :icon="Plus" @click="showUploadDialog">
+        上传文档
+      </el-button>
+    </div>
 
+    <el-card shadow="never">
       <el-form :inline="true" :model="queryParams">
         <el-form-item label="项目">
           <el-select v-model="queryParams.projectId" placeholder="选择项目" style="width: 200px" @change="loadDocuments">
@@ -46,7 +48,7 @@
       </el-form>
 
       <el-table :data="documents" border v-loading="loading">
-        <el-table-column prop="doc_name" label="文档名称" width="200" />
+        <el-table-column prop="doc_name" label="文档名称" min-width="200" />
         <el-table-column prop="doc_type" label="类型" width="100">
           <template #default="scope">
             <el-tag v-if="scope.row.doc_type === 'prd'" type="primary">PRD</el-tag>
@@ -72,19 +74,19 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
-            <el-button size="small" :icon="View" @click="viewDocument(scope.row)">查看</el-button>
+            <el-button type="primary" link :icon="View" @click="viewDocument(scope.row)">查看</el-button>
             <el-button
               v-if="scope.row.vector_status === 'failed'"
-              size="small"
               type="warning"
+              link
               :icon="RefreshRight"
               @click="retryVectorize(scope.row)"
             >
               重试
             </el-button>
             <el-button
-              size="small"
               type="danger"
+              link
               :icon="Delete"
               @click="deleteDocument(scope.row)"
             >
@@ -370,14 +372,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.knowledge-management {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .el-pagination {

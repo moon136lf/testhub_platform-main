@@ -122,10 +122,10 @@
             <el-table-column prop="locator_source" label="定位来源" width="130" />
             <el-table-column label="操作" width="280">
               <template #default="{ row }">
-                <el-button size="small" type="primary" :loading="runningId === row.id" @click="handleRun(row)">运行</el-button>
-                <el-button size="small" @click="viewScript(row)">查看</el-button>
-                <el-button size="small" type="success" :disabled="row.status === 'confirmed'" @click="confirmScript(row)">确认入库</el-button>
-                <el-button size="small" @click="openDiagnose(row)">调试修复</el-button>
+                <el-button type="primary" link :loading="runningId === row.id" @click="handleRun(row)">运行</el-button>
+                <el-button type="primary" link @click="viewScript(row)">查看</el-button>
+                <el-button type="success" link :disabled="row.status === 'confirmed'" @click="confirmScript(row)">确认入库</el-button>
+                <el-button type="warning" link @click="openDiagnose(row)">调试修复</el-button>
               </template>
             </el-table-column>
           </el-table>

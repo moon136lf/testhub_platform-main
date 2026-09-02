@@ -1,6 +1,14 @@
 <template>
-  <div class="case-generate">
-    <el-card>
+  <div class="case-generate page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>AI 用例生成</h2>
+        <div class="page-subtitle">上传材料 → AI 识别测试点 → 生成用例，全程可查看直播日志</div>
+      </div>
+    </div>
+
+    <el-card shadow="never" class="steps-card">
       <el-steps :active="currentStep" finish-status="success" align-center>
         <el-step title="选择项目" />
         <el-step title="上传材料" />
@@ -12,7 +20,7 @@
       </el-steps>
     </el-card>
 
-    <el-card class="step-content">
+    <el-card class="step-content" shadow="never">
       <!-- Step 1: 选择项目 -->
       <div v-if="currentStep === 0" class="step-container">
         <h3>选择项目</h3>
@@ -547,12 +555,18 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.case-generate {
-  padding: 20px;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
+
+.steps-card {
+  margin-bottom: 16px;
 }
 
 .step-content {
-  margin-top: 20px;
+  margin-top: 0;
   min-height: 500px;
 }
 
@@ -562,15 +576,16 @@ onUnmounted(() => {
 
 .step-container h3 {
   margin-bottom: 20px;
-  color: #303133;
+  color: var(--mt-text);
   font-size: 18px;
+  font-weight: 600;
 }
 
 .step-actions {
   margin-top: 30px;
   text-align: center;
   padding-top: 20px;
-  border-top: 1px solid #ebeef5;
+  border-top: 1px solid var(--mt-border);
 }
 
 .step-actions .el-button {
@@ -578,8 +593,8 @@ onUnmounted(() => {
 }
 
 .upload-box {
-  border: 1px dashed #dcdfe6;
-  border-radius: 4px;
+  border: 1px dashed var(--mt-border);
+  border-radius: var(--mt-radius-sm);
   padding: 16px;
   text-align: center;
 }
@@ -587,12 +602,12 @@ onUnmounted(() => {
 .upload-label {
   margin-bottom: 8px;
   font-size: 14px;
-  color: #606266;
+  color: var(--mt-text-secondary);
 }
 
 .token-info {
   margin-left: 16px;
-  color: #909399;
+  color: var(--mt-text-secondary);
   font-size: 13px;
 }
 
@@ -604,24 +619,24 @@ onUnmounted(() => {
   margin-top: 12px;
   max-height: 240px;
   overflow-y: auto;
-  background: #fafafa;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
+  background: var(--mt-bg);
+  border: 1px solid var(--mt-border);
+  border-radius: var(--mt-radius-sm);
   padding: 8px 12px;
   font-size: 13px;
   line-height: 1.6;
 }
 
 .log-line.type-ai {
-  color: #409eff;
+  color: var(--mt-primary);
 }
 
 .log-line.type-error {
-  color: #f56c6c;
+  color: var(--mt-danger);
 }
 
 .log-line.hallucination {
-  color: #e6a23c;
+  color: var(--mt-warning);
 }
 
 .toolbar {
@@ -632,7 +647,7 @@ onUnmounted(() => {
 }
 
 .selected-count {
-  color: #909399;
+  color: var(--mt-text-secondary);
   font-size: 13px;
 }
 </style>

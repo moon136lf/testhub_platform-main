@@ -1,9 +1,14 @@
 <template>
-  <div class="element-library">
-    <el-card>
-      <template #header>
-        <span>元素库管理</span>
-      </template>
+  <div class="element-library page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>元素库管理</h2>
+        <div class="page-subtitle">从被测应用抓取页面元素，供用例转脚本使用</div>
+      </div>
+    </div>
+
+    <el-card shadow="never">
 
       <!-- 抓取表单 -->
       <el-form :inline="true" :model="fetchForm" class="fetch-form">
@@ -411,8 +416,10 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.element-library {
-  padding: 20px;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .fetch-form {

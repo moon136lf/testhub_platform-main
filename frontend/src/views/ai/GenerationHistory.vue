@@ -1,13 +1,15 @@
 <template>
-  <div class="generation-history">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>生成历史</span>
-          <el-button type="primary" :icon="Refresh" @click="loadSessions">刷新</el-button>
-        </div>
-      </template>
+  <div class="generation-history page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>生成历史</h2>
+        <div class="page-subtitle">AI 用例生成会话记录与结果回看</div>
+      </div>
+      <el-button type="primary" :icon="Refresh" @click="loadSessions">刷新</el-button>
+    </div>
 
+    <el-card shadow="never">
       <el-form :inline="true" :model="queryParams">
         <el-form-item label="项目">
           <el-select v-model="queryParams.projectId" placeholder="选择项目" style="width: 200px" @change="loadSessions">
@@ -79,10 +81,10 @@
             {{ formatDate(scope.row.start_time) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="170" fixed="right">
           <template #default="scope">
-            <el-button size="small" :icon="View" @click="viewSession(scope.row)">详情</el-button>
-            <el-button size="small" type="danger" :icon="Delete" @click="deleteSession(scope.row)">删除</el-button>
+            <el-button type="primary" link :icon="View" @click="viewSession(scope.row)">详情</el-button>
+            <el-button type="danger" link :icon="Delete" @click="deleteSession(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -328,14 +330,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.generation-history {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .el-pagination {

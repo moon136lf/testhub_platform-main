@@ -1,7 +1,14 @@
 <template>
-  <div class="whitescan" v-loading="loading">
-    <el-card>
-      <template #header><span>白盒测试</span></template>
+  <div class="whitescan page-container" v-loading="loading">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>白盒测试</h2>
+        <div class="page-subtitle">仓库静态扫描，AI 修复建议与回归用例生成</div>
+      </div>
+    </div>
+
+    <el-card shadow="never">
 
       <!-- ① 扫描入口 -->
       <el-form inline>
@@ -48,9 +55,9 @@
         <el-table-column label="高/中/低" width="100">
           <template #default="{ row }">{{ row.high_count }}/{{ row.mid_count }}/{{ row.low_count }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="170">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="onGenerateCases(row)">生成功能回归用例</el-button>
+            <el-button link type="primary" @click="onGenerateCases(row)">生成功能回归用例</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -85,9 +92,9 @@
           </el-table-column>
           <el-table-column label="操作" width="220">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="onAiFix(row)">AI修复</el-button>
-              <el-button link size="small" @click="onMark(row, 'fixed')">标记已修复</el-button>
-              <el-button link size="small" @click="onMark(row, 'false_positive')">误报</el-button>
+              <el-button link type="primary" @click="onAiFix(row)">AI修复</el-button>
+              <el-button link @click="onMark(row, 'fixed')">标记已修复</el-button>
+              <el-button link @click="onMark(row, 'false_positive')">误报</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -267,6 +274,10 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <style scoped>
-.whitescan { padding: 20px; }
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
 .code-block { background: #f5f7fa; padding: 10px; font-family: monospace; font-size: 12px; max-height: 200px; overflow: auto; white-space: pre-wrap; }
 </style>

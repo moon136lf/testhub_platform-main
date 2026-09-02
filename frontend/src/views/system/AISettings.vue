@@ -1,7 +1,14 @@
 <template>
-  <div class="ai-settings">
-    <el-card>
-      <template #header><span>AI 设置</span></template>
+  <div class="ai-settings page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>AI 设置</h2>
+        <div class="page-subtitle">配置 AI 供应商的 API Key 与接入参数，修改后即时生效</div>
+      </div>
+    </div>
+
+    <el-card shadow="never">
       <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
         provider 的 API Key / URL 存数据库，修改后即时生效（无需重启）。联调时在此填入真实 key。
       </el-alert>
@@ -24,8 +31,8 @@
         </el-table-column>
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="save(row)">保存</el-button>
-            <el-button size="small" :loading="row.testing" @click="testConn(row)">测试连接</el-button>
+            <el-button type="primary" link @click="save(row)">保存</el-button>
+            <el-button type="primary" link :loading="row.testing" @click="testConn(row)">测试连接</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -128,5 +135,9 @@ onMounted(loadSettings)
 </script>
 
 <style scoped>
-.ai-settings { padding: 20px; }
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
 </style>

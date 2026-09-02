@@ -1,14 +1,17 @@
 <template>
-  <div class="rule-management">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>测试规则管理</span>
-          <el-button type="primary" :icon="Plus" @click="showCreateDialog">
-            新建规则
-          </el-button>
-        </div>
-      </template>
+  <div class="rule-management page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>测试规则管理</h2>
+        <div class="page-subtitle">管理 AI 生成用例时参考的测试规则</div>
+      </div>
+      <el-button type="primary" :icon="Plus" @click="showCreateDialog">
+        新建规则
+      </el-button>
+    </div>
+
+    <el-card shadow="never">
 
       <el-form :inline="true" :model="queryParams">
         <el-form-item label="规则类型">
@@ -28,35 +31,37 @@
       </el-form>
 
       <el-table :data="rules" border v-loading="loading">
-        <el-table-column prop="name" label="规则名称" width="200" />
-        <el-table-column prop="rule_type" label="类型" width="120">
+        <el-table-column prop="name" label="规则名称" min-width="200" />
+        <el-table-column prop="is_builtin" label="类型" width="120">
           <template #default="scope">
-            <el-tag v-if="scope.row.rule_type === 'built-in'" type="primary">内置规则</el-tag>
+            <!-- 后端契约: is_builtin 布尔（无 rule_type 字段） -->
+            <el-tag v-if="scope.row.is_builtin" type="primary">内置规则</el-tag>
             <el-tag v-else type="success">自定义</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="content" label="规则内容" show-overflow-tooltip />
+        <el-table-column prop="description" label="规则内容" show-overflow-tooltip />
         <el-table-column prop="created_by" label="创建者" width="120" />
         <el-table-column prop="created_at" label="创建时间" width="180">
           <template #default="scope">
             {{ formatDate(scope.row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
-            <el-button size="small" :icon="View" @click="viewRule(scope.row)">查看</el-button>
+            <el-button type="primary" link :icon="View" @click="viewRule(scope.row)">查看</el-button>
             <el-button
-              v-if="scope.row.rule_type === 'custom'"
-              size="small"
+              v-if="!scope.row.is_builtin"
+              type="primary"
+              link
               :icon="Edit"
               @click="editRule(scope.row)"
             >
               编辑
             </el-button>
             <el-button
-              v-if="scope.row.rule_type === 'custom'"
-              size="small"
+              v-if="!scope.row.is_builtin"
               type="danger"
+              link
               :icon="Delete"
               @click="deleteRule(scope.row)"
             >
@@ -109,14 +114,14 @@
       <el-descriptions :column="1" border>
         <el-descriptions-item label="规则名称">{{ currentRule.name }}</el-descriptions-item>
         <el-descriptions-item label="规则类型">
-          <el-tag v-if="currentRule.rule_type === 'built-in'" type="primary">内置规则</el-tag>
+          <el-tag v-if="currentRule.is_builtin" type="primary">内置规则</el-tag>
           <el-tag v-else type="success">自定义</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="创建者">{{ currentRule.created_by }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ formatDate(currentRule.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="规则内容">
           <el-input
-            v-model="currentRule.content"
+            v-model="currentRule.description"
             type="textarea"
             :rows="8"
             readonly
@@ -184,7 +189,9 @@ const loadRules = async () => {
     // Filter by query params
     let filteredRules = ruleList
     if (queryParams.value.ruleType) {
-      filteredRules = filteredRules.filter(r => r.rule_type === queryParams.value.ruleType)
+      // 下拉值 'built-in'/'custom' 对应后端 is_builtin 布尔
+      const wantBuiltin = queryParams.value.ruleType === 'built-in'
+      filteredRules = filteredRules.filter(r => r.is_builtin === wantBuiltin)
     }
     if (queryParams.value.name) {
       filteredRules = filteredRules.filter(r => r.name.includes(queryParams.value.name))
@@ -238,14 +245,18 @@ const submitRule = async () => {
     submitting.value = true
     try {
       if (isEdit.value) {
-        // Update rule - API not implemented yet
+        await aiCaseAPI.updateRule(
+          ruleForm.value.id,
+          ruleForm.value.name,
+          ruleForm.value.content,        // 表单的"规则内容"即后端 description
+          null                            // prompt_template 暂不使用
+        )
         ElMessage.success('规则更新成功')
       } else {
         await aiCaseAPI.createRule(
           ruleForm.value.name,
-          ruleForm.value.rule_type,
-          ruleForm.value.content,
-          'admin'
+          ruleForm.value.content,        // 表单的"规则内容"即后端 description
+          null                            // prompt_template 暂不使用
         )
         ElMessage.success('规则创建成功')
       }
@@ -272,7 +283,7 @@ const deleteRule = async (rule) => {
       }
     )
 
-    // Delete rule - API not implemented yet
+    await aiCaseAPI.deleteRule(rule.id)
     ElMessage.success('规则删除成功')
     loadRules()
   } catch {
@@ -292,14 +303,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.rule-management {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .el-pagination {

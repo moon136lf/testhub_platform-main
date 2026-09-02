@@ -1,15 +1,13 @@
 <template>
   <el-container class="main-layout">
-    <el-aside width="200px" class="sidebar">
+    <el-aside width="220px" class="sidebar">
       <div class="logo">
-        <h2>🌙 MoonTest</h2>
+        <h2>🌙 <span class="logo-text">MoonTest</span></h2>
       </div>
       <el-menu
         :default-active="activeMenu"
         router
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409EFF"
+        class="sidebar-menu"
       >
         <el-menu-item index="/dashboard">
           <el-icon><DataAnalysis /></el-icon>
@@ -44,7 +42,6 @@
             <el-icon><Connection /></el-icon>
             <span>接口与执行</span>
           </template>
-          <!-- 接口测试模块一期不在范围（菜单死链已移除，二期再启） -->
           <el-menu-item index="/api/parse" disabled>接口文档解析（二期）</el-menu-item>
           <el-menu-item index="/api/manage" disabled>接口管理（二期）</el-menu-item>
           <el-menu-item index="/api/debug" disabled>单接口调试（二期）</el-menu-item>
@@ -83,7 +80,7 @@
     </el-aside>
 
     <el-container>
-      <el-header class="header">
+      <el-header class="header" height="56px">
         <div class="header-left">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
@@ -118,9 +115,13 @@ const currentTitle = computed(() => route.meta?.title || '首页')
   height: 100vh;
 }
 
+/* ---- 侧边栏：浅色 ---- */
 .sidebar {
-  background-color: #304156;
+  background: var(--mt-sidebar);
+  border-right: 1px solid var(--mt-border);
   overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .logo {
@@ -128,32 +129,96 @@ const currentTitle = computed(() => route.meta?.title || '首页')
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 20px;
+  border-bottom: 1px solid var(--mt-border);
+  flex-shrink: 0;
 }
 
 .logo h2 {
   margin: 0;
+  font-size: 19px;
+  font-weight: 700;
 }
 
+.logo-text {
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ---- 菜单（去掉 el-menu 深色默认，全 CSS 接管） ---- */
+.sidebar-menu {
+  border-right: none;
+  background: transparent;
+  padding: 8px;
+  flex: 1;
+  overflow-y: auto;
+}
+.sidebar-menu .el-menu-item,
+.sidebar-menu :deep(.el-sub-menu__title) {
+  height: 42px;
+  line-height: 42px;
+  border-radius: 6px;
+  margin: 2px 0;
+  color: var(--mt-sidebar-text);
+}
+.sidebar-menu :deep(.el-menu-item:hover),
+.sidebar-menu :deep(.el-sub-menu__title:hover) {
+  background: var(--mt-sidebar-hover-bg);
+  color: var(--mt-text);
+}
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  background: var(--mt-sidebar-active-bg);
+  color: var(--mt-sidebar-active-text);
+  font-weight: 600;
+}
+.sidebar-menu :deep(.el-menu-item.is-active .el-icon) {
+  color: var(--mt-sidebar-active-text);
+}
+/* 二级菜单缩进区背景 */
+.sidebar-menu :deep(.el-menu .el-menu-item) {
+  padding-left: 48px !important;
+  min-width: 0;
+}
+.sidebar-menu :deep(.el-sub-menu.is-disabled .el-menu-item) {
+  color: #CBD5E1;
+  cursor: not-allowed;
+}
+
+/* ---- 顶栏 ---- */
 .header {
-  background: #fff;
-  border-bottom: 1px solid #e6e6e6;
+  background: var(--mt-surface);
+  border-bottom: 1px solid var(--mt-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 24px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--mt-text-secondary);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: default;
+}
+.header-right:hover {
+  background: var(--mt-sidebar-hover-bg);
 }
 
+/* ---- 主内容区 ---- */
 .main-content {
-  background: #f0f2f5;
-  padding: 20px;
+  background: var(--mt-bg);
+  padding: 24px;
   overflow-y: auto;
+}
+
+/* 面包屑当前项主色 */
+.header-left :deep(.el-breadcrumb__inner.is-link),
+.header-left :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+  color: var(--mt-primary);
+  font-weight: 500;
 }
 </style>

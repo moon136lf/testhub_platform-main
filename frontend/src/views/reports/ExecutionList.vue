@@ -1,7 +1,14 @@
 <template>
-  <div class="exec-list">
-    <el-card>
-      <template #header><span>执行记录与报告</span></template>
+  <div class="exec-list page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>执行记录与报告</h2>
+        <div class="page-subtitle">UI 回归 / 接口 / 白盒执行记录与报告查看</div>
+      </div>
+    </div>
+
+    <el-card shadow="never">
       <el-form inline>
         <el-form-item label="项目">
           <el-select v-model="projectId" filterable @change="load" style="width: 240px">
@@ -112,4 +119,10 @@ const goDetail = (row) => router.push(`/reports/${row.exec_id}`)
 onMounted(loadProjects)
 onBeforeUnmount(() => { if (chart) chart.dispose() })
 </script>
-<style scoped>.exec-list { padding: 20px; }</style>
+<style scoped>
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
+</style>

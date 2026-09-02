@@ -245,11 +245,31 @@ defineExpose({
   margin-bottom: 16px;
 }
 
-.el-form {
+/* 网格布局：每个字段占一列、列宽一致 —— 跨行/跨列的标签才真正对齐
+   （flex 换行时各行累计宽度不同，标签 x 位置会随上一列控件宽度漂移） */
+.case-filter :deep(.el-form) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 20px;
   margin-bottom: 0;
 }
 
-.el-form-item {
-  margin-bottom: 12px;
+.case-filter :deep(.el-form-item) {
+  margin-right: 0;
+  margin-bottom: 0;
+  width: 100%;
+}
+
+/* 控件填满所在列：标签 84px 固定（theme.css），其余空间归输入框 */
+.case-filter :deep(.el-select),
+.case-filter :deep(.el-input) {
+  width: 100%;
+}
+
+/* 查询/重置按钮行：单独一行、贴查询区右下角 */
+.case-filter :deep(.el-form-item:last-child) {
+  grid-column: 1 / -1;          /* 占满整行 */
+  justify-self: end;            /* 靠右 = 右下角（grid 自动流到最后一行） */
+  justify-content: flex-end;
 }
 </style>

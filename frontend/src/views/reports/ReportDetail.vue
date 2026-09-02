@@ -4,11 +4,11 @@
       <template #header>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span>报告详情：{{ detail.record.exec_id }}</span>
-          <div>
-            <el-button type="primary" size="small" :loading="generating" @click="generate(false)">生成报告</el-button>
-            <el-button size="small" @click="generate(true)">重新生成</el-button>
-            <el-button size="small" @click="exportReport('html')">导出HTML</el-button>
-            <el-button size="small" @click="exportReport('pdf')">导出PDF</el-button>
+          <div style="display:flex;gap:8px">
+            <el-button type="primary" :loading="generating" @click="generate(false)">生成报告</el-button>
+            <el-button @click="generate(true)">重新生成</el-button>
+            <el-button @click="exportReport('html')">导出HTML</el-button>
+            <el-button @click="exportReport('pdf')">导出PDF</el-button>
           </div>
         </div>
       </template>
