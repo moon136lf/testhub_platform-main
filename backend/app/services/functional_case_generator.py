@@ -80,7 +80,7 @@ class FunctionalCaseGenerator:
             return False, 0
         n = 0
         for c in cases:
-            title = f"[回归] {c.get('title', '')}"[:200]
+            title = f"[回归] {c.get('title', '')}"[:100]
             if not c.get("title") or await self._case_title_exists(project_id, title):
                 continue
             tc = TestCase(
