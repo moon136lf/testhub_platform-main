@@ -117,9 +117,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { reviewAPI } from '@/api/review.js'
 import { projectAPI } from '@/api/project.js'
+
+const route = useRoute()
 
 const loading = ref(false)
 const refining = ref(false)
@@ -138,8 +141,15 @@ const statusTag = (s) => ({ passed: 'success', needs_revision: 'danger', pending
 const statusLabel = (s) => ({ passed: '已通过', needs_revision: '需修改', pending: '待评审' }[s] || s || '待评审')
 
 // 评审状态筛选在前端做（后端列表接口无 review_status 筛选参数）
+// #case-batch T3: 支持路由 query 预筛选 —— case_ids（优先）/ batch_id（前端过滤批内用例）
+const preCaseIds = ref(null)
+const preBatchId = ref(null)
 const filteredCases = computed(() =>
-  cases.value.filter(c => !reviewFilter.value || c.review_status === reviewFilter.value)
+  cases.value.filter(c => {
+    if (preCaseIds.value && !preCaseIds.value.includes(c.id)) return false
+    if (!preCaseIds.value && preBatchId.value && c.batch_id !== preBatchId.value) return false
+    return !reviewFilter.value || c.review_status === reviewFilter.value
+  })
 )
 
 const loadProjects = async () => {
@@ -230,7 +240,41 @@ const onApplyAll = async () => {
   } catch (e) { ElMessage.error('应用失败') } finally { loading.value = false }
 }
 
-onMounted(loadProjects)
+onMounted(async () => {
+  // #case-batch T3: 路由 query 预筛选（CaseDetail 勾选用例跳转而来）
+  if (route.query.case_ids) {
+    preCaseIds.value = String(route.query.case_ids).split(',').filter(Boolean)
+  }
+  if (route.query.batch_id) {
+    preBatchId.value = String(route.query.batch_id)
+  }
+  if (!preCaseIds.value && !preBatchId.value) {
+    loadProjects()
+    return
+  }
+  // 预筛选模式：加载项目下拉但不自动触发全量加载
+  try {
+    const res = await projectAPI.list()
+    projects.value = Array.isArray(res) ? res : (res?.items || [])
+  } catch (e) { console.error(e) }
+  if (preCaseIds.value) {
+    // 用现有列表接口拉全量，再前端按 case_ids 过滤
+    const firstProject = projects.value[0]?.id
+    if (firstProject) projectId.value = firstProject
+    await loadCasesForPreFilter()
+  } else {
+    // 仅 batch_id：走现有项目加载流程，computed 内按 batch_id 过滤
+    if (projects.value.length) { projectId.value = projects.value[0].id; loadAll() }
+  }
+})
+
+// 预筛选 case_ids：绕过项目维度限制，直接加载列表后由 computed 过滤
+const loadCasesForPreFilter = async () => {
+  loading.value = true
+  try {
+    cases.value = await reviewAPI.listCasesWithReview(projectId.value)
+  } catch (e) { console.error(e) } finally { loading.value = false }
+}
 </script>
 
 <style scoped>

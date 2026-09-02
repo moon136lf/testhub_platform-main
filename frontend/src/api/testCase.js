@@ -47,6 +47,25 @@ export const testCaseAPI = {
     return response.data
   },
 
+  // ---- 批次（生成记录）----
+  /** 生成记录列表 @returns {Promise<Object>} { items, total, page, page_size } */
+  async listBatches(params = {}) {
+    const response = await axios.get('/test-cases/batches', { params })
+    return response.data
+  },
+
+  /** 批内用例列表 @returns {Promise<Array>} */
+  async listBatchCases(batchId) {
+    const response = await axios.get(`/test-cases/batches/${batchId}/cases`)
+    return response.data
+  },
+
+  /** 删除生成记录（含批内用例） */
+  async deleteBatch(batchId) {
+    const response = await axios.delete(`/test-cases/batches/${batchId}`)
+    return response.data
+  },
+
   /**
    * 批量操作：delete|finalize|unfinalize|update_priority|update_automation_status|mark_hallucination|update_review
    */

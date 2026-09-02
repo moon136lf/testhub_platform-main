@@ -4,7 +4,7 @@
     <div class="page-header">
       <div>
         <h2>用例管理</h2>
-        <div class="page-subtitle">管理测试用例：新建、导入导出、批量操作</div>
+        <div class="page-subtitle">管理用例生成记录：查看、删除，点「查看」进入批内用例操作</div>
       </div>
       <div class="header-actions">
         <el-button type="primary" :icon="Plus" @click="showCreateDialog">新建用例</el-button>
@@ -20,88 +20,48 @@
         </el-dropdown>
         <el-button :icon="Upload" @click="triggerImport">导入</el-button>
         <input ref="importInput" type="file" accept=".csv,.xlsx,.md" style="display:none" @change="handleImport" />
-        <el-button
-          type="danger"
-          plain
-          :icon="Delete"
-          :disabled="selectedCases.length === 0"
-          @click="handleBatchDelete"
-        >
-          批量删除
-        </el-button>
-        <el-button
-          type="success"
-          plain
-          :icon="Check"
-          :disabled="selectedCases.length === 0"
-          @click="handleBatchFinalize"
-        >
-          批量定稿
-        </el-button>
       </div>
     </div>
 
     <el-card shadow="never">
-
       <!-- 筛选区域 -->
-      <CaseFilter
-        :projects="projects"
-        :test-points="testPoints"
-        @filter-change="handleFilterChange"
-      />
+      <el-form inline style="margin-bottom: 4px">
+        <el-form-item label="项目">
+          <el-select v-model="filters.project_id" filterable clearable placeholder="全部项目"
+            style="width: 220px" @change="onFilterChange">
+            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="filters.batch_type" clearable placeholder="全部类型"
+            style="width: 180px" @change="onFilterChange">
+            <el-option v-for="(v, k) in typeMap" :key="k" :label="v.label" :value="k" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="记录名称">
+          <el-input v-model="keyword" placeholder="按记录名搜索，回车触发" clearable
+            style="width: 240px" @keyup.enter="onFilterChange" @clear="onFilterChange" />
+        </el-form-item>
+      </el-form>
 
       <!-- 列表 -->
-      <el-table
-        :data="cases"
-        v-loading="loading"
-        stripe
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column type="selection" width="55" />
-        <el-table-column prop="name" label="用例名称" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="point_name" label="测试点" width="150" show-overflow-tooltip />
-        <el-table-column prop="priority" label="优先级" width="100">
+      <el-table :data="batches" v-loading="loading" stripe>
+        <el-table-column prop="batch_name" label="记录名称" min-width="280" show-overflow-tooltip />
+        <el-table-column prop="batch_type" label="类型" width="150">
           <template #default="{ row }">
-            <el-tag :type="getPriorityType(row.priority)">{{ row.priority }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="case_type" label="用例类型" width="120">
-          <template #default="{ row }">
-            {{ getCaseTypeLabel(row.case_type) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="automation_status" label="自动化状态" width="120">
-          <template #default="{ row }">
-            <el-tag :type="getAutomationStatusType(row.automation_status)">
-              {{ getAutomationStatusLabel(row.automation_status) }}
+            <el-tag :type="typeMap[row.batch_type]?.tag || 'info'">
+              {{ typeMap[row.batch_type]?.label || row.batch_type }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="is_finalized" label="定稿状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.is_finalized ? 'success' : 'info'">
-              {{ row.is_finalized ? '已定稿' : '草稿' }}
-            </el-tag>
-          </template>
+        <el-table-column prop="case_count" label="用例数" width="100" align="center" />
+        <el-table-column prop="created_at" label="创建时间" width="180">
+          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column prop="hallucination_status" label="幻觉标记" width="100">
-          <template #default="{ row }">
-            <el-tag v-if="row.hallucination_status === 'detected'" type="warning">存在幻觉</el-tag>
-            <el-tag v-else type="success">正常</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="review_status" label="评审状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="reviewTagType(row.review_status)">
-              {{ reviewStatusLabel(row.review_status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link :icon="View" @click="goToDetail(row)">查看</el-button>
-            <el-button type="primary" link :icon="Edit" @click="editCase(row)">编辑</el-button>
-            <el-button type="danger" link :icon="Delete" @click="deleteCase(row)">删除</el-button>
+            <el-button type="danger" link :icon="Delete" @click="deleteBatch(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -114,8 +74,8 @@
           :total="total"
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
-          @size-change="fetchCases"
-          @current-change="fetchCases"
+          @size-change="fetchBatches"
+          @current-change="fetchBatches"
         />
       </div>
     </el-card>
@@ -137,78 +97,6 @@
         @cancel="dialogVisible = false"
       />
     </el-dialog>
-
-    <!-- 查看详情对话框 -->
-    <el-dialog
-      v-model="viewDialogVisible"
-      title="用例详情"
-      width="900px"
-    >
-      <div v-if="viewingCase" class="case-detail">
-        <el-descriptions>
-          <el-descriptions-item label="用例名称" :span="2">
-            {{ viewingCase.name }}
-          </el-descriptions-item>
-          <el-descriptions-item label="所属项目">
-            {{ viewingCase.project_name || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="测试点">
-            {{ viewingCase.point_name || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="优先级">
-            <el-tag :type="getPriorityType(viewingCase.priority)">
-              {{ viewingCase.priority }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="用例类型">
-            {{ getCaseTypeLabel(viewingCase.case_type) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="自动化状态">
-            <el-tag :type="getAutomationStatusType(viewingCase.automation_status)">
-              {{ getAutomationStatusLabel(viewingCase.automation_status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="定稿状态">
-            <el-tag :type="viewingCase.is_finalized ? 'success' : 'info'">
-              {{ viewingCase.is_finalized ? '已定稿' : '草稿' }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="幻觉标记" :span="2">
-            <el-tag v-if="viewingCase.hallucination_status === 'detected'" type="warning">存在幻觉</el-tag>
-            <el-tag v-else type="success">正常</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="用例描述" :span="2">
-            {{ viewingCase.description || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="前置条件" :span="2">
-            {{ viewingCase.preconditions || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="后置条件" :span="2">
-            {{ viewingCase.postconditions || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="标签" :span="2">
-            <el-tag
-              v-for="tag in viewingCase.tags"
-              :key="tag"
-              style="margin-right: 8px"
-            >
-              {{ tag }}
-            </el-tag>
-            <span v-if="!viewingCase.tags || viewingCase.tags.length === 0">-</span>
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <div class="steps-section">
-          <h3>测试步骤</h3>
-          <el-table :data="viewingCase.steps" border stripe>
-            <el-table-column prop="step_number" label="步骤" width="80" align="center" />
-            <el-table-column prop="action" label="操作" min-width="200" />
-            <el-table-column prop="expected" label="预期结果" min-width="200" />
-            <el-table-column prop="data" label="测试数据" min-width="150" show-overflow-tooltip />
-          </el-table>
-        </div>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -216,93 +104,53 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, View, Edit, Delete, Check, Upload } from '@element-plus/icons-vue'
-import CaseFilter from '@/components/testCase/CaseFilter.vue'
+import { Plus, Delete, View, Upload } from '@element-plus/icons-vue'
 import CaseForm from '@/components/testCase/CaseForm.vue'
 import { testCaseAPI } from '@/api/testCase.js'
 import { projectAPI } from '@/api/project.js'
-import axios from '@/api/axios.js'
 
 const router = useRouter()
 
 const loading = ref(false)
-const cases = ref([])
+const batches = ref([])
 const projects = ref([])
-const testPoints = ref([])
-const selectedCases = ref([])
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const filters = ref({})
+const filters = ref({ project_id: '', batch_type: '' })
+const keyword = ref('')
 const importInput = ref(null)
 
-const REVIEW_STATUS_MAP = { pending: '待评审', passed: '已通过', needs_revision: '需修改' }
-const reviewStatusLabel = (s) => REVIEW_STATUS_MAP[s] || '待评审'
-const reviewTagType = (s) => ({ passed: 'success', needs_revision: 'warning', pending: 'info' }[s] || 'info')
-
-const dialogVisible = ref(false)
-const viewDialogVisible = ref(false)
-const isEdit = ref(false)
-const caseFormRef = ref(null)
-const currentCase = ref({})
-const viewingCase = ref(null)
-
-const caseTypeMap = {
-  functional: '功能用例',
-  interface_case: '接口用例'
+const typeMap = {
+  whitescan_api: { label: '白盒-接口回归', tag: 'warning' },
+  whitescan_ui: { label: '白盒-UI回归', tag: 'success' },
+  ai_generate: { label: 'AI需求生成', tag: 'primary' },
+  manual: { label: '手工创建', tag: 'info' },
 }
 
-const automationStatusMap = {
-  pending: '未转化',
-  converted: '已转脚本',
-  partial_automated: '部分自动化',
-  automated: '已自动化'
+const formatTime = (timeStr) => {
+  if (!timeStr) return '-'
+  return new Date(timeStr).toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+  })
 }
 
-const getPriorityType = (priority) => {
-  const typeMap = {
-    P0: 'danger',
-    P1: 'warning',
-    P2: '',
-    P3: 'info'
-  }
-  return typeMap[priority] || ''
-}
-
-const getCaseTypeLabel = (type) => {
-  return caseTypeMap[type] || type
-}
-
-const getAutomationStatusLabel = (status) => {
-  return automationStatusMap[status] || status
-}
-
-const getAutomationStatusType = (status) => {
-  const typeMap = {
-    pending: 'info',
-    converted: 'warning',
-    partial_automated: 'warning',
-    automated: 'success'
-  }
-  return typeMap[status] || 'info'
-}
-
-const fetchCases = async () => {
+const fetchBatches = async () => {
   loading.value = true
   try {
-    const skip = (currentPage.value - 1) * pageSize.value
     const params = {
-      ...filters.value,
-      skip,
-      limit: pageSize.value
+      project_id: filters.value.project_id || undefined,
+      batch_type: filters.value.batch_type || undefined,
+      keyword: keyword.value || undefined,
+      page: currentPage.value,
+      page_size: pageSize.value
     }
-    // 空 project_id 不传（后端 UUID('') 会 400/422）——未选项目时靠后端返回全部或前端提示
-    if (!params.project_id) delete params.project_id
-    const response = await testCaseAPI.list(params)
-    cases.value = response.items || response
-    total.value = response.total || cases.value.length
+    const response = await testCaseAPI.listBatches(params)
+    const data = (response && response.data) || response
+    batches.value = data.items || []
+    total.value = data.total || 0
   } catch (error) {
-    ElMessage.error('获取用例列表失败: ' + error.message)
+    ElMessage.error('获取生成记录列表失败: ' + (error.message || error))
   } finally {
     loading.value = false
   }
@@ -312,25 +160,42 @@ const fetchProjects = async () => {
   try {
     const response = await projectAPI.list()
     projects.value = response.items || response
-    // 默认选中第一个项目再查询（后端 project_id 必填，避免首载 422）
-    if (!filters.value.project_id && projects.value.length) {
-      filters.value.project_id = projects.value[0].id
-      fetchCases()
-    }
   } catch (error) {
     console.error('获取项目列表失败:', error)
   }
 }
 
-const handleFilterChange = (newFilters) => {
-  filters.value = newFilters
+const onFilterChange = () => {
   currentPage.value = 1
-  fetchCases()
+  fetchBatches()
 }
 
-const handleSelectionChange = (selection) => {
-  selectedCases.value = selection
+const goToDetail = (row) => {
+  router.push({ name: 'CaseDetail', query: { batch_id: row.id, batch_name: row.batch_name } })
 }
+
+const deleteBatch = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `将删除记录《${row.batch_name}》及其 ${row.case_count} 条用例，不可恢复`,
+      '确认删除',
+      { type: 'warning' }
+    )
+    await testCaseAPI.deleteBatch(row.id)
+    ElMessage.success('删除成功')
+    fetchBatches()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败: ' + (error.message || error))
+    }
+  }
+}
+
+// ---- 新建用例（保留原有能力，用例归属到项目，出现在「手工创建」类记录中）----
+const dialogVisible = ref(false)
+const isEdit = ref(false)
+const caseFormRef = ref(null)
+const currentCase = ref({})
 
 const showCreateDialog = () => {
   isEdit.value = false
@@ -348,102 +213,28 @@ const showCreateDialog = () => {
   dialogVisible.value = true
 }
 
-const goToDetail = (caseItem) => {
-  router.push({ name: 'CaseDetail', params: { id: caseItem.id } })
-}
-
-const viewCase = async (caseItem) => {
+const handleSubmit = async (formData) => {
   try {
-    const response = await testCaseAPI.get(caseItem.id)
-    viewingCase.value = response
-    viewDialogVisible.value = true
-  } catch (error) {
-    ElMessage.error('获取用例详情失败: ' + error.message)
-  }
-}
-
-const editCase = async (caseItem) => {
-  try {
-    const response = await testCaseAPI.get(caseItem.id)
-    currentCase.value = { ...response }
-    isEdit.value = true
-    dialogVisible.value = true
-  } catch (error) {
-    ElMessage.error('获取用例详情失败: ' + error.message)
-  }
-}
-
-const deleteCase = async (caseItem) => {
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除用例 "${caseItem.name}" 吗？`,
-      '确认删除',
-      {
-        type: 'warning'
-      }
-    )
-
-    await testCaseAPI.delete(caseItem.id)
-    ElMessage.success('删除成功')
-    fetchCases()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
+    if (isEdit.value) {
+      await testCaseAPI.update(currentCase.value.id, formData)
+      ElMessage.success('更新成功')
+    } else {
+      await testCaseAPI.create(formData)
+      ElMessage.success('创建成功')
     }
-  }
-}
-
-const handleBatchDelete = async () => {
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除选中的 ${selectedCases.value.length} 个用例吗？`,
-      '确认批量删除',
-      {
-        type: 'warning'
-      }
-    )
-
-    const caseIds = selectedCases.value.map(c => c.id)
-    const response = await testCaseAPI.batchOperation({
-      action: 'delete',
-      case_ids: caseIds
-    })
-
-    ElMessage.success(`成功删除 ${response.success_count} 个用例`)
-    fetchCases()
+    dialogVisible.value = false
+    fetchBatches()
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('批量删除失败: ' + error.message)
-    }
+    ElMessage.error(isEdit.value ? '更新失败: ' + error.message : '创建失败: ' + error.message)
   }
 }
 
-const handleBatchFinalize = async () => {
-  try {
-    await ElMessageBox.confirm(
-      `确定要将选中的 ${selectedCases.value.length} 个用例标记为已定稿吗？`,
-      '确认批量定稿',
-      {
-        type: 'info'
-      }
-    )
-
-    const caseIds = selectedCases.value.map(c => c.id)
-    const response = await testCaseAPI.batchOperation({
-      action: 'finalize',
-      case_ids: caseIds
-    })
-
-    ElMessage.success(`成功定稿 ${response.success_count} 个用例`)
-    fetchCases()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('批量定稿失败: ' + error.message)
-    }
-  }
+const resetForm = () => {
+  caseFormRef.value?.resetForm()
+  currentCase.value = {}
 }
 
-// ---- W4 导入导出 ----
+// ---- W4 导入导出（按项目维度，保留原逻辑）----
 const handleExport = async (format) => {
   const projectId = filters.value.project_id || (projects.value[0] && projects.value[0].id)
   if (!projectId) {
@@ -483,7 +274,7 @@ const handleImport = async (e) => {
     const res = await testCaseAPI.importCases(projectId, file, format)
     const data = res.data || res
     ElMessage.success(`导入成功 ${data.imported} 条，失败 ${data.failed} 条`)
-    fetchCases()
+    fetchBatches()
   } catch (error) {
     ElMessage.error('导入失败: ' + (error.message || error))
   } finally {
@@ -491,36 +282,9 @@ const handleImport = async (e) => {
   }
 }
 
-const handleSubmit = async (formData) => {
-  try {
-    if (isEdit.value) {
-      await testCaseAPI.update(currentCase.value.id, formData)
-      ElMessage.success('更新成功')
-    } else {
-      await testCaseAPI.create(formData)
-      ElMessage.success('创建成功')
-    }
-
-    dialogVisible.value = false
-    fetchCases()
-  } catch (error) {
-    ElMessage.error(isEdit.value ? '更新失败: ' + error.message : '创建失败: ' + error.message)
-  }
-}
-
-const resetForm = () => {
-  caseFormRef.value?.resetForm()
-  currentCase.value = {}
-}
-
 onMounted(async () => {
   await fetchProjects()
-  // fetchProjects 内部已在默认选中首个项目时触发 fetchCases (带 project_id);
-  // 此处仅在项目列表为空 (无法默认选中) 时兜底提示, 不再无参调用 (后端 project_id 必填, 无参会 422)
-  if (!filters.value.project_id) {
-    cases.value = []
-    total.value = 0
-  }
+  fetchBatches()
 })
 </script>
 
@@ -540,16 +304,5 @@ onMounted(async () => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
-}
-
-.case-detail {
-  padding: 12px 0;
-}
-
-.steps-section h3 {
-  margin-bottom: 16px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--mt-text);
 }
 </style>
