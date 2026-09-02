@@ -56,3 +56,10 @@ class TestSetupLogging:
             h.flush()
         content = open(os.path.join(tmp_path / "app.log"), encoding="utf-8").read()
         assert "still-logged" in content
+
+
+class TestCeleryLogging:
+    def test_worker_setup_connects(self, tmp_path):
+        """celery signals module imports without error and wires setup."""
+        from app.core.logging_setup import setup_worker_logging  # noqa: F401
+        import app.tasks  # noqa: F401  导入即注册 signal, 不抛错

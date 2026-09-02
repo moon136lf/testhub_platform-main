@@ -47,3 +47,9 @@ def setup_logging(log_dir: str = "logs",
     root.addHandler(sh)
 
     root.setLevel(min(fh.level, sh.level))
+
+
+def setup_worker_logging() -> None:
+    """Celery worker 进程日志: 单独文件 app-worker.log (多进程写同一文件有轮转交错风险)."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    setup_logging(log_dir=os.path.join(base_dir, "logs"), log_file="app-worker.log")

@@ -35,3 +35,12 @@ celery_app.conf.update(include=[
     'app.tasks.script_tasks',
     'app.tasks.element_tasks',
 ])
+
+# Worker 日志落 backend/logs/app-worker.log (与 API 的 app.log 分进程, 避免多进程轮转交错)
+from celery.signals import worker_ready
+from app.core.logging_setup import setup_worker_logging
+
+
+@worker_ready.connect
+def _init_worker_logging(**_kwargs):
+    setup_worker_logging()
