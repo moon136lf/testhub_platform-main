@@ -46,7 +46,7 @@
       </el-form>
 
       <el-table :data="documents" border v-loading="loading">
-        <el-table-column prop="doc_name" label="文档名称" width="200" />
+        <el-table-column prop="doc_name" label="文档名称" min-width="200" />
         <el-table-column prop="doc_type" label="类型" width="100">
           <template #default="scope">
             <el-tag v-if="scope.row.doc_type === 'prd'" type="primary">PRD</el-tag>

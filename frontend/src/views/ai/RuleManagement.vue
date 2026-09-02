@@ -28,7 +28,7 @@
       </el-form>
 
       <el-table :data="rules" border v-loading="loading">
-        <el-table-column prop="name" label="规则名称" width="200" />
+        <el-table-column prop="name" label="规则名称" min-width="200" />
         <el-table-column prop="is_builtin" label="类型" width="120">
           <template #default="scope">
             <!-- 后端契约: is_builtin 布尔（无 rule_type 字段） -->
