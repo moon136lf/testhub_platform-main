@@ -95,12 +95,13 @@ export const aiCaseAPI = {
     return response.data
   },
 
-  async createRule(name, ruleType, content, createdBy = 'system') {
+  // 后端 RuleCreate 契约: {name(<=50), description(必填), prompt_template?}；
+  // rule_type/content/created_by 非契约字段，不传（后端统一按自定义规则处理）
+  async createRule(name, description, promptTemplate) {
     const response = await axios.post(`${API_BASE}/rules`, {
       name,
-      rule_type: ruleType,
-      content,
-      created_by: createdBy
+      description,
+      prompt_template: promptTemplate || null
     })
     return response.data
   },

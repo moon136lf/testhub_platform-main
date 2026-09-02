@@ -29,13 +29,14 @@
 
       <el-table :data="rules" border v-loading="loading">
         <el-table-column prop="name" label="规则名称" width="200" />
-        <el-table-column prop="rule_type" label="类型" width="120">
+        <el-table-column prop="is_builtin" label="类型" width="120">
           <template #default="scope">
-            <el-tag v-if="scope.row.rule_type === 'built-in'" type="primary">内置规则</el-tag>
+            <!-- 后端契约: is_builtin 布尔（无 rule_type 字段） -->
+            <el-tag v-if="scope.row.is_builtin" type="primary">内置规则</el-tag>
             <el-tag v-else type="success">自定义</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="content" label="规则内容" show-overflow-tooltip />
+        <el-table-column prop="description" label="规则内容" show-overflow-tooltip />
         <el-table-column prop="created_by" label="创建者" width="120" />
         <el-table-column prop="created_at" label="创建时间" width="180">
           <template #default="scope">
@@ -46,7 +47,7 @@
           <template #default="scope">
             <el-button type="primary" link :icon="View" @click="viewRule(scope.row)">查看</el-button>
             <el-button
-              v-if="scope.row.rule_type === 'custom'"
+              v-if="!scope.row.is_builtin"
               type="primary"
               link
               :icon="Edit"
@@ -55,7 +56,7 @@
               编辑
             </el-button>
             <el-button
-              v-if="scope.row.rule_type === 'custom'"
+              v-if="!scope.row.is_builtin"
               type="danger"
               link
               :icon="Delete"
@@ -110,14 +111,14 @@
       <el-descriptions :column="1" border>
         <el-descriptions-item label="规则名称">{{ currentRule.name }}</el-descriptions-item>
         <el-descriptions-item label="规则类型">
-          <el-tag v-if="currentRule.rule_type === 'built-in'" type="primary">内置规则</el-tag>
+          <el-tag v-if="currentRule.is_builtin" type="primary">内置规则</el-tag>
           <el-tag v-else type="success">自定义</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="创建者">{{ currentRule.created_by }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ formatDate(currentRule.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="规则内容">
           <el-input
-            v-model="currentRule.content"
+            v-model="currentRule.description"
             type="textarea"
             :rows="8"
             readonly
@@ -185,7 +186,9 @@ const loadRules = async () => {
     // Filter by query params
     let filteredRules = ruleList
     if (queryParams.value.ruleType) {
-      filteredRules = filteredRules.filter(r => r.rule_type === queryParams.value.ruleType)
+      // 下拉值 'built-in'/'custom' 对应后端 is_builtin 布尔
+      const wantBuiltin = queryParams.value.ruleType === 'built-in'
+      filteredRules = filteredRules.filter(r => r.is_builtin === wantBuiltin)
     }
     if (queryParams.value.name) {
       filteredRules = filteredRules.filter(r => r.name.includes(queryParams.value.name))
@@ -244,9 +247,8 @@ const submitRule = async () => {
       } else {
         await aiCaseAPI.createRule(
           ruleForm.value.name,
-          ruleForm.value.rule_type,
-          ruleForm.value.content,
-          'admin'
+          ruleForm.value.content,        // 表单的"规则内容"即后端 description
+          null                            // prompt_template 暂不使用
         )
         ElMessage.success('规则创建成功')
       }
