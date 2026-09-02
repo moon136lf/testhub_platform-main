@@ -33,31 +33,39 @@ class FunctionalCaseGenerator:
         self.gateway = gateway
         self.analyzer = CodeStructureAnalyzer()
 
-    async def generate_from_repo(self, project_id: str, repo_path: str) -> dict:
+    async def generate_from_repo(self, project_id: str, repo_path: str,
+                                 source_id=None) -> dict:
+        from app.services.case_batch_service import CaseBatchService
+        batch_svc = CaseBatchService(self.db)
+        ui_batch = await batch_svc.create_batch(project_id, "whitescan_ui", source_id=source_id)
+        api_batch = await batch_svc.create_batch(project_id, "whitescan_api", source_id=source_id)
         menus = self.analyzer.analyze_frontend(repo_path)
         apis = self.analyzer.analyze_backend(repo_path)
-        generated, failed = 0, 0
+        ui_generated, api_generated, failed = 0, 0, 0
 
         # 菜单批
         for i in range(0, len(menus), MENU_BATCH_SIZE):
             batch = menus[i:i + MENU_BATCH_SIZE]
-            ok, n = await self._gen_menu_batch(project_id, batch)
-            generated += n
+            ok, n = await self._gen_menu_batch(project_id, batch, batch_id=ui_batch.id)
+            ui_generated += n
             failed += 0 if ok else 1
             await asyncio.sleep(BATCH_SLEEP)
 
         # API 批
         for i in range(0, len(apis), API_BATCH_SIZE):
             batch = apis[i:i + API_BATCH_SIZE]
-            ok, n = await self._gen_api_batch(project_id, batch)
-            generated += n
+            ok, n = await self._gen_api_batch(project_id, batch, batch_id=api_batch.id)
+            api_generated += n
             failed += 0 if ok else 1
             await asyncio.sleep(BATCH_SLEEP)
 
-        return {"generated": generated, "failed": failed,
+        await batch_svc.update_case_count(ui_batch.id, ui_generated)
+        await batch_svc.update_case_count(api_batch.id, api_generated)
+
+        return {"generated": ui_generated + api_generated, "failed": failed,
                 "menus_found": len(menus), "apis_found": len(apis)}
 
-    async def _gen_menu_batch(self, project_id, batch) -> tuple:
+    async def _gen_menu_batch(self, project_id, batch, batch_id=None) -> tuple:
         prompt = (
             "以下是 Web 系统的前端菜单列表(JSON)。为每个菜单生成 UI 页面功能回归测试用例, "
             "每个菜单 2-5 条, 覆盖: ①页面可访问(菜单点击后正常加载); "
@@ -67,9 +75,9 @@ class FunctionalCaseGenerator:
             "steps: [{step, action, expected}]}。菜单列表:\n"
             + json.dumps(batch, ensure_ascii=False)
         )
-        return await self._call_and_save(project_id, prompt, "菜单")
+        return await self._call_and_save(project_id, prompt, "菜单", batch_id=batch_id)
 
-    async def _gen_api_batch(self, project_id, batch) -> tuple:
+    async def _gen_api_batch(self, project_id, batch, batch_id=None) -> tuple:
         # 过滤健康检查/文档/SSE 等非业务端点
         batch = [a for a in batch
                  if not any(p in f"{a.get('method')} {a.get('path')} {a.get('desc')}".lower()
@@ -82,9 +90,11 @@ class FunctionalCaseGenerator:
             "precondition, priority(P1/P2), steps: [{step, action, expected}]}。"
             "端点列表:\n" + json.dumps(batch, ensure_ascii=False)
         )
-        return await self._call_and_save(project_id, prompt, "API", prefix="[回归-接口]")
+        return await self._call_and_save(project_id, prompt, "API", prefix="[回归-接口]",
+                                         batch_id=batch_id)
 
-    async def _call_and_save(self, project_id, prompt, kind, prefix="[回归]") -> tuple:
+    async def _call_and_save(self, project_id, prompt, kind, prefix="[回归]",
+                             batch_id=None) -> tuple:
         """调 AI → 解析 JSON → 逐条去重落库. 返回 (ok, generated_count)."""
         try:
             resp = await self.gateway.chat([{"role": "user", "content": prompt}],
@@ -119,6 +129,7 @@ class FunctionalCaseGenerator:
                 steps=steps,
                 expected_result=str(expected)[:EXPECTED_MAX_LEN],
                 is_finalized=False,
+                batch_id=batch_id,
             )
             self.db.add(tc)
             seen_titles.add(title)
