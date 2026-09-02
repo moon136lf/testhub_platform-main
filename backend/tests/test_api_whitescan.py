@@ -95,22 +95,44 @@ class TestIssueEndpoints:
 class TestGenerateAndExport:
     def test_generate_cases(self, client):
         svc = MagicMock()
-        # Plan's test only set svc.generate_cases, but the endpoint first calls
-        # svc.list_issues(scan_id) -> MagicMock auto-attr is not awaitable
-        # (plan-internal mismatch, deviation documented). Stub list_issues too;
-        # the endpoint's inlined generate/persist flow is service-level logic
-        # covered by test_regression_case_generator — here we mock the whole
-        # batch path via patching RegressionCaseGenerator.batch_generate.
-        svc.list_issues = AsyncMock(return_value=[])
+        # New functional-gen flow: get_scan for repo_url/branch, git clone via
+        # subprocess, then FunctionalCaseGenerator.generate_from_repo (mocked
+        # hermetically; the service-level logic lives in
+        # test_functional_case_generator).
+        svc.get_scan = AsyncMock(return_value={"id": SCAN,
+                                               "repo_url": "https://example.com/r.git",
+                                               "branch": "main"})
         _override(svc)
-        with patch("app.api.v1.whitescan.RegressionCaseGenerator") as mock_gen_cls:
-            mock_gen_cls.return_value.batch_generate = AsyncMock(
-                return_value={"generated_count": 2, "skipped_count": 1,
-                              "failed_count": 0, "errors": []})
-            r = client.post(f"/api/v1/whitescan/scans/{SCAN}/generate-cases",
-                            params={"project_id": PID})
+        # FunctionalCaseGenerator is imported inside the endpoint, so patch it
+        # at its source module.
+        with patch("app.services.functional_case_generator.FunctionalCaseGenerator") as mock_gen_cls:
+            mock_gen_cls.return_value.generate_from_repo = AsyncMock(
+                return_value={"generated": 2, "failed": 0, "menus_found": 3,
+                              "apis_found": 5})
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                r = client.post(f"/api/v1/whitescan/scans/{SCAN}/generate-cases",
+                                params={"project_id": PID})
         assert r.status_code == 200
-        assert r.json()["data"]["generated_count"] == 2
+        assert r.json()["data"]["generated"] == 2
+
+    def test_generate_cases_scan_not_found(self, client):
+        svc = MagicMock()
+        svc.get_scan = AsyncMock(return_value=None)
+        _override(svc)
+        r = client.post(f"/api/v1/whitescan/scans/{SCAN}/generate-cases",
+                        params={"project_id": PID})
+        assert r.status_code == 404
+
+    def test_generate_cases_invalid_repo_url(self, client):
+        svc = MagicMock()
+        svc.get_scan = AsyncMock(return_value={"id": SCAN,
+                                               "repo_url": "not-a-url",
+                                               "branch": "main"})
+        _override(svc)
+        r = client.post(f"/api/v1/whitescan/scans/{SCAN}/generate-cases",
+                        params={"project_id": PID})
+        assert r.status_code == 400
 
     def test_export_xlsx(self, client):
         svc = MagicMock()

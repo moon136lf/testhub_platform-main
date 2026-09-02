@@ -50,7 +50,7 @@
         </el-table-column>
         <el-table-column label="操作" width="120">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="onGenerateCases(row)">生成回归用例</el-button>
+            <el-button link type="primary" size="small" @click="onGenerateCases(row)">生成功能回归用例</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -253,8 +253,8 @@ const onGenerateCases = async (row) => {
   loading.value = true
   try {
     const res = await whitescanAPI.generateCases(row.id, projectId.value)
-    const d = res.data || res
-    ElMessage.success(`生成 ${d.generated_count} 条，跳过 ${d.skipped_count} 条`)
+    const d = res.data?.data || res.data || {}
+    ElMessage.success(`生成 ${d.generated || 0} 条功能回归用例，请到用例管理页查看`)
   } catch (e) { ElMessage.error('生成失败') } finally { loading.value = false }
 }
 

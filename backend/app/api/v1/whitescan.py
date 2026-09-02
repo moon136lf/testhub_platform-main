@@ -4,19 +4,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.core.database import get_db
 from app.services.code_scan_service import CodeScanService
 from app.services.ai_fix_service import AIFixService
-from app.services.regression_case_generator import RegressionCaseGenerator
 from app.services.scan_export_service import ScanExportService
 from app.schemas.whitescan import (
     ScanTriggerRequest, ScanListResponse, IssueUpdateRequest,
 )
-from app.models.test_case import TestCase
-
-from uuid import UUID
 
 router = APIRouter()
 
@@ -87,45 +82,29 @@ async def ai_fix(issue_id: str, project_id: str = Query(...),
 async def generate_cases(scan_id: str, project_id: str = Query(...),
                          svc: CodeScanService = Depends(get_scan_service),
                          db: AsyncSession = Depends(get_db)):
-    from app.services.ai_gateway import AIGateway
-    generator = RegressionCaseGenerator(AIGateway())
-    issues = await svc.list_issues(scan_id)
-
-    # inject real _case_exists + persistence
-    async def case_exists(pid, issue_id):
-        q = select(TestCase).where(TestCase.source_issue_id == UUID(issue_id),
-                                   TestCase.is_deleted.is_(False))
-        return (await db.execute(q)).scalar_one_or_none() is not None
-
-    async def persist(case, issue):
-        tc = TestCase(
-            project_id=UUID(project_id),
-            name=case["name"][:100],
-            priority=case.get("priority", "P1"),
-            case_type="functional",
-            automation_status="pending",
-            precondition=case.get("precondition"),
-            steps=case["steps"],
-            expected_result=case.get("expected_result", "")[:200],
-            source_issue_id=UUID(issue["id"]),
-        )
-        db.add(tc)
-        await db.commit()
-        return tc
-
-    generator._case_exists = case_exists
-
-    # wrap generate_case to persist
-    original = generator.generate_case
-
-    async def gen_and_persist(issue, suggestion, project_id=None):
-        case = await original(issue, suggestion, project_id=project_id)
-        await persist(case, issue)
-        return case
-
-    generator.generate_case = gen_and_persist
-    result = await generator.batch_generate(project_id, issues)
-    return {"code": 0, "data": result}
+    """基于被测系统代码结构生成功能回归用例 (clone → 静态解析 → AI 批量 → 落库)."""
+    import os, subprocess, tempfile, shutil, re as _re
+    scan = await svc.get_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="scan not found")
+    repo_url, branch = scan["repo_url"], scan.get("branch") or "main"
+    if not _re.match(r"^(https?://|git@|ssh://|file://)", repo_url):
+        raise HTTPException(status_code=400, detail="invalid repo_url")
+    repo_path = tempfile.mkdtemp(prefix="funccase_")
+    try:
+        clone = subprocess.run(
+            ["git", "clone", "--depth", "1", "-b", branch, "--", repo_url, repo_path],
+            capture_output=True, text=True, timeout=240,
+            env={**os.environ, "GIT_ALLOW_PROTOCOL": "https:http:ssh:file"})
+        if clone.returncode != 0:
+            raise HTTPException(status_code=400, detail=f"git clone failed: {clone.stderr[:300]}")
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        from app.services.ai_gateway import AIGateway
+        gen = FunctionalCaseGenerator(db=db, gateway=AIGateway())
+        result = await gen.generate_from_repo(project_id, repo_path)
+        return {"code": 0, "data": result}
+    finally:
+        shutil.rmtree(repo_path, ignore_errors=True)
 
 
 @router.get("/scans/{scan_id}/export")
