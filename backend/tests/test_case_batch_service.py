@@ -36,6 +36,21 @@ class TestCreateBatch:
         assert batch.batch_type == "whitescan_api"
         assert batch.source_id == "scan-1"
 
+    def test_duplicate_name_appends_suffix(self):
+        db = _db()
+
+        async def _execute(q):  # 查重命中（重名存在）
+            r = MagicMock()
+            r.scalar_one_or_none.return_value = 42
+            return r
+        db.execute = _execute
+        svc = CaseBatchService(db)
+        batch = asyncio.run(svc.create_batch(
+            project_id="p1", batch_type="whitescan_api",
+            ts=datetime(2026, 9, 2, 14, 30, 25)))
+        assert batch.batch_name.endswith("-2")
+        assert batch.batch_name == "白盒测试生成接口回归用例20260902143025-2"
+
     def test_create_ai_batch_with_requirement(self):
         db = _db()
         svc = CaseBatchService(db)
