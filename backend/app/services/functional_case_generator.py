@@ -6,7 +6,6 @@
 import asyncio
 import json
 import logging
-import re
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -94,8 +93,8 @@ class FunctionalCaseGenerator:
             title = f"[回归] {c.get('title', '')}"[:NAME_MAX_LEN]
             if title in seen_titles or await self._case_title_exists(project_id, title):
                 continue
-            steps = c.get("steps") or []
-            expected = steps[-1].get("expected", "") if steps and isinstance(steps[-1], dict) else ""
+            steps = self._normalize_steps(c.get("steps"))
+            expected = steps[-1].get("expected", "") if steps else ""
             priority = c.get("priority")
             if priority not in VALID_PRIORITIES:
                 priority = "P2"
@@ -103,7 +102,7 @@ class FunctionalCaseGenerator:
                 project_id=project_id,
                 name=title,
                 priority=priority,
-                case_type="regression",
+                case_type="functional",
                 precondition=c.get("precondition", "已登录系统"),
                 steps=steps,
                 expected_result=str(expected)[:EXPECTED_MAX_LEN],
@@ -116,6 +115,7 @@ class FunctionalCaseGenerator:
             await self.db.flush()
         except IntegrityError as e:
             logger.warning(f"{kind} batch flush failed (duplicate title): {e}")
+            await self.db.rollback()
             return False, 0
         return True, n
 
@@ -127,14 +127,59 @@ class FunctionalCaseGenerator:
         return r.scalar_one_or_none() is not None
 
     @staticmethod
+    def _normalize_steps(raw) -> list:
+        """LLM steps → StepSchema 兼容: 过滤非法项, 重编号 1..n; 全非法返回 []."""
+        if not isinstance(raw, list):
+            return []
+        valid = []
+        for s in raw:
+            if not isinstance(s, dict):
+                continue
+            action, expected = s.get("action"), s.get("expected")
+            if not isinstance(action, str) or not action.strip():
+                continue
+            if not isinstance(expected, str) or not expected.strip():
+                continue
+            valid.append({"step": 0, "action": action[:200], "expected": expected[:200]})
+        for i, s in enumerate(valid, 1):
+            s["step"] = i
+        return valid
+
+    @staticmethod
     def _parse_json_array(raw: str):
-        """LLM 输出 → JSON 数组. 失败返回 None 并告警."""
-        m = re.search(r"\[.*\]", raw, re.DOTALL)
-        if not m:
+        """LLM 输出 → JSON 数组. 取第一个平衡的 [...] (支持嵌套), 失败返回 None 并告警."""
+        start = raw.find("[")
+        if start == -1:
             logger.warning(f"functional case LLM output has no JSON array: {raw[:200]!r}")
             return None
+        depth = 0
+        in_str = False
+        esc = False
+        end = None
+        for i in range(start, len(raw)):
+            ch = raw[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end is None:
+            logger.warning(f"functional case LLM output has unbalanced JSON array: {raw[:200]!r}")
+            return None
         try:
-            data = json.loads(m.group(0))
+            data = json.loads(raw[start:end])
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning(f"functional case LLM output JSON parse failed: {e}; raw: {raw[:200]!r}")
             return None

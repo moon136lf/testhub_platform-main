@@ -70,7 +70,7 @@ class TestGenerateFromRepo:
         tc = db.added[0]
         assert tc.project_id == "p1"
         assert "回归" in tc.name
-        assert tc.case_type == "regression"
+        assert tc.case_type == "functional"
         assert isinstance(tc.steps, list)
 
     def test_gateway_503_one_batch_does_not_abort(self, tmp_path):
@@ -152,3 +152,51 @@ class TestGenerateFromRepo:
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
         assert result["generated"] == 1
         assert db.added[0].priority == "P2"
+
+    def test_garbage_steps_normalized(self, tmp_path):
+        """LLM steps 含垃圾项 → 过滤+重编号; 全非法 → []."""
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text("{ path: '/g', meta: { title: 'G' } }", encoding="utf-8")
+        messy = '''[
+  {"title": "脏步骤-页面", "priority": "P1", "steps": [
+    {"step": "1.", "action": "合法动作", "expected": "合法预期"},
+    "not-a-dict",
+    {"step": 2, "action": "", "expected": "空动作应被过滤"},
+    {"step": 3, "action": "合法动作2", "expected": "合法预期2"}
+  ]},
+  {"title": "全空步骤-页面", "priority": "P2", "steps": [
+    {"step": 1, "action": "", "expected": ""}
+  ]}
+]'''
+        db = _make_db()
+        gw = _gw_ok([messy])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        assert result["generated"] == 2
+        s1 = db.added[0].steps
+        assert [s["step"] for s in s1] == [1, 2]  # 过滤+重编号
+        assert s1[0]["action"] == "合法动作"
+        assert db.added[1].steps == []  # 全非法 → 空
+        assert db.added[1].expected_result == ""
+
+    def test_flush_integrity_error_rolls_back(self, tmp_path):
+        """flush 抛 IntegrityError → rollback 被调用, 批计 failed."""
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        from sqlalchemy.exc import IntegrityError
+        rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text("{ path: '/r', meta: { title: 'R' } }", encoding="utf-8")
+        db = _make_db()
+        rolled_back = []
+        async def _flush():
+            raise IntegrityError("dup", None, Exception())
+        async def _rollback():
+            rolled_back.append(True)
+        db.flush = _flush
+        db.rollback = _rollback
+        gw = _gw_ok([MENU_JSON])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        assert result["generated"] == 0
+        assert result["failed"] >= 1
+        assert rolled_back == [True]
