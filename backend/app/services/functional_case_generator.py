@@ -8,6 +8,9 @@ import json
 import logging
 import re
 
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+
 from app.models.test_case import TestCase
 from app.services.code_structure_analyzer import CodeStructureAnalyzer
 
@@ -16,6 +19,9 @@ logger = logging.getLogger(__name__)
 MENU_BATCH_SIZE = 3   # 每批菜单数 (一次 AI 调用)
 API_BATCH_SIZE = 8    # 每批 API 数
 BATCH_SLEEP = 1.0     # 批间隔秒 (避免打爆网关)
+NAME_MAX_LEN = 100    # test_case.name 列宽
+EXPECTED_MAX_LEN = 200  # test_case.expected_result 列宽
+VALID_PRIORITIES = {"P1", "P2"}
 
 
 class FunctionalCaseGenerator:
@@ -71,7 +77,9 @@ class FunctionalCaseGenerator:
         """调 AI → 解析 JSON → 逐条去重落库. 返回 (ok, generated_count)."""
         try:
             resp = await self.gateway.chat([{"role": "user", "content": prompt}],
-                                           max_tokens=3000)
+                                           max_tokens=3000,
+                                           stage="functional_case_gen",
+                                           project_id=project_id or None)
         except Exception as e:
             logger.warning(f"{kind} batch AI call failed: {e}")
             return False, 0
@@ -79,27 +87,39 @@ class FunctionalCaseGenerator:
         if cases is None:
             return False, 0
         n = 0
+        seen_titles: set[str] = set()  # 同批去重, 防唯一约束 IntegrityError
         for c in cases:
-            title = f"[回归] {c.get('title', '')}"[:100]
-            if not c.get("title") or await self._case_title_exists(project_id, title):
+            if not isinstance(c, dict) or not c.get("title"):
                 continue
+            title = f"[回归] {c.get('title', '')}"[:NAME_MAX_LEN]
+            if title in seen_titles or await self._case_title_exists(project_id, title):
+                continue
+            steps = c.get("steps") or []
+            expected = steps[-1].get("expected", "") if steps and isinstance(steps[-1], dict) else ""
+            priority = c.get("priority")
+            if priority not in VALID_PRIORITIES:
+                priority = "P2"
             tc = TestCase(
                 project_id=project_id,
                 name=title,
-                priority=c.get("priority", "P2"),
+                priority=priority,
                 case_type="regression",
                 precondition=c.get("precondition", "已登录系统"),
-                steps=c.get("steps", []),
-                expected_result=c.get("steps", [{}])[-1].get("expected", "") if c.get("steps") else "",
+                steps=steps,
+                expected_result=str(expected)[:EXPECTED_MAX_LEN],
                 is_finalized=False,
             )
             self.db.add(tc)
+            seen_titles.add(title)
             n += 1
-        await self.db.flush()
+        try:
+            await self.db.flush()
+        except IntegrityError as e:
+            logger.warning(f"{kind} batch flush failed (duplicate title): {e}")
+            return False, 0
         return True, n
 
     async def _case_title_exists(self, project_id, title) -> bool:
-        from sqlalchemy import select
         r = await self.db.execute(
             select(TestCase.id).where(TestCase.project_id == project_id,
                                       TestCase.name == title,
@@ -108,12 +128,14 @@ class FunctionalCaseGenerator:
 
     @staticmethod
     def _parse_json_array(raw: str):
-        """LLM 输出 → JSON 数组. 失败返回 None."""
+        """LLM 输出 → JSON 数组. 失败返回 None 并告警."""
         m = re.search(r"\[.*\]", raw, re.DOTALL)
         if not m:
+            logger.warning(f"functional case LLM output has no JSON array: {raw[:200]!r}")
             return None
         try:
             data = json.loads(m.group(0))
-            return data if isinstance(data, list) else None
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"functional case LLM output JSON parse failed: {e}; raw: {raw[:200]!r}")
             return None
+        return data if isinstance(data, list) else None

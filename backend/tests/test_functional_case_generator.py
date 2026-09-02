@@ -104,3 +104,51 @@ class TestGenerateFromRepo:
         result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
         assert result["generated"] == 0
         assert len(db.added) == 0
+
+    def test_non_dict_elements_skipped(self, tmp_path):
+        """JSON 数组混入非 dict 元素 → 跳过不崩溃."""
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text("{ path: '/x', meta: { title: 'X' } }", encoding="utf-8")
+        mixed = '''[42, "oops", null,
+  {"title": "混合-页面访问", "priority": "P1",
+   "steps": [{"step": 1, "action": "a", "expected": "e"}]}
+]'''
+        db = _make_db()
+        gw = _gw_ok([mixed])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        assert result["generated"] == 1
+        assert len(db.added) == 1
+        assert db.added[0].name.startswith("[回归]")
+
+    def test_same_batch_duplicate_titles(self, tmp_path):
+        """同批两个相同 title → 只落库一条."""
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text("{ path: '/y', meta: { title: 'Y' } }", encoding="utf-8")
+        dup = '''[
+  {"title": "重复-页面", "priority": "P1", "steps": [{"step": 1, "action": "a", "expected": "e"}]},
+  {"title": "重复-页面", "priority": "P2", "steps": [{"step": 1, "action": "a", "expected": "e"}]}
+]'''
+        db = _make_db()
+        gw = _gw_ok([dup])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        assert result["generated"] == 1
+        assert len(db.added) == 1
+
+    def test_invalid_priority_defaults_p2(self, tmp_path):
+        """priority 为非法值 → 默认 P2."""
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text("{ path: '/z', meta: { title: 'Z' } }", encoding="utf-8")
+        bad = '''[
+  {"title": "优先级异常-页面", "priority": "P9", "steps": [{"step": 1, "action": "a", "expected": "e"}]}
+]'''
+        db = _make_db()
+        gw = _gw_ok([bad])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        assert result["generated"] == 1
+        assert db.added[0].priority == "P2"
