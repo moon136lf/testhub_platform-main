@@ -380,22 +380,63 @@ const clearMaterial = (kind) => {
   materials.value[kind] = null
 }
 
-// Step 2 -> 3: 解析材料为文本（前端仅做轻量拼接，真正解析在后端 parse_document_task；
-// 此处把上传文件名 + 需求文本聚合为 doc_content，实际文件流交给后端识别任务时附带）
+// Step 2 -> 3: 真解析——文件走后端 upload-document（parse_document_task 解析），
+// 轮询 /sse/parse-result/{session_id} 拿解析文本；纯文本直接 uploadText。
+// 修复：此前只把「文件名」拼进 doc_content，AI 从未见过文档内容（幻觉根因）。
 const prepareContent = async () => {
   uploading.value = true
+  const parts = []
   try {
-    const parts = []
-    if (materials.value.prd) parts.push(`[PRD文档] ${materials.value.prd.name}`)
-    if (materials.value.design) parts.push(`[设计方案] ${materials.value.design.name}`)
+    // ① 文档类材料：PRD / 设计方案（可解析文本的文件）
+    const docFiles = [
+      ['prd', materials.value.prd],
+      ['design', materials.value.design]
+    ].filter(([, f]) => f)
+
+    for (const [kind, file] of docFiles) {
+      const res = await aiCaseAPI.uploadDocument(formData.value.projectId, file)
+      const data = res.data || res
+      const sessionId = data.session_id || data.data?.session_id
+
+      // 轮询解析结果（任务异步，最多等 30s）
+      const parsed = await pollParseResult(sessionId)
+      if (parsed) parts.push(`[${kind === 'prd' ? 'PRD文档' : '设计方案'}] ${file.name}\n${parsed}`)
+      else parts.push(`[${kind === 'prd' ? 'PRD文档' : '设计方案'}] ${file.name}（解析超时，内容未提取）`)
+    }
+
+    // ② UI 原型（图片/zip/html——后端解析器暂不支持，保留文件名提示）
     if (materials.value.prototype) parts.push(`[UI原型] ${materials.value.prototype.name}`)
+
+    // ③ 需求文本直接附带
     if (formData.value.requirementText?.trim()) parts.push(`[需求文本]\n${formData.value.requirementText}`)
+
     parsedContent.value = parts.join('\n\n')
-    ElMessage.success('材料已准备')
+
+    if (formData.value.requirementText?.trim() && !docFiles.length) {
+      // 纯文本输入也走 upload-document 建会话（后端 text_content 分支）
+      try { await aiCaseAPI.uploadText(formData.value.projectId, formData.value.requirementText) } catch { /* 非阻塞 */ }
+    }
+
+    ElMessage.success(`材料解析完成，共 ${parsedContent.value.length} 字`)
     nextStep()
+  } catch (error) {
+    ElMessage.error('材料解析失败: ' + (error.message || error))
   } finally {
     uploading.value = false
   }
+}
+
+// 轮询解析结果：parse_document_task 完成后写 task_result:{session_id}
+const pollParseResult = async (sessionId, maxWaitMs = 30000) => {
+  const start = Date.now()
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise(r => setTimeout(r, 1500))
+    try {
+      const res = await aiCaseAPI.getParseResult(sessionId)
+      if (res.code === 0 && res.data?.content) return res.data.content
+    } catch { /* not ready yet */ }
+  }
+  return null
 }
 
 // Step 4: AI 识别测试点（SSE 文字直播）

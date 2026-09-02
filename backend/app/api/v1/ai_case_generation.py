@@ -21,6 +21,7 @@ from app.tasks.ai_case_tasks import (
 from app.models.project import Project
 from app.models.test_case import TestPoint, TestCase
 from app.models.test_rule import TestRule
+from app.models.generation import GenerationSession
 from app.core.sse import SSEStream
 from app.schemas.generation import GenerationRules
 
@@ -314,6 +315,17 @@ async def identify_points(
             [uuid.UUID(kid) for kid in request.knowledge_ids]
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid knowledge ID format")
+
+    # 落会话记录（generation_session 表此前 0 行——生成历史无数据可查的根因之一）
+    db.add(GenerationSession(
+        project_id=project_uuid,
+        document_content=request.document_content,
+        selected_rules=request.rules.model_dump() if request.rules else None,
+        selected_knowledge=request.knowledge_ids or None,
+        current_step=5,
+        status="in_progress"
+    ))
+    await db.commit()
 
     # Submit Celery task
     task = identify_test_points_task.delay(

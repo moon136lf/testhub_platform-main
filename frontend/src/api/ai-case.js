@@ -3,20 +3,31 @@ import axios from './axios'
 const API_BASE = '/ai-case-generation'
 
 export const aiCaseAPI = {
+  // Step 2: 上传材料——走后端 /upload-document（JSON base64 文件流），
+  // 后端 parse_document_task 解析并缓存结果，用 getParseResult 轮询取文本
   async uploadDocument(projectId, file, docType = 'prd') {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('doc_type', docType)
+    const buffer = await file.arrayBuffer()
+    const bytes = Array.from(new Uint8Array(buffer))
+    const response = await axios.post(`${API_BASE}/upload-document`, {
+      project_id: projectId,
+      file_bytes: bytes,
+      file_type: docType
+    })
+    return response.data
+  },
 
-    const response = await axios.post(
-      `${API_BASE}/projects/${projectId}/documents/upload`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      }
-    )
+  // 轮询文档解析结果（parse_document_task 完成后写入 task_result:{session_id}）
+  async getParseResult(sessionId) {
+    const response = await axios.get(`/sse/parse-result/${sessionId}`)
+    return response.data
+  },
+
+  // 纯文本输入也走 upload-document（text_content 分支），保证会话一致
+  async uploadText(projectId, text) {
+    const response = await axios.post(`${API_BASE}/upload-document`, {
+      project_id: projectId,
+      text_content: text
+    })
     return response.data
   },
 

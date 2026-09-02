@@ -118,6 +118,10 @@ async def _parse_document_async(
         progress=1.0
     )
 
+    # 缓存解析结果，供前端 /sse/parse-result/{session_id} 轮询获取
+    # （celery 返回值只进 celery-task-meta，前端拿不到；cache_result 走 redis）
+    await sse.cache_result({"content": parsed_content})
+
     logger.info(f"Task parse_document_task completed: session_id={session_id}")
     return {"content": parsed_content}
 
@@ -328,7 +332,8 @@ async def _identify_test_points_async(
                 test_points = await generator.generate(
                     doc_content=doc_content,
                     rules=rules,
-                    knowledge_context=knowledge_context
+                    knowledge_context=knowledge_context,
+                    project_id=project_id  # W10: 记录 token 用量到 ai_call_log
                 )
                 # W6: 累加真实 Token（ai_gateway.chat 已返回 tokens）
                 # generate() 内部已消费 token，这里按点数粗估回补（粗估满足 CASE-08）

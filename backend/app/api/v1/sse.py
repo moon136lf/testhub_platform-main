@@ -12,6 +12,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/parse-result/{session_id}")
+async def get_parse_result(session_id: str):
+    """
+    获取文档解析任务缓存结果（parse_document_task 完成后写入 task_result:{session_id}）
+
+    前端 Step 2「解析并继续」轮询此端点，拿到解析文本后再进入 Step 3。
+    """
+    sse = SSEStream(session_id)
+    result = await sse.get_cached_result()
+    if result is None:
+        return {"code": 1, "message": "not ready", "data": None}
+    return {"code": 0, "message": "ok", "data": result}
+
+
 @router.get("/stream/{session_id}")
 async def stream_events(session_id: str):
     """

@@ -34,7 +34,7 @@ class TestPointGenerator:
 {{
   "pages": [
     {{
-      "page_name": "页面名称",
+      "page_name": "页面名称（从文档中提取的真实页面/模块名）",
       "test_points": [
         {{
           "name": "测试点名称",
@@ -49,8 +49,10 @@ class TestPointGenerator:
 注意：
 1. 每个测试点必须清晰、可执行
 2. type_label 只能是：正常流程、异常流程、边界值、等价类、场景法
-3. 按页面分组输出
-4. 只返回JSON，不要其他说明文字
+3. 按页面分组输出，page_name 必须来自文档中实际描述的页面或功能模块
+4. 测试点必须严格来自文档描述的功能——文档没提到的功能不要臆造
+5. 覆盖文档中所有功能模块，不要只围绕某一个模块
+6. 只返回JSON，不要其他说明文字
 """
 
     async def generate(
@@ -79,8 +81,10 @@ class TestPointGenerator:
             logger.info("Starting test point generation")
 
             # Limit content length
-            limited_doc = doc_content[:5000]
-            limited_knowledge = knowledge_context[:2000]
+            # 注意：真实 PRD 可能几万字，截断过狠会导致 AI 只见文档开头（覆盖不全）。
+            # glm 上下文足够，这里放宽到 30000 字符；知识库参考 4000。
+            limited_doc = doc_content[:30000]
+            limited_knowledge = knowledge_context[:4000]
 
             # Build prompts
             system_prompt = self._build_system_prompt(rules)
@@ -103,6 +107,7 @@ class TestPointGenerator:
                 messages, provider="glm-4",
                 project_id=str(project_id) if project_id else None,
                 stage="identify_point",
+                max_tokens=8000  # 大文档测试点多，默认 2000 会被截断导致 JSON 解析失败
             )
 
             # Parse JSON response
