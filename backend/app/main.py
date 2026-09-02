@@ -10,13 +10,16 @@ import logging
 
 from app.core.config import settings
 from app.core.database import engine, init_db
+from app.core.redis import redis_client
 from app.api import api_router
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO if settings.DEBUG else logging.WARNING,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+import os
+
+from app.core.logging_setup import setup_logging
+
+setup_logging(log_dir=os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs"),
+              level_console=os.getenv("LOG_LEVEL"))
 logger = logging.getLogger(__name__)
 
 
@@ -27,11 +30,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting MoonTest application...")
     await init_db()
     logger.info("Database initialized")
+    await redis_client.connect()  # SSE 流依赖（不连则 redis_client.redis 为 None）
+    logger.info("Redis initialized")
 
     yield
 
     # Shutdown
     logger.info("Shutting down MoonTest application...")
+    await redis_client.close()
     await engine.dispose()
     logger.info("Database connections closed")
 
