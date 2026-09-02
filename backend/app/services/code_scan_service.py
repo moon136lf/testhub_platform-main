@@ -130,7 +130,7 @@ class CodeScanService:
             scan.stage = stage
             await self.db.commit()
         except Exception as e:
-            logger.warning(f"update_progress failed (non-blocking): {e}")
+            logger.warning(f"update_progress failed (non-blocking) | scan_id={scan_id} stage={stage} progress={progress}: {e}")
 
     async def mark_scan_done(self, scan_id: str, *, total: int, high: int,
                              mid: int, low: int, file_count: int,

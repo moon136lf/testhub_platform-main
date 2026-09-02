@@ -46,7 +46,7 @@ class AIFixService:
                 stage="whitescan_ai_fix",
             )
         except Exception as e:
-            logger.error(f"AI fix gateway call failed: {e}")
+            logger.error(f"AI fix gateway call failed | issue_id={issue_id} project_id={project_id}: {e}")
             raise
 
         content = (resp or {}).get("content", "")

@@ -44,8 +44,8 @@ class OperationLogService:
             logger.warning(f"Operation log failed (non-blocking): {e}")
             try:
                 await self.db.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"operation log rollback skipped (non-critical): {e}")
 
 
 def _build_service(db: AsyncSession) -> OperationLogService:

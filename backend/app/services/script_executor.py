@@ -42,13 +42,13 @@ async def collect_failure(page, step: int, error: Exception, storage=None) -> di
             if storage is not None and screenshot:
                 screenshot_url = await storage.upload_bytes(screenshot, f"fail_step{step}.png")
         except Exception as e:
-            logger.warning(f"screenshot collect failed: {e}")
+            logger.warning(f"screenshot collect failed | step={step}: {e}")
         try:
             dom_snapshot = await page.content()
             if dom_snapshot:
                 dom_snapshot = dom_snapshot[:50000]
         except Exception as e:
-            logger.warning(f"dom collect failed: {e}")
+            logger.warning(f"dom collect failed | step={step}: {e}")
     # 用 error 实例自身的 traceback 格式化, 而非 traceback.format_exc()——后者依赖
     # 调用上下文处于 except 块, 在正常协程调用里会返回 'NoneType: None\n',
     # 无法体现错误类型. format_exception 始终包含异常类型名 + 消息.
@@ -152,7 +152,7 @@ class ScriptExecutor:
             svc = ElementService(self.db)
             await svc.writeback_healed_locator(writeback["element_id"], writeback["locator"])
         except Exception as e:
-            logger.warning(f"writeback to repo failed: {e}")
+            logger.warning(f"writeback to repo failed | element_id={writeback.get('element_id')}: {e}")
 
     async def execute(self, script_asset: ScriptAsset, config, target_url: str,
                       sse, execution_record: Optional[ExecutionRecord] = None,
@@ -173,7 +173,7 @@ class ScriptExecutor:
                 page = await self._launch_browser(config, target_url)
                 launched = True
             except Exception as e:
-                logger.error(f"browser launch failed: {e}")
+                logger.error(f"browser launch failed | script={script_asset.name} target_url={target_url}: {e}")
                 page = None
         failures = 0
         overall_status = "pass"

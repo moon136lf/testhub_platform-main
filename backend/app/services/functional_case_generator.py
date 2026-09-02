@@ -80,7 +80,7 @@ class FunctionalCaseGenerator:
                                            stage="functional_case_gen",
                                            project_id=project_id or None)
         except Exception as e:
-            logger.warning(f"{kind} batch AI call failed: {e}")
+            logger.warning(f"{kind} batch AI call failed | project_id={project_id} prompt_len={len(prompt)}: {e}")
             return False, 0
         cases = self._parse_json_array(resp.get("content", ""))
         if cases is None:

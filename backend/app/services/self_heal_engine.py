@@ -149,7 +149,7 @@ class SelfHealEngine:
         try:
             dom = await page.content()
         except Exception as e:
-            logger.warning(f"ai_dom content fetch failed: {e}")
+            logger.warning(f"ai_dom content fetch failed | element={element_data.get('element_name')}: {e}")
             return None
         dom = (dom or "")[:DOM_TRUNCATE]
         semantic = element_data.get("semantic_info") or {}
@@ -162,7 +162,7 @@ DOM:
         try:
             resp = await self.gateway.chat([{"role": "user", "content": prompt}])
         except Exception as e:
-            logger.warning(f"ai_dom LLM call failed: {e}")
+            logger.warning(f"ai_dom LLM call failed | element={element_data.get('element_name')} dom_len={len(dom)}: {e}")
             return None
         locator = self._clean_llm_locator(resp.get("content"))
         if not locator:
@@ -185,7 +185,7 @@ DOM:
         try:
             screenshot = await page.screenshot()
         except Exception as e:
-            logger.warning(f"visual screenshot failed: {e}")
+            logger.warning(f"visual screenshot failed | element={element_data.get('element_name')}: {e}")
             return None
         if not screenshot:
             return None
@@ -208,7 +208,7 @@ DOM:
             # 显式 provider="moonshot" (路线1: Level4 专用 kimi2.6, 其他仍默认)
             resp = await self.gateway.chat(messages, provider="moonshot")
         except Exception as e:
-            logger.warning(f"visual LLM call failed: {e}")
+            logger.warning(f"visual LLM call failed | element={element_data.get('element_name')} provider=moonshot: {e}")
             return None
         locator = self._clean_llm_locator(resp.get("content"))
         if not locator:
@@ -277,7 +277,7 @@ DOM:
             return base64.b64encode(buf.getvalue()).decode()
         except Exception as e:
             # PIL 缺失/图片异常 → 原样 base64 (PNG), 保证可用性
-            logger.warning(f"screenshot compress skipped: {e}")
+            logger.warning(f"screenshot compress skipped (fallback to raw PNG base64): {e}")
             return base64.b64encode(screenshot).decode()
 
     async def _on_heal_success(self, element_data, locator, strategy) -> Optional[dict]:
