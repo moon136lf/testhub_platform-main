@@ -312,10 +312,27 @@ async def _identify_test_points_async(
                 tokens_estimated_total=0
             )
 
-            # TODO: Load actual knowledge chunks when needed
+            # 加载知识库上下文：读所选文档全文（向量检索需 embedding 通道，
+            # 未配置时降级为全文拼接——文档本身已解析入库，直接可用）
             knowledge_context = ""
             if knowledge_ids:
-                knowledge_context = "参考历史测试经验..."
+                try:
+                    from app.models.knowledge import KnowledgeDocument
+                    k_uuids = [UUID(k) for k in knowledge_ids if k]
+                    if k_uuids:
+                        k_result = await db.execute(
+                            select(KnowledgeDocument).where(KnowledgeDocument.id.in_(k_uuids))
+                        )
+                        docs = k_result.scalars().all()
+                        parts = [
+                            f"【{d.doc_name}】\n{(d.content or '')[:6000]}"
+                            for d in docs if d.content
+                        ]
+                        knowledge_context = "\n\n".join(parts)
+                        logger.info(f"Loaded {len(parts)} knowledge docs for context ({len(knowledge_context)} chars)")
+                except Exception as e:
+                    logger.warning(f"Knowledge context load failed (non-blocking): {e}")
+                    knowledge_context = ""
 
             # Step 3: AI 识别测试点
             await sse.send_message(
