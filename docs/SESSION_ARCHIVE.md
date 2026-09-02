@@ -5,6 +5,30 @@
 
 ---
 
+## 快照 #40 — 2026-09-02 19:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+```
+c1652fe feat(logging): celery worker logs to app-worker.log (#logging T2)
+86397f1 feat(logging): setup_logging — rotating file + console dual output (#logging T1)
+6225d59 docs: backend logging standardization implementation plan (5 tasks)
+dda686b docs: backend logging standardization spec
+6b454b5 feat(whitescan): refresh button next to scan-start
+37afe8f docs: session archive #39 (auto)
+dfc22db merge: #12 UI modern light theme — all 19 pages
+73448bc feat(ui): batch-4 modern light theme — remaining 9 pages
+```
+
+### 未提交改动
+- 未跟踪：`backend/.en`、`docs/REQUIREMENTS_V1.1.md`、`docs/SESSION_HANDOFF_2026-08-26.md`
+
+### 进度
+日志规范化 5 任务进行中：T1（setup_logging 双输出+轮转，86397f1）、T2（Celery worker 落 app-worker.log，c1652fe）完成且审查通过；T3（报错补上下文）→T4（请求日志+异常兜底）→T5（真实验证）待做。
+
+---
+
 ## 快照 #39 — 2026-09-02 18:50（auto）
 
 **当前分支**：master（主仓）
