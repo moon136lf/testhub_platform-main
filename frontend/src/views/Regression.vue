@@ -344,9 +344,15 @@ const exportReport = (fmt) => {
 const pushReport = async () => {
   if (!summary.value?.record) return
   try {
-    await regressionAPI.push(summary.value.record.exec_id)
-    ElMessage.success('已推送(notifier stub)')
-  } catch (e) { ElMessage.error('推送失败') }
+    const res = await regressionAPI.push(summary.value.record.exec_id)
+    const d = res.data || res
+    if (d.pushed) {
+      const ch = Object.entries(d.channels || {}).filter(([, v]) => v === 'ok').map(([k]) => k)
+      ElMessage.success(`已推送到：${ch.join('、') || 'webhook'}`)
+    } else {
+      ElMessage.warning('未配置推送渠道——请在 系统设置 中配置钉钉/企微/飞书 Webhook（category=notify）')
+    }
+  } catch (e) { ElMessage.error('推送失败: ' + (e.message || e)) }
 }
 
 onMounted(async () => {

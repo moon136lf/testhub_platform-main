@@ -96,10 +96,11 @@ async def latest_execution(script_id: str = Query(...),
 
 @router.post("/{exec_id}/push")
 async def push_report(exec_id: str) -> RegResponse:
-    """REG-05: 推送报告 (notifier stub, 真实渠道归 #10)."""
+    """REG-05: 推送报告到已配置的 webhook（钉钉/企微/飞书/自定义，system_setting notify 类）。
+    未配置任何渠道时返回 pushed=False，前端如实提示。"""
     from app.services.notifier import notify_report_ready
-    await notify_report_ready(exec_id, {"source": "regression"})
-    return RegResponse(data={"pushed": True, "exec_id": exec_id})
+    result = await notify_report_ready(exec_id, {"source": "regression"})
+    return RegResponse(data={"pushed": result["pushed"], "channels": result["channels"], "exec_id": exec_id})
 
 
 @router.get("/report-summary")

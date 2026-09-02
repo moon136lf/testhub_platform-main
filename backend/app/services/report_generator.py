@@ -87,7 +87,7 @@ class ReportGenerator:
         rec.report_url = html_key
         await self.db.commit()
 
-        # notify (P1 stub)
+        # notify (webhook 渠道，未配置则降级日志)
         await notify_report_ready(exec_id, {"html_url": html_key, "pdf_url": pdf_key})
 
         return {"html_url": html_key, "pdf_url": pdf_key, "regenerated": True}

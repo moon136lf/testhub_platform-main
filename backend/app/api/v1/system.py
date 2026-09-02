@@ -33,7 +33,7 @@ def get_oplog_service(db: AsyncSession = Depends(get_db)) -> OperationLogService
 # ---- settings ----
 @router.get("/settings")
 async def list_settings(
-    category: str = Query(..., pattern="^(ai|runtime)$"),
+    category: str = Query(..., pattern="^(ai|runtime|notify)$"),
     svc: SystemSettingService = Depends(get_setting_service),
 ):
     rows = await svc.list(category)
@@ -43,7 +43,7 @@ async def list_settings(
 @router.get("/settings/{key}")
 async def get_setting(
     key: str,
-    category: str = Query(..., pattern="^(ai|runtime)$"),
+    category: str = Query(..., pattern="^(ai|runtime|notify)$"),
     reveal: bool = Query(False),
     svc: SystemSettingService = Depends(get_setting_service),
 ):
@@ -55,7 +55,7 @@ async def get_setting(
 async def update_setting(
     key: str,
     body: SettingUpdate,
-    category: str = Query(..., pattern="^(ai|runtime)$"),
+    category: str = Query(..., pattern="^(ai|runtime|notify)$"),
     svc: SystemSettingService = Depends(get_setting_service),
     oplog: OperationLogService = Depends(get_oplog_service),
 ):

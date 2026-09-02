@@ -19,7 +19,7 @@ class SystemSetting(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    category = Column(Enum("ai", "runtime", name="system_setting_category", native_enum=False), nullable=False)  # ai / runtime
+    category = Column(Enum("ai", "runtime", "notify", name="system_setting_category", native_enum=False), nullable=False)  # ai / runtime / notify
     key = Column(String(100), nullable=False)
     value = Column(Text)
     value_encrypted = Column(Text)
