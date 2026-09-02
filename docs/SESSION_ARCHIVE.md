@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #43 — 2026-09-02 22:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- b49dd7e fix(elements): missing SSE route + playwright async API fix
+- 2bc5ba5 feat(ai-gen): real generation history — sessions list/detail/delete (was fully mocked)
+- 4e89c40 fix(ai-gen): documents never parsed — AI only saw file names (hallucinated login points)
+- 96670db docs: session archive #42 (auto)
+- 57b5634 docs: session archive #41 (auto)
+- 49e8018 feat(sse): reconnect limit — close after 3 consecutive failures
+- 8df658f docs(logging): tick plan checkboxes T1-T5 (#logging complete)
+- 124d5df feat(logging): request log middleware + unhandled exception handler (#logging T4)
+
+### 未提交变更
+- `M backend/app/api/v1/regression.py`、`M backend/app/services/notifier.py`、`M backend/app/services/report_generator.py`（另一会话进行中，勿动）
+- 未跟踪：`backend/.en`、`docs/SESSION_HANDOFF_2026-08-26.md`、`docs/superpowers/plans/2026-09-02-case-batch.md`
+
+### 进度
+元素抓取 404 修复（b49dd7e：补 /element-fetch SSE 路由 + playwright async Browser 无 set_default_timeout 的崩溃）；诊断出用户环境两个 uvicorn 实例抢 8000 端口（12:32 旧实例 vs 15:13 新实例）导致新路由随机 404，已指导用户 stop_all→start_all 清理。
+
+---
+
 ## 快照 #42 — 2026-09-02 21:50（auto）
 
 **当前分支**：master（主仓）
