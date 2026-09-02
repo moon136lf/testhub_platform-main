@@ -165,9 +165,13 @@ async def verify_and_score_locator(page, locator_candidate: Dict[str, Any], targ
             return None
 
         # 检查是否定位到目标元素
+        # 注意: 把 Locator 直接作为 evaluate 参数传过去会变成 JS 值序列化,
+        # el === target 恒为 False → 所有定位器验证失败 → 抓取 0 元素。
+        # 必须先 evaluate_handle 拿到 ElementHandle 再做 DOM 身份比较。
+        target_handle = await target_element.evaluate_handle("el => el")
         target_found = False
         for elem in found_elements:
-            is_same = await elem.evaluate("(el, target) => el === target", target_element)
+            is_same = await elem.evaluate("(el, target) => el === target", target_handle)
             if is_same:
                 target_found = True
                 break
