@@ -5,16 +5,19 @@ const API_BASE = '/ai-case-generation'
 export const aiCaseAPI = {
   // Step 2: 上传材料——走后端 /upload-document（base64 文本，pydantic bytes 接受 str），
   // 后端 parse_document_task 解析并缓存结果，用 getParseResult 轮询取文本
-  async uploadDocument(projectId, file, docType = 'prd') {
+  // file_type 从文件扩展名推导（kind 标签 prd/design 不是解析器类型）
+  async uploadDocument(projectId, file, docType = 'md') {
     const buf = new Uint8Array(await file.arrayBuffer())
     let bin = ''
     for (let i = 0; i < buf.length; i += 0x8000) {
       bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000))
     }
+    const ext = (file.name || '').split('.').pop()?.toLowerCase()
+    const fileType = ['docx', 'pdf', 'txt', 'md'].includes(ext) ? ext : (docType || 'md')
     const response = await axios.post(`${API_BASE}/upload-document`, {
       project_id: projectId,
       file_bytes: btoa(bin),   // base64 str（JSON 数字数组会被 pydantic bytes 拒绝 → 422）
-      file_type: docType
+      file_type: fileType
     })
     return response.data
   },

@@ -56,6 +56,9 @@ class UploadDocumentRequest(BaseModel):
     @field_validator('file_type')
     @classmethod
     def validate_file_type(cls, v):
+        # 前端 Step2 的 kind 标签(prd/design)会透传进 docType，需映射到解析器类型
+        kind_map = {"prd": "md", "design": "md", "prototype": "html"}
+        v = kind_map.get(v, v)
         if v is not None and v not in ALLOWED_FILE_TYPES:
             raise ValueError(f'Invalid file type. Allowed types: {", ".join(ALLOWED_FILE_TYPES)}')
         return v
