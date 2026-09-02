@@ -8,7 +8,7 @@ class CodeStructureAnalyzer:
     """扫描代码仓库，提取前端菜单（Vue Router 路由）与后端 API 端点（FastAPI 装饰器）。"""
 
     # 跳过的目录（第三方/构建产物）
-    SKIP_DIRS = {"node_modules", "dist", "build", ".git", "__pycache__", "venv", ".venv"}
+    SKIP_DIRS = {"node_modules", "dist", "build", ".git", "__pycache__", "venv", ".venv", ".claude", "worktrees"}
 
     # 路由对象内的字段提取
     _PATH_RE = re.compile(r"path\s*:\s*['\"]([^'\"]+)['\"]")
@@ -96,19 +96,14 @@ class CodeStructureAnalyzer:
 
     @staticmethod
     def _route_blocks(content: str) -> list[str]:
-        """按 { } 大致切分路由对象块（支持单行与多行写法）。"""
-        blocks: list[str] = []
-        depth = 0
-        start = None
-        for i, ch in enumerate(content):
-            if ch == "{":
-                if depth == 0:
-                    start = i
-                depth += 1
-            elif ch == "}":
-                if depth > 0:
-                    depth -= 1
-                    if depth == 0 and start is not None:
-                        blocks.append(content[start: i + 1])
-                        start = None
+        """按 path: 锚点切分路由块。路由对象嵌套(children)，大括号配平切不出
+        单条路由，改为以每个 path 锚点为起点切到下一个锚点前。"""
+        anchors = [m.start() for m in CodeStructureAnalyzer._PATH_RE.finditer(content)]
+        if not anchors:
+            return []
+        # 每块从锚点前一点点(含 path 所在行首)到下一锚点，首块前无内容可取则从锚点起
+        blocks = []
+        for idx, pos in enumerate(anchors):
+            end = anchors[idx + 1] if idx + 1 < len(anchors) else len(content)
+            blocks.append(content[pos:end])
         return blocks

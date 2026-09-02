@@ -4,9 +4,10 @@ AI Case Generation API endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
+from datetime import datetime
 import uuid
 import tempfile
 import os
@@ -22,6 +23,7 @@ from app.models.project import Project
 from app.models.test_case import TestPoint, TestCase
 from app.models.test_rule import TestRule
 from app.models.generation import GenerationSession
+from app.models.execution import AICallLog
 from app.core.sse import SSEStream
 from app.schemas.generation import GenerationRules
 
@@ -317,7 +319,9 @@ async def identify_points(
             raise HTTPException(status_code=400, detail="Invalid knowledge ID format")
 
     # 落会话记录（generation_session 表此前 0 行——生成历史无数据可查的根因之一）
+    # session_id 由前端生成（uuid），直接以其为主键，供 /sessions/{id} 详情查询
     db.add(GenerationSession(
+        id=uuid.UUID(request.session_id),
         project_id=project_uuid,
         document_content=request.document_content,
         selected_rules=request.rules.model_dump() if request.rules else None,
@@ -507,6 +511,25 @@ async def generate_cases(
         point_ids=request.point_ids,
         hallucination_strategy=request.hallucination_strategy
     )
+
+    # 生成完成节点：更新会话状态（identify 时已建会话；查不到就新建，兼容直连生成）
+    result = await db.execute(
+        select(GenerationSession).where(GenerationSession.id == uuid.UUID(request.session_id))
+    )
+    session = result.scalar_one_or_none()
+    if session:
+        session.hallucination_strategy = request.hallucination_strategy
+        session.current_step = 7
+        session.updated_at = datetime.utcnow()
+    else:
+        db.add(GenerationSession(
+            id=uuid.UUID(request.session_id),
+            project_id=project_uuid,
+            hallucination_strategy=request.hallucination_strategy,
+            current_step=7,
+            status="in_progress"
+        ))
+    await db.commit()
 
     return {
         "code": 0,
@@ -721,3 +744,150 @@ async def delete_rule(
     await db.commit()
 
     return {"code": 0, "message": "Rule deleted successfully", "data": {"id": rule_id}}
+
+
+# ---------------- 生成会话（生成历史页数据源） ----------------
+
+@router.get("/sessions")
+async def list_sessions(
+    project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    status: Optional[str] = Query(None, description="Filter by status: in_progress, completed, failed"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    生成会话列表（生成历史页）
+
+    会话在 identify-points 时创建、generate-cases 时更新。
+    counts/tokens 从 test_point / test_case / ai_call_log 聚合。
+    """
+    query = select(GenerationSession)
+    if project_id:
+        try:
+            query = query.where(GenerationSession.project_id == uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project ID format")
+    if status:
+        query = query.where(GenerationSession.status == status)
+
+    query = query.order_by(GenerationSession.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(query)
+    sessions = result.scalars().all()
+
+    data = []
+    for s in sessions:
+        # 聚合：该会话识别的测试点数（同项目 + 会话创建时间之后到下次会话前，简化口径：项目内全部）
+        # 精确关联需要 test_point 加 session_id 外键（V1.2 再做），此处按项目+时间窗粗略统计
+        pts_result = await db.execute(
+            select(func.count(TestPoint.id)).where(TestPoint.project_id == s.project_id)
+        )
+        cases_result = await db.execute(
+            select(func.count(TestCase.id)).where(
+                and_(TestCase.project_id == s.project_id, TestCase.is_deleted.is_(False))
+            )
+        )
+        tokens_result = await db.execute(
+            select(func.coalesce(func.sum(AICallLog.tokens_used), 0)).where(
+                AICallLog.project_id == s.project_id
+            )
+        )
+        project_name = None
+        pr = await db.execute(select(Project).where(Project.id == s.project_id))
+        p = pr.scalar_one_or_none()
+        if p:
+            project_name = p.name
+
+        data.append({
+            "session_id": str(s.id),
+            "project_id": str(s.project_id) if s.project_id else None,
+            "project_name": project_name,
+            "status": s.status,
+            "test_points_count": pts_result.scalar() or 0,
+            "test_cases_count": cases_result.scalar() or 0,
+            "total_tokens": int(tokens_result.scalar() or 0),
+            "start_time": s.created_at.isoformat() if s.created_at else None,
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            "current_step": s.current_step,
+        })
+
+    return {"code": 0, "data": data}
+
+
+@router.get("/sessions/{session_id}")
+async def get_session_detail(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """生成会话详情：文档摘要 + 会话内识别的测试点 + 生成的用例"""
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    result = await db.execute(select(GenerationSession).where(GenerationSession.id == sid))
+    s = result.scalar_one_or_none()
+    if not s:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # 该会话时间窗内（创建→下次更新/现在）项目内的测试点与用例
+    pts_result = await db.execute(
+        select(TestPoint).where(
+            and_(TestPoint.project_id == s.project_id,
+                 TestPoint.created_at >= s.created_at)
+        ).order_by(TestPoint.created_at.desc())
+    )
+    points = pts_result.scalars().all()
+
+    cases_result = await db.execute(
+        select(TestCase).where(
+            and_(TestCase.project_id == s.project_id,
+                 TestCase.is_deleted.is_(False),
+                 TestCase.created_at >= s.created_at)
+        ).order_by(TestCase.created_at.desc())
+    )
+    cases = cases_result.scalars().all()
+
+    return {
+        "code": 0,
+        "data": {
+            "session_id": str(s.id),
+            "project_id": str(s.project_id) if s.project_id else None,
+            "status": s.status,
+            "document_summary": (s.document_content or "")[:500],
+            "selected_rules": s.selected_rules,
+            "hallucination_strategy": s.hallucination_strategy,
+            "generation_mode": "comprehensive",
+            "test_points": [
+                {"id": str(p.id), "page_name": p.page_name, "name": p.name,
+                 "type_label": p.type_label, "description": p.description}
+                for p in points
+            ],
+            "test_cases": [
+                {"id": str(c.id), "name": c.name, "priority": c.priority,
+                 "is_finalized": c.is_finalized}
+                for c in cases
+            ],
+        }
+    }
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """删除生成会话记录（仅删会话，不动已生成的测试点/用例）"""
+    try:
+        sid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    result = await db.execute(select(GenerationSession).where(GenerationSession.id == sid))
+    s = result.scalar_one_or_none()
+    if not s:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    await db.delete(s)
+    await db.commit()
+    return {"code": 0, "message": "Session deleted successfully", "data": {"id": session_id}}

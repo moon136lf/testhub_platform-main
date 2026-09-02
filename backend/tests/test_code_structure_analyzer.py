@@ -81,3 +81,52 @@ class TestAnalyzeBackend:
     def test_empty_repo_returns_empty(self, tmp_path):
         assert CodeStructureAnalyzer().analyze_frontend(str(tmp_path)) == []
         assert CodeStructureAnalyzer().analyze_backend(str(tmp_path)) == []
+
+
+# ---- V1.1 修复: 嵌套路由块提取 + redirect 不连坐 + .claude/worktrees 跳过 ----
+
+ROUTER_JS_NESTED = '''
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    {
+      path: '/',
+      component: Layout,
+      redirect: '/dashboard',
+      children: [
+        { path: 'dashboard', name: 'Dashboard', component: Dashboard, meta: { title: '仪表盘' } },
+        { path: 'cases', name: 'Cases', component: Cases, meta: { title: '用例管理' } },
+        { path: 'ai', name: 'AI', component: AI, meta: { title: 'AI智能' } },
+      ]
+    },
+    { path: '/login', name: 'Login', component: Login },
+    { path: '/reports', name: 'Reports', component: Reports, meta: { title: '执行记录' } },
+  ]
+})
+'''
+
+
+class TestNestedRoutes:
+    def test_nested_children_extracted(self, tmp_path):
+        """嵌套 children 路由逐条提取; 顶层 redirect 不连坐其他路由."""
+        rdir = tmp_path / "src" / "router"
+        rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text(ROUTER_JS_NESTED, encoding="utf-8")
+        menus = CodeStructureAnalyzer().analyze_frontend(str(tmp_path))
+        paths = [m["path"] for m in menus]
+        assert "dashboard" in paths
+        assert "cases" in paths
+        assert "ai" in paths
+        assert "/reports" in paths
+        assert len(menus) == 5  # login 无 title 也算菜单; 顶层 '/' 的 path 锚点也切出, 但 redirect+无 title 不影响其他条
+        titles = [m.get("title") for m in menus]
+        assert "仪表盘" in titles
+        assert "用例管理" in titles
+
+    def test_skips_claude_worktrees(self, tmp_path):
+        """.claude/worktrees 下的旧 router 不重复扫描."""
+        wt = tmp_path / ".claude" / "worktrees" / "x" / "src" / "router"
+        wt.mkdir(parents=True)
+        (wt / "index.js").write_text(ROUTER_JS, encoding="utf-8")
+        menus = CodeStructureAnalyzer().analyze_frontend(str(tmp_path))
+        assert menus == []

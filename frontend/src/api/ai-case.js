@@ -106,6 +106,19 @@ export const aiCaseAPI = {
     return response.data
   },
 
+  // 生成会话列表（生成历史页）
+  async listSessions(projectId = '', status = '', skip = 0, limit = 20) {
+    const response = await axios.get(`${API_BASE}/sessions`, {
+      params: { project_id: projectId || undefined, status: status || undefined, skip, limit }
+    })
+    return response.data
+  },
+
+  async deleteSession(sessionId) {
+    const response = await axios.delete(`${API_BASE}/sessions/${sessionId}`)
+    return response.data
+  },
+
   // 后端 RuleCreate 契约: {name(<=50), description(必填), prompt_template?}；
   // rule_type/content/created_by 非契约字段，不传（后端统一按自定义规则处理）
   async createRule(name, description, promptTemplate) {

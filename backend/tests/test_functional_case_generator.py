@@ -200,3 +200,51 @@ class TestGenerateFromRepo:
         assert result["generated"] == 0
         assert result["failed"] >= 1
         assert rolled_back == [True]
+
+
+class TestPromptEnhancement:
+    """V1.1 增强: 菜单批 prompt 要求增删改查+流程用例; API 批过滤非业务端点并加前缀."""
+
+    def test_menu_prompt_requires_crud_and_flow(self, tmp_path):
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        rdir = tmp_path / "src" / "router"; rdir.mkdir(parents=True)
+        (rdir / "index.js").write_text("{ path: '/d', meta: { title: '仪表盘' } }", encoding="utf-8")
+        db = _make_db()
+        gw = _gw_ok([MENU_JSON])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        prompt = gw.chat.call_args[0][0][0]["content"]
+        assert "增删改查" in prompt
+        assert "流程" in prompt
+        assert "2-5" in prompt  # 每菜单用例数指引
+
+    def test_api_noise_endpoints_filtered(self, tmp_path):
+        """health/ping/sse/docs 等非业务端点不生成用例."""
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        apidir = tmp_path / "api" / "v1"; apidir.mkdir(parents=True)
+        (apidir / "health.py").write_text(
+            '@router.get("/")\nasync def health():\n    """健康检查"""\n'
+            '@router.get("/ping")\nasync def ping():\n    """存活探活"""\n', encoding="utf-8")
+        (apidir / "projects.py").write_text(
+            '@router.get("/projects")\nasync def list_projects():\n    """获取项目列表"""\n', encoding="utf-8")
+        db = _make_db()
+        gw = _gw_ok([API_JSON])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        result = asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        prompt = gw.chat.call_args[0][0][0]["content"]
+        assert "/projects" in prompt
+        assert "/ping" not in prompt
+        assert "健康检查" not in prompt
+        assert result["generated"] >= 1
+
+    def test_api_cases_prefixed(self, tmp_path):
+        """API 用例名称加 [回归-接口] 前缀, 与页面用例区分."""
+        from app.services.functional_case_generator import FunctionalCaseGenerator
+        apidir = tmp_path / "api" / "v1"; apidir.mkdir(parents=True)
+        (apidir / "projects.py").write_text(
+            '@router.get("/projects")\nasync def list_projects():\n    """获取项目列表"""\n', encoding="utf-8")
+        db = _make_db()
+        gw = _gw_ok([API_JSON])
+        gen = FunctionalCaseGenerator(db=db, gateway=gw)
+        asyncio_run(gen.generate_from_repo(project_id="p1", repo_path=str(tmp_path)))
+        assert db.added[0].name.startswith("[回归-接口]")

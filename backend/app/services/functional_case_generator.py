@@ -22,6 +22,10 @@ NAME_MAX_LEN = 100    # test_case.name 列宽
 EXPECTED_MAX_LEN = 200  # test_case.expected_result 列宽
 VALID_PRIORITIES = {"P1", "P2"}
 
+# 非业务端点(健康检查/文档/内部通道)不生成接口用例
+NOISE_API_PATTERNS = ("health", "ping", "/stream", "/docs", "/openapi", "/redoc", "/static", "/sse",
+                      "健康检查", "存活探活", "liveness", "readiness")
+
 
 class FunctionalCaseGenerator:
     def __init__(self, db, gateway):
@@ -55,8 +59,10 @@ class FunctionalCaseGenerator:
 
     async def _gen_menu_batch(self, project_id, batch) -> tuple:
         prompt = (
-            "以下是 Web 系统的前端菜单列表(JSON)。为每个菜单生成功能回归测试用例"
-            "(页面可访问+核心功能操作, 如增删改查入口)。"
+            "以下是 Web 系统的前端菜单列表(JSON)。为每个菜单生成 UI 页面功能回归测试用例, "
+            "每个菜单 2-5 条, 覆盖: ①页面可访问(菜单点击后正常加载); "
+            "②基础增删改查(按菜单业务语义裁剪, 如列表加载/新增/编辑/删除); "
+            "③1 条主流程用例(多步操作串联, 从进入到完成关键业务动作)。"
             "只返回 JSON 数组, 每元素: {title, precondition, priority(P1/P2), "
             "steps: [{step, action, expected}]}。菜单列表:\n"
             + json.dumps(batch, ensure_ascii=False)
@@ -64,15 +70,21 @@ class FunctionalCaseGenerator:
         return await self._call_and_save(project_id, prompt, "菜单")
 
     async def _gen_api_batch(self, project_id, batch) -> tuple:
+        # 过滤健康检查/文档/SSE 等非业务端点
+        batch = [a for a in batch
+                 if not any(p in f"{a.get('method')} {a.get('path')} {a.get('desc')}".lower()
+                            for p in NOISE_API_PATTERNS)]
+        if not batch:
+            return True, 0
         prompt = (
             "以下是后端 API 端点列表(JSON)。为每个端点生成接口功能测试用例"
             "(正常调用+关键参数校验)。只返回 JSON 数组, 每元素: {title, "
             "precondition, priority(P1/P2), steps: [{step, action, expected}]}。"
             "端点列表:\n" + json.dumps(batch, ensure_ascii=False)
         )
-        return await self._call_and_save(project_id, prompt, "API")
+        return await self._call_and_save(project_id, prompt, "API", prefix="[回归-接口]")
 
-    async def _call_and_save(self, project_id, prompt, kind) -> tuple:
+    async def _call_and_save(self, project_id, prompt, kind, prefix="[回归]") -> tuple:
         """调 AI → 解析 JSON → 逐条去重落库. 返回 (ok, generated_count)."""
         try:
             resp = await self.gateway.chat([{"role": "user", "content": prompt}],
@@ -90,7 +102,7 @@ class FunctionalCaseGenerator:
         for c in cases:
             if not isinstance(c, dict) or not c.get("title"):
                 continue
-            title = f"[回归] {c.get('title', '')}"[:NAME_MAX_LEN]
+            title = f"{prefix} {c.get('title', '')}"[:NAME_MAX_LEN]
             if title in seen_titles or await self._case_title_exists(project_id, title):
                 continue
             steps = self._normalize_steps(c.get("steps"))

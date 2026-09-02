@@ -75,7 +75,7 @@
             {{ formatDuration(scope.row.start_time, scope.row.end_time) }}
           </template>
         </el-table-column>
-        <el-table-column prop="created_by" label="创建者" width="120" />
+        <el-table-column prop="current_step" label="进度" width="80"><template #default="scope">{{ scope.row.current_step }}/7</template></el-table-column>
         <el-table-column prop="start_time" label="开始时间" width="180">
           <template #default="scope">
             {{ formatDate(scope.row.start_time) }}
@@ -110,7 +110,7 @@
           <el-tag v-else-if="currentSession.status === 'completed'" type="success">已完成</el-tag>
           <el-tag v-else-if="currentSession.status === 'failed'" type="danger">失败</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="创建者">{{ currentSession.created_by }}</el-descriptions-item>
+        
         <el-descriptions-item label="开始时间">{{ formatDate(currentSession.start_time) }}</el-descriptions-item>
         <el-descriptions-item label="结束时间">{{ formatDate(currentSession.end_time) }}</el-descriptions-item>
         <el-descriptions-item label="耗时">
@@ -124,16 +124,20 @@
       <el-tabs v-model="activeTab">
         <el-tab-pane label="测试点" name="testPoints">
           <el-table :data="currentSession.test_points" border max-height="400">
-            <el-table-column prop="point_name" label="测试点名称" />
-            <el-table-column prop="point_desc" label="描述" show-overflow-tooltip />
-            <el-table-column prop="test_type" label="类型" width="100" />
+            <el-table-column prop="name" label="测试点名称" />
+            <el-table-column prop="description" label="描述" show-overflow-tooltip />
+            <el-table-column prop="type_label" label="类型" width="100" />
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="测试用例" name="testCases">
           <el-table :data="currentSession.test_cases" border max-height="400">
-            <el-table-column prop="case_name" label="用例名称" />
-            <el-table-column prop="case_desc" label="用例描述" show-overflow-tooltip />
+            <el-table-column prop="name" label="用例名称" />
             <el-table-column prop="priority" label="优先级" width="80" />
+            <el-table-column prop="is_finalized" label="定稿" width="80">
+              <template #default="scope">
+                <el-tag :type="scope.row.is_finalized ? 'success' : 'info'" size="small">{{ scope.row.is_finalized ? '已定稿' : '草稿' }}</el-tag>
+              </template>
+            </el-table-column>
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="配置信息" name="config">
@@ -169,6 +173,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, View, Delete, Download } from '@element-plus/icons-vue'
 import { aiCaseAPI } from '@/api/ai-case'
+import { projectAPI } from '@/api/project.js'
 
 const loading = ref(false)
 const detailDialogVisible = ref(false)
@@ -198,43 +203,15 @@ const pagination = ref({
 const loadSessions = async () => {
   loading.value = true
   try {
-    // Mock data - replace with actual API
-    sessions.value = [
-      {
-        session_id: 'sess-12345678-1234-1234-1234-123456789abc',
-        project_name: '项目A',
-        status: 'completed',
-        test_points_count: 15,
-        test_cases_count: 45,
-        total_tokens: 12580,
-        start_time: '2026-08-18T09:00:00Z',
-        end_time: '2026-08-18T09:15:32Z',
-        created_by: 'admin'
-      },
-      {
-        session_id: 'sess-87654321-4321-4321-4321-cba987654321',
-        project_name: '项目B',
-        status: 'in_progress',
-        test_points_count: 8,
-        test_cases_count: 0,
-        total_tokens: 5200,
-        start_time: '2026-08-19T10:30:00Z',
-        end_time: null,
-        created_by: 'tester1'
-      },
-      {
-        session_id: 'sess-abcdef12-3456-7890-abcd-ef1234567890',
-        project_name: '项目A',
-        status: 'failed',
-        test_points_count: 12,
-        test_cases_count: 20,
-        total_tokens: 8900,
-        start_time: '2026-08-17T14:20:00Z',
-        end_time: '2026-08-17T14:28:15Z',
-        created_by: 'admin'
-      }
-    ]
-    pagination.value.total = 3
+    const res = await aiCaseAPI.listSessions(
+      queryParams.value.projectId,
+      queryParams.value.status,
+      (pagination.value.page - 1) * pagination.value.pageSize,
+      pagination.value.pageSize
+    )
+    const list = Array.isArray(res?.data) ? res.data : []
+    sessions.value = list
+    pagination.value.total = list.length
   } catch (error) {
     ElMessage.error('加载生成历史失败: ' + error.message)
   } finally {
@@ -254,21 +231,22 @@ const resetQuery = () => {
 
 const viewSession = async (session) => {
   try {
-    const result = await aiCaseAPI.getSessionDetail(session.session_id)
+    const res = await aiCaseAPI.getSessionDetail(session.session_id)
+    const result = res.data || res
 
     currentSession.value = {
       ...session,
       test_points: result.test_points || [],
       test_cases: result.test_cases || [],
-      rules: result.rules || [],
-      knowledge_docs: result.knowledge_docs || [],
+      rules: result.selected_rules ? Object.keys(result.selected_rules).filter(k => result.selected_rules[k]) : [],
+      knowledge_docs: [],
       generation_mode: result.generation_mode || 'comprehensive',
-      enable_hallucination_check: result.enable_hallucination_check || false
+      enable_hallucination_check: result.hallucination_strategy !== 'permissive'
     }
 
     detailDialogVisible.value = true
   } catch (error) {
-    ElMessage.error('加载会话详情失败: ' + error.message)
+    ElMessage.error('加载会话详情失败: ' + (error.response?.data?.detail || error.message))
   }
 }
 
@@ -284,7 +262,7 @@ const deleteSession = async (session) => {
       }
     )
 
-    // Delete session - API not implemented yet
+    await aiCaseAPI.deleteSession(session.session_id)
     ElMessage.success('会话删除成功')
     loadSessions()
   } catch {
@@ -315,12 +293,13 @@ const formatDuration = (startStr, endStr) => {
 }
 
 const loadProjects = async () => {
-  // Mock data
-  projects.value = [
-    { id: '1', name: '项目A' },
-    { id: '2', name: '项目B' },
-    { id: '3', name: '项目C' }
-  ]
+  try {
+    const res = await projectAPI.list({ skip: 0, limit: 100 })
+    const list = Array.isArray(res) ? res : (res?.items || res?.data || [])
+    projects.value = list.map(p => ({ id: p.id, name: p.name }))
+  } catch (e) {
+    console.error('加载项目失败', e)
+  }
 }
 
 onMounted(() => {
