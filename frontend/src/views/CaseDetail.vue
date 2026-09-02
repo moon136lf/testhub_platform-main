@@ -433,11 +433,13 @@ const handleBatchFinalize = async () => {
 }
 
 const goReview = () => {
+  // 传 project_id 供 ReviewCenter 预筛选拉取正确项目的用例列表
   router.push({
     name: 'ReviewCenter',
     query: {
       batch_id: batchId.value,
-      case_ids: selectedCases.value.map(c => c.id).join(',')
+      case_ids: selectedCases.value.map(c => c.id).join(','),
+      project_id: cases.value[0]?.project_id
     }
   })
 }
@@ -454,6 +456,8 @@ const goConvert = async () => {
     }
     const res = await scriptAPI.convert(projectId, caseIds, false)
     if (res?.data?.session_id) {
+      // subscribe 建立真实 EventSource 连接（/api/sse/stream/{id}），保活会话流；
+      // 转换结果由后端自动入脚本库，前端无需处理消息，故回调为空
       scriptAPI.subscribe(res.data.session_id, () => {}, () => {})
     }
     ElMessage.success('转换任务已提交，脚本将自动入脚本库')
@@ -584,13 +588,8 @@ const loadProjects = async () => {
 }
 
 const goBack = () => {
-  if (batchMode.value) {
-    router.push({ name: 'Cases' })
-    return
-  }
-  if (route.params.id) {
-    router.push({ name: 'Cases' })
-  }
+  // 批内用例模式与单用例模式均返回用例管理页
+  router.push({ name: 'Cases' })
 }
 
 const enterEditMode = () => {

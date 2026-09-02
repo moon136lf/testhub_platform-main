@@ -80,10 +80,10 @@
       </div>
     </el-card>
 
-    <!-- 新建/编辑对话框 -->
+    <!-- 新建用例对话框（仅创建入口；isEdit 恒为 false，编辑在 CaseDetail 完成） -->
     <el-dialog
       v-model="dialogVisible"
-      :title="isEdit ? '编辑用例' : '新建用例'"
+      title="新建用例"
       width="900px"
       :close-on-click-modal="false"
       @close="resetForm"
@@ -91,7 +91,7 @@
       <CaseForm
         ref="caseFormRef"
         v-model="currentCase"
-        :is-edit="isEdit"
+        :is-edit="false"
         :projects="projects"
         @submit="handleSubmit"
         @cancel="dialogVisible = false"
@@ -171,7 +171,7 @@ const onFilterChange = () => {
 }
 
 const goToDetail = (row) => {
-  router.push({ name: 'CaseDetail', query: { batch_id: row.id, batch_name: row.batch_name } })
+  router.push({ name: 'CaseDetail', params: { id: row.id }, query: { batch_id: row.id, batch_name: row.batch_name } })
 }
 
 const deleteBatch = async (row) => {
@@ -193,12 +193,10 @@ const deleteBatch = async (row) => {
 
 // ---- 新建用例（保留原有能力，用例归属到项目，出现在「手工创建」类记录中）----
 const dialogVisible = ref(false)
-const isEdit = ref(false)
 const caseFormRef = ref(null)
 const currentCase = ref({})
 
 const showCreateDialog = () => {
-  isEdit.value = false
   currentCase.value = {
     name: '',
     project_id: '',
@@ -215,17 +213,12 @@ const showCreateDialog = () => {
 
 const handleSubmit = async (formData) => {
   try {
-    if (isEdit.value) {
-      await testCaseAPI.update(currentCase.value.id, formData)
-      ElMessage.success('更新成功')
-    } else {
-      await testCaseAPI.create(formData)
-      ElMessage.success('创建成功')
-    }
+    await testCaseAPI.create(formData)
+    ElMessage.success('创建成功')
     dialogVisible.value = false
     fetchBatches()
   } catch (error) {
-    ElMessage.error(isEdit.value ? '更新失败: ' + error.message : '创建失败: ' + error.message)
+    ElMessage.error('创建失败: ' + error.message)
   }
 }
 
