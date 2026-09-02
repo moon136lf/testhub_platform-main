@@ -50,7 +50,7 @@
         </el-table-column>
         <el-table-column label="操作" width="120">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="onGenerateCases(row)">生成回归用例</el-button>
+            <el-button link type="primary" @click="onGenerateCases(row)">生成回归用例</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -85,9 +85,9 @@
           </el-table-column>
           <el-table-column label="操作" width="220">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="onAiFix(row)">AI修复</el-button>
-              <el-button link size="small" @click="onMark(row, 'fixed')">标记已修复</el-button>
-              <el-button link size="small" @click="onMark(row, 'false_positive')">误报</el-button>
+              <el-button link type="primary" @click="onAiFix(row)">AI修复</el-button>
+              <el-button link @click="onMark(row, 'fixed')">标记已修复</el-button>
+              <el-button link @click="onMark(row, 'false_positive')">误报</el-button>
             </template>
           </el-table-column>
         </el-table>

@@ -24,8 +24,8 @@
         </el-table-column>
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="save(row)">保存</el-button>
-            <el-button size="small" :loading="row.testing" @click="testConn(row)">测试连接</el-button>
+            <el-button type="primary" link @click="save(row)">保存</el-button>
+            <el-button type="primary" link :loading="row.testing" @click="testConn(row)">测试连接</el-button>
           </template>
         </el-table-column>
       </el-table>

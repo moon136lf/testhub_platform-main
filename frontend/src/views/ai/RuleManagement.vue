@@ -44,10 +44,11 @@
         </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="scope">
-            <el-button size="small" :icon="View" @click="viewRule(scope.row)">查看</el-button>
+            <el-button type="primary" link :icon="View" @click="viewRule(scope.row)">查看</el-button>
             <el-button
               v-if="scope.row.rule_type === 'custom'"
-              size="small"
+              type="primary"
+              link
               :icon="Edit"
               @click="editRule(scope.row)"
             >
@@ -55,8 +56,8 @@
             </el-button>
             <el-button
               v-if="scope.row.rule_type === 'custom'"
-              size="small"
               type="danger"
+              link
               :icon="Delete"
               @click="deleteRule(scope.row)"
             >

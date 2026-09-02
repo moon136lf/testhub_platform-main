@@ -81,8 +81,8 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="scope">
-            <el-button size="small" :icon="View" @click="viewSession(scope.row)">详情</el-button>
-            <el-button size="small" type="danger" :icon="Delete" @click="deleteSession(scope.row)">删除</el-button>
+            <el-button type="primary" link :icon="View" @click="viewSession(scope.row)">详情</el-button>
+            <el-button type="danger" link :icon="Delete" @click="deleteSession(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

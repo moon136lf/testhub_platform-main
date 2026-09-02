@@ -175,6 +175,17 @@ body {
   min-width: 0;
   line-height: normal;
 }
+/* 无标签的按钮项（查询/重置行）：单独一行、贴查询区右下角——
+   flex 布局用 flex-basis:100% + margin-left:auto 换行并靠右 */
+.el-form--inline.el-form .el-form-item:last-child {
+  flex-basis: 100%;
+  margin-left: auto;
+  margin-right: 0;
+  justify-content: flex-end;
+}
+.el-form--inline.el-form .el-form-item:last-child .el-form-item__content {
+  flex: 0 0 auto;
+}
 
 /* ---- 弹窗/页内表单（新增、编辑、设置页，label-width 场景）：
    label 已由 EP 按宽度渲染，只需右对齐文字 + 统一间距，保持原行布局 ---- */

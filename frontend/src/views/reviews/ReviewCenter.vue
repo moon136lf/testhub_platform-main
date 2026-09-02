@@ -56,8 +56,8 @@
         </el-table-column>
         <el-table-column label="操作" width="140">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="onRefine(row)">精修</el-button>
-            <el-button link size="small" @click="onApply(row)">应用建议</el-button>
+            <el-button link type="primary" @click="onRefine(row)">精修</el-button>
+            <el-button link @click="onApply(row)">应用建议</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -78,7 +78,7 @@
           <el-table-column prop="status" label="状态" width="90" />
           <el-table-column label="操作" width="100">
             <template #default="{ row }">
-              <el-button v-if="row.status === 'pending'" link type="primary" size="small"
+              <el-button v-if="row.status === 'pending'" link type="primary"
                 @click="onApplyOne(row)">确认</el-button>
               <span v-else>-</span>
             </template>

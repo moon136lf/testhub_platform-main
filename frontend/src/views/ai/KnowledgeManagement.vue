@@ -72,19 +72,19 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
-            <el-button size="small" :icon="View" @click="viewDocument(scope.row)">查看</el-button>
+            <el-button type="primary" link :icon="View" @click="viewDocument(scope.row)">查看</el-button>
             <el-button
               v-if="scope.row.vector_status === 'failed'"
-              size="small"
               type="warning"
+              link
               :icon="RefreshRight"
               @click="retryVectorize(scope.row)"
             >
               重试
             </el-button>
             <el-button
-              size="small"
               type="danger"
+              link
               :icon="Delete"
               @click="deleteDocument(scope.row)"
             >

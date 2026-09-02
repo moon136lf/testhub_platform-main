@@ -24,8 +24,8 @@
         </el-table-column>
         <el-table-column label="操作" width="160">
           <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="remove(row)">停用</el-button>
+            <el-button type="primary" link :icon="Edit" @click="openEdit(row)">编辑</el-button>
+            <el-button type="danger" link :icon="Delete" @click="remove(row)">停用</el-button>
           </template>
         </el-table-column>
       </el-table>

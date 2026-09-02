@@ -265,4 +265,11 @@ defineExpose({
 .case-filter :deep(.el-input) {
   width: 100%;
 }
+
+/* 查询/重置按钮行：单独一行、贴查询区右下角 */
+.case-filter :deep(.el-form-item:last-child) {
+  grid-column: 1 / -1;          /* 占满整行 */
+  justify-self: end;            /* 靠右 = 右下角（grid 自动流到最后一行） */
+  justify-content: flex-end;
+}
 </style>
