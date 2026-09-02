@@ -79,7 +79,7 @@
             {{ formatDate(scope.row.start_time) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="170" fixed="right">
           <template #default="scope">
             <el-button type="primary" link :icon="View" @click="viewSession(scope.row)">详情</el-button>
             <el-button type="danger" link :icon="Delete" @click="deleteSession(scope.row)">删除</el-button>

@@ -28,7 +28,7 @@
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link :icon="View" @click="viewProject(row)">查看</el-button>
             <el-button type="primary" link :icon="Edit" @click="editProject(row)">编辑</el-button>

@@ -22,7 +22,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160">
+        <el-table-column label="操作" width="170">
           <template #default="{ row }">
             <el-button type="primary" link :icon="Edit" @click="openEdit(row)">编辑</el-button>
             <el-button type="danger" link :icon="Delete" @click="remove(row)">停用</el-button>
