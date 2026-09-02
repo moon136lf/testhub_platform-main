@@ -69,7 +69,7 @@ class TestGLMModelUpgrade:
                 side_effect=lambda url, json, headers: (captured.update(json=json) or fake_resp)
             )
             asyncio_run(provider.chat_completion([{"role": "user", "content": "hi"}]))
-        assert captured["json"]["model"] == "glm5.2"
+        assert captured["json"]["model"] == "glm-5.2"
 
 
 class TestAIGatewayRegistersMoonshot:
