@@ -51,8 +51,7 @@ class PlaywrightService:
                     '--disable-blink-features=AutomationControlled'
                 ]
             )
-            # 设置默认超时
-            self.browser.set_default_timeout(timeout * 1000)
+            # 设置默认超时（async Browser 无 set_default_timeout，落到 context/page 级）
             logger.info(f"Playwright browser started (headless={headless}, timeout={timeout}s)")
         except Exception as e:
             logger.error(f"Failed to start Playwright: {e}")

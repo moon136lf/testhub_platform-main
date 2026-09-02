@@ -94,6 +94,7 @@ async def _fetch_elements_async(
         )
         context = await pw_service.browser.new_context()
         page = await context.new_page()
+        page.set_default_timeout(30000)
         await page.goto(url, wait_until="networkidle", timeout=30000)
 
         # 阶段 3: 可选登录 (25%)

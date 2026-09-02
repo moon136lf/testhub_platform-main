@@ -66,6 +66,17 @@ async def stream_events(session_id: str):
     )
 
 
+@router.get("/element-fetch/{session_id}")
+async def stream_element_fetch(session_id: str):
+    """
+    元素抓取 SSE 流端点
+
+    /elements/fetch 返回的 sse_url 指向此路由（/api/v1/sse/element-fetch/{session_id}）。
+    与 /stream 共用同一 redis key（sse:{session_id}），仅是前端订阅路径不同。
+    """
+    return await stream_events(session_id)
+
+
 @router.delete("/stream/{session_id}")
 async def clear_stream(session_id: str):
     """
