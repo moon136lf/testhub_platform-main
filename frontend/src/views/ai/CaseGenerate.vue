@@ -451,7 +451,10 @@ const onSSEMessage = (msg) => {
 }
 
 const onSSEError = () => {
-  // 断线重连留 P1；此处静默
+  // 连续 3 次重连失败（api 层已 close），给出明确提示并复位加载态
+  ElMessage.error('实时日志连接失败（已重试 3 次），任务仍在后台执行，结果稍后可在列表查看')
+  identifying.value = false
+  generating.value = false
 }
 
 // Step 5: 测试点勾选

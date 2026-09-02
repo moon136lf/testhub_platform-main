@@ -143,21 +143,33 @@ export const aiCaseAPI = {
 
   /**
    * W6 SSE 订阅（文字直播/进度/Token）
+   * 重连限制：EventSource 断线会自动无限重连（后端 500 时每 3s 一次，
+   * 用户只能停服务才能停）。这里计数，连续 3 次失败后主动 close 并回调 onError。
+   * 收到消息即重置计数（正常流里连接刷新不算连续失败）。
    * @param {string} sessionId
    * @param {(msg: object) => void} onMessage 每条 SSE 消息回调
-   * @param {(err: Event) => void} [onError]
+   * @param {(err: Event) => void} [onError] 首次失败与最终放弃时回调
    * @returns {EventSource}
    */
   subscribeSSE(sessionId, onMessage, onError) {
+    const MAX_RETRIES = 3
+    let retries = 0
     const es = new EventSource(`/api/sse/stream/${sessionId}`)
     es.onmessage = (e) => {
+      retries = 0
       try {
         onMessage(JSON.parse(e.data))
       } catch (err) {
         // ignore malformed frames
       }
     }
-    es.onerror = onError || (() => {})
+    es.onerror = (err) => {
+      retries += 1
+      if (retries >= MAX_RETRIES) {
+        es.close()  // 阻断 EventSource 内置的无限自动重连
+        if (onError) onError(err)
+      }
+    }
     return es
   }
 }

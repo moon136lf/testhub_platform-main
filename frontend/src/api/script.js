@@ -62,17 +62,28 @@ export const scriptAPI = {
 
   /**
    * SSE 订阅转脚本文字直播
+   * 重连限制：连续 3 次失败主动 close（阻断 EventSource 无限自动重连），
+   * 收到消息重置计数
    * @param {string} sessionId
    * @param {(msg: object) => void} onMessage
-   * @param {(err: Event) => void} [onError]
+   * @param {(err: Event) => void} [onError] 首次失败与最终放弃时回调
    * @returns {EventSource}
    */
   subscribe(sessionId, onMessage, onError) {
+    const MAX_RETRIES = 3
+    let retries = 0
     const es = new EventSource(`/api/sse/stream/${sessionId}`)
     es.onmessage = (ev) => {
+      retries = 0
       try { onMessage(JSON.parse(ev.data)) } catch { onMessage({ content: ev.data }) }
     }
-    if (onError) es.onerror = onError
+    es.onerror = (err) => {
+      retries += 1
+      if (retries >= MAX_RETRIES) {
+        es.close()
+        if (onError) onError(err)
+      }
+    }
     return es
   },
 }
