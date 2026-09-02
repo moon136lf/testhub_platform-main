@@ -119,6 +119,13 @@ class RuleCreate(BaseModel):
     prompt_template: Optional[str] = Field(None, description="Custom prompt template")
 
 
+class RuleUpdate(BaseModel):
+    """Update custom rule request (all fields optional)"""
+    name: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = Field(None, description="Rule description")
+    prompt_template: Optional[str] = Field(None, description="Custom prompt template")
+
+
 # API Endpoints
 
 @router.post("/upload-document", response_model=UploadDocumentResponse)
@@ -624,3 +631,81 @@ async def create_rule(
             "status": rule.status
         }
     }
+
+
+def _rule_to_dict(rule: TestRule) -> dict:
+    """Serialize a TestRule row for API responses"""
+    return {
+        "id": str(rule.id),
+        "name": rule.name,
+        "description": rule.description,
+        "prompt_template": rule.prompt_template,
+        "is_builtin": rule.is_builtin,
+        "status": rule.status,
+        "created_by": rule.created_by,
+        "created_at": rule.created_at.isoformat() if rule.created_at else None
+    }
+
+
+@router.put("/rules/{rule_id}")
+async def update_rule(
+    rule_id: str,
+    request: RuleUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update custom test rule
+
+    Only custom (non-builtin) rules can be updated.
+    """
+    try:
+        rule_uuid = uuid.UUID(rule_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid rule ID format")
+
+    result = await db.execute(select(TestRule).where(TestRule.id == rule_uuid))
+    rule = result.scalars().first()
+    if not rule or rule.status != "active":
+        raise HTTPException(status_code=404, detail="Rule not found")
+    if rule.is_builtin:
+        raise HTTPException(status_code=403, detail="Built-in rules cannot be modified")
+
+    if request.name is not None:
+        rule.name = request.name
+    if request.description is not None:
+        rule.description = request.description
+    if request.prompt_template is not None:
+        rule.prompt_template = request.prompt_template
+
+    await db.commit()
+    await db.refresh(rule)
+
+    return {"code": 0, "message": "Rule updated successfully", "data": _rule_to_dict(rule)}
+
+
+@router.delete("/rules/{rule_id}")
+async def delete_rule(
+    rule_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete custom test rule (soft delete: status -> inactive)
+
+    Only custom (non-builtin) rules can be deleted.
+    """
+    try:
+        rule_uuid = uuid.UUID(rule_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid rule ID format")
+
+    result = await db.execute(select(TestRule).where(TestRule.id == rule_uuid))
+    rule = result.scalars().first()
+    if not rule or rule.status != "active":
+        raise HTTPException(status_code=404, detail="Rule not found")
+    if rule.is_builtin:
+        raise HTTPException(status_code=403, detail="Built-in rules cannot be deleted")
+
+    rule.status = "inactive"
+    await db.commit()
+
+    return {"code": 0, "message": "Rule deleted successfully", "data": {"id": rule_id}}
