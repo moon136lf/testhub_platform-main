@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #42 — 2026-09-02 21:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- 57b5634 docs: session archive #41 (auto)
+- 49e8018 feat(sse): reconnect limit — close after 3 consecutive failures
+- 8df658f docs(logging): tick plan checkboxes T1-T5 (#logging complete)
+- 124d5df feat(logging): request log middleware + unhandled exception handler (#logging T4)
+- 0376202 test: update GLM default model assertion to glm-5.2
+- a1b7283 feat(logging): error logs carry context (ids/provider/model) + no silent swallows (#logging T3)
+- 4b1bca7 fix(sse): two-part fix for NoneType.lrange / empty SSE stream
+- 5c7dbbd docs: session archive #40 (auto)
+
+### 未提交变更
+- `M backend/app/services/code_structure_analyzer.py`、`M backend/app/services/functional_case_generator.py`、`M backend/tests/test_code_structure_analyzer.py`、`M backend/tests/test_functional_case_generator.py` —— func-gen 模块的未提交增强（路由块切分按 path 锚点重构、SKIP_DIRS 扩展等），属另一会话/后续优化，未提交
+- 未跟踪：`backend/.en`、`docs/REQUIREMENTS_V1.1.md`、`docs/SESSION_HANDOFF_2026-08-26.md`
+
+### 进度
+日志规范化已收官（T1-T5）；#func-gen 有 4 个文件的未提交改动在工作区（analyzer 路由块切分重构 + generator/测试调整），未验证未提交。
+
+---
+
 ## 快照 #41 — 2026-09-02 20:50（auto）
 
 **当前分支**：master（主仓）
