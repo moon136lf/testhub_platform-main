@@ -1,6 +1,6 @@
 -- 用例生成批次 (case_batch) + test_case.batch_id. Idempotent.
 CREATE TABLE IF NOT EXISTS case_batch (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES project(id) ON DELETE CASCADE,
     batch_name VARCHAR(200) NOT NULL,
     batch_type VARCHAR(20) NOT NULL,

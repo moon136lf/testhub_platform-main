@@ -3,10 +3,10 @@ Case batch model — 用例生成批次（用例管理记录层）
 """
 
 import uuid
-from datetime import datetime
 
-from sqlalchemy import Column, String, Integer, ForeignKey, Index, UniqueConstraint, TIMESTAMP
+from sqlalchemy import Column, String, Integer, ForeignKey, Index, UniqueConstraint, DateTime
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.sql import func
 from app.core.database import Base
 
 
@@ -24,7 +24,7 @@ class CaseBatch(Base):
     batch_type = Column(String(20), nullable=False)  # whitescan_api/whitescan_ui/ai_generate/manual
     source_id = Column(UUID(as_uuid=True), nullable=True)  # scan_id / generation_session_id
     case_count = Column(Integer, default=0)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def to_dict(self):
         return {

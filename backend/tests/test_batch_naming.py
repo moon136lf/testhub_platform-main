@@ -1,5 +1,8 @@
 """batch_naming 纯函数测试（T1）"""
 from datetime import datetime
+
+import pytest
+
 from app.services.batch_naming import build_batch_name, truncate_requirement
 
 
@@ -31,7 +34,6 @@ class TestBuildBatchName:
         assert build_batch_name("manual", ts) == "手工创建用例20260902143025"
 
     def test_invalid_type_raises(self):
-        import pytest
         with pytest.raises(ValueError):
             build_batch_name("bogus", datetime.now())
 
@@ -42,3 +44,6 @@ class TestTruncateRequirement:
 
     def test_none(self):
         assert truncate_requirement(None) == "未命名需求"
+
+    def test_whitespace_only(self):
+        assert truncate_requirement("   ") == "未命名需求"

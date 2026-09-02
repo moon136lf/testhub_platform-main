@@ -105,7 +105,9 @@ class TestCase(Base):
             "cannot_automate_reason": self.cannot_automate_reason,
             "refinement_report": self.refinement_report,
             "refined_at": self.refined_at.isoformat() if self.refined_at else None,
-            "is_deleted": self.is_deleted
+            "is_deleted": self.is_deleted,
+            "source_issue_id": str(self.source_issue_id) if self.source_issue_id else None,
+            "batch_id": str(self.batch_id) if self.batch_id else None
         }
 
 
