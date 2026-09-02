@@ -177,13 +177,19 @@ async def upload_document(
         )
 
     # 前端以 base64 str 传输文件（JSON 数字数组会被 pydantic bytes 拒绝）；
-    # pydantic 收到 str 时按 utf-8 编码为 bytes（并非 base64 解码），此处还原
+    # pydantic 收到 str 时按 utf-8 编码为 bytes（并非 base64 解码），此处还原。
+    # 兼容直接传 bytes 的调用方（内部调用/测试）：仅当值可 utf-8 解码且是合法
+    # base64 时才转换，否则视为原始字节直传。
     if request.file_bytes:
         import base64 as _b64
+        decoded = None
         try:
-            request.file_bytes = _b64.b64decode(request.file_bytes)
+            as_str = request.file_bytes.decode("utf-8")
+            decoded = _b64.b64decode(as_str, validate=True)
         except Exception:
-            raise HTTPException(status_code=400, detail="file_bytes 不是合法的 base64")
+            decoded = None  # 非文本/非 base64 → 原始字节直传
+        if decoded is not None:
+            request.file_bytes = decoded
 
     # Generate session_id
     session_id = str(uuid.uuid4())
