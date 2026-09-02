@@ -78,6 +78,8 @@ class TestCase(Base):
     is_deleted = Column(Boolean, default=False)
     # W9: whitescan regression case source (NULL = not whitescan-generated)
     source_issue_id = Column(UUID(as_uuid=True), ForeignKey("code_issue.id", ondelete="SET NULL"), nullable=True)
+    # 批次归属（用例管理记录层, case_batch.id）; NULL=历史遗留(将被清理)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("case_batch.id", ondelete="SET NULL"), nullable=True)
 
     def to_dict(self):
         return {
