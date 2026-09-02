@@ -145,14 +145,45 @@ body {
 }
 
 /* ---- 查询条件区：标签右对齐（标签文字靠右贴控件，对内整齐列对齐） ---- */
+/* 每个 el-form-item 是一个「列」：inline-flex 排布可换行；
+   gap 统一标签与控件间距，margin 分隔列与列 */
 .el-form--inline.el-form .el-form-item {
-  margin-right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;                    /* 标签与输入框之间的呼吸感 */
+  margin-right: 16px;
 }
-/* 每个「标签-控件」对内部：label 文字右对齐（label 宽度=文字宽度时
-   需设固定宽度才有效——inline 场景 label 是 auto 宽，右对齐靠 text-align） */
+/* 每个「标签-控件」对内部：固定 label 宽度 + 文字右对齐。
+   inline 场景 label 默认 flex:none + auto 宽（随文字收缩），text-align 无意义；
+   统一 84px（约5个汉字）后：文字右对齐贴控件左缘，控件在垂直方向列对齐。
+   注意 align-items:center / line-height:normal —— EP 默认 flex-start 会让
+   单行标签在多行换行的 flex 行里上浮错位，表现为标签与控件重叠。 */
 .el-form--inline.el-form .el-form-item__label {
+  width: 84px;
+  flex: 0 0 84px;
+  align-items: center;
+  line-height: normal;
+  justify-content: flex-end;
   text-align: right;
-  padding-right: 8px;
+  padding-right: 0;           /* 间距已由 gap 承担，避免双重间距 */
+  box-sizing: border-box;
+}
+/* content 自适应：可收缩防重叠；inline 表单里 content 宽度由内部控件的
+   定宽（页面里的 style="width:200px"）决定，要更长就改各页控件宽度 */
+.el-form--inline.el-form .el-form-item__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: normal;
+}
+
+/* ---- 弹窗/页内表单（新增、编辑、设置页，label-width 场景）：
+   label 已由 EP 按宽度渲染，只需右对齐文字 + 统一间距，保持原行布局 ---- */
+.el-form .el-form-item__label {
+  justify-content: flex-end;
+  text-align: right;
+}
+.el-form .el-form-item {
+  gap: 8px;
 }
 /* 页面级筛选行（Dashboard 用 .header-filters）右对齐 */
 .page-header .header-filters,
