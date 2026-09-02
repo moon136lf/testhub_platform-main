@@ -616,3 +616,16 @@ async def _generate_test_cases_async(
 
         logger.info(f"Task generate_test_cases_task completed: session_id={session_id}, success={success_count}, failed={failed_count}")
         return {"generated_count": success_count, "failed_count": failed_count, "tokens_used": total_tokens}
+
+
+@celery_app.task(bind=True, name="vectorize_knowledge_document")
+def vectorize_knowledge_document(self, doc_id: str, content: str):
+    """知识库文档向量化（chunks + qwen embedding；失败置 vector_status=failed 可重试）"""
+    return asyncio.run(_vectorize_knowledge_async(doc_id, content))
+
+
+async def _vectorize_knowledge_async(doc_id: str, content: str) -> Dict:
+    logger.info(f"Task vectorize_knowledge_document started: doc_id={doc_id}")
+    async with AsyncSessionLocal() as db:
+        await KnowledgeService.vectorize_document(db, UUID(doc_id), content)
+    return {"doc_id": doc_id, "vectorized": True}

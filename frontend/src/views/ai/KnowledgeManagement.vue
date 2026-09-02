@@ -181,6 +181,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Refresh, View, Delete, RefreshRight, UploadFilled } from '@element-plus/icons-vue'
 import { aiCaseAPI } from '@/api/ai-case'
+import { projectAPI } from '@/api/project.js'
 
 const loading = ref(false)
 const uploading = ref(false)
@@ -213,42 +214,17 @@ const pagination = ref({
 const loadDocuments = async () => {
   loading.value = true
   try {
-    // Mock data - replace with actual API
-    documents.value = [
-      {
-        id: '1',
-        doc_name: '用户管理模块PRD.docx',
-        doc_type: 'prd',
-        chunk_count: 15,
-        vector_status: 'completed',
-        created_by: 'admin',
-        created_at: '2026-08-18T10:30:00Z',
-        content: '这是PRD文档的内容...'
-      },
-      {
-        id: '2',
-        doc_name: '订单接口文档.pdf',
-        doc_type: 'api',
-        chunk_count: 8,
-        vector_status: 'completed',
-        created_by: 'dev1',
-        created_at: '2026-08-17T15:20:00Z',
-        content: '接口文档内容...'
-      },
-      {
-        id: '3',
-        doc_name: '测试规范v2.0.md',
-        doc_type: 'standard',
-        chunk_count: 0,
-        vector_status: 'pending',
-        created_by: 'qa1',
-        created_at: '2026-08-19T09:00:00Z',
-        content: ''
-      }
-    ]
-    pagination.value.total = 3
+    const res = await aiCaseAPI.listKnowledgeDocuments(
+      queryParams.value.projectId,
+      queryParams.value.docType,
+      queryParams.value.vectorStatus,
+      (pagination.value.page - 1) * pagination.value.pageSize,
+      pagination.value.pageSize
+    )
+    documents.value = Array.isArray(res?.data) ? res.data : []
+    pagination.value.total = res.total || documents.value.length
   } catch (error) {
-    ElMessage.error('加载文档失败: ' + error.message)
+    ElMessage.error('加载文档失败: ' + (error.response?.data?.detail || error.message))
   } finally {
     loading.value = false
   }
@@ -291,12 +267,13 @@ const submitUpload = async () => {
 
   uploading.value = true
   try {
-    await aiCaseAPI.uploadDocument(
+    await aiCaseAPI.uploadKnowledgeDocument(
       uploadForm.value.projectId,
-      uploadForm.value.file,
-      uploadForm.value.docType
+      uploadForm.value.file.name,
+      uploadForm.value.docType,
+      uploadForm.value.file
     )
-    ElMessage.success('文档上传成功')
+    ElMessage.success('文档上传成功，向量化进行中')
     uploadDialogVisible.value = false
     loadDocuments()
   } catch (error) {
@@ -306,8 +283,13 @@ const submitUpload = async () => {
   }
 }
 
-const viewDocument = (doc) => {
-  currentDocument.value = { ...doc }
+const viewDocument = async (doc) => {
+  try {
+    const res = await aiCaseAPI.getKnowledgeDocument(doc.id)
+    currentDocument.value = res.data || doc
+  } catch {
+    currentDocument.value = { ...doc }
+  }
   viewDialogVisible.value = true
 }
 
@@ -323,8 +305,8 @@ const retryVectorize = async (doc) => {
       }
     )
 
+    await aiCaseAPI.revectorizeKnowledgeDocument(doc.id)
     ElMessage.info('向量化任务已提交')
-    // Call API to retry vectorization
     loadDocuments()
   } catch {
     // User cancelled
@@ -343,6 +325,7 @@ const deleteDocument = async (doc) => {
       }
     )
 
+    await aiCaseAPI.deleteKnowledgeDocument(doc.id)
     ElMessage.success('文档删除成功')
     loadDocuments()
   } catch {
@@ -357,12 +340,13 @@ const formatDate = (dateStr) => {
 }
 
 const loadProjects = async () => {
-  // Mock data
-  projects.value = [
-    { id: '1', name: '项目A' },
-    { id: '2', name: '项目B' },
-    { id: '3', name: '项目C' }
-  ]
+  try {
+    const res = await projectAPI.list({ skip: 0, limit: 100 })
+    const list = Array.isArray(res) ? res : (res?.items || res?.data || [])
+    projects.value = list.map(p => ({ id: p.id, name: p.name }))
+  } catch (e) {
+    console.error('加载项目失败', e)
+  }
 }
 
 onMounted(() => {

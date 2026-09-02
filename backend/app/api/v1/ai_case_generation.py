@@ -17,13 +17,15 @@ from app.tasks.ai_case_tasks import (
     parse_document_task,
     retrieve_knowledge_task,
     identify_test_points_task,
-    generate_test_cases_task
+    generate_test_cases_task,
+    vectorize_knowledge_document
 )
 from app.models.project import Project
 from app.models.test_case import TestPoint, TestCase
 from app.models.test_rule import TestRule
 from app.models.generation import GenerationSession
 from app.models.execution import AICallLog
+from app.models.knowledge import KnowledgeDocument
 from app.core.sse import SSEStream
 from app.schemas.generation import GenerationRules
 
@@ -113,6 +115,17 @@ class GenerateCasesRequest(BaseModel):
         pattern="^(strict|moderate|permissive)$",
         description="Hallucination detection strategy"
     )
+
+
+class KnowledgeDocumentCreate(BaseModel):
+    """知识库文档上传请求"""
+    project_id: str = Field(..., description="Project ID")
+    doc_name: str = Field(..., max_length=200)
+    doc_type: str = Field(..., pattern="^(prd|api|standard|other)$")
+    file_bytes_b64: Optional[str] = Field(None, description="File content base64-encoded")
+    file_bytes: Optional[bytes] = Field(None, description="File content in bytes")
+    file_type: Optional[str] = Field(None, description="File type: docx, pdf, txt, md")
+    text_content: Optional[str] = Field(None, description="Direct text content")
 
 
 class RuleCreate(BaseModel):
@@ -891,3 +904,167 @@ async def delete_session(
     await db.delete(s)
     await db.commit()
     return {"code": 0, "message": "Session deleted successfully", "data": {"id": session_id}}
+
+
+# ---------------- 知识库文档管理（知识库页数据源，此前整页 mock） ----------------
+
+@router.get("/knowledge-documents")
+async def list_knowledge_documents(
+    project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    doc_type: Optional[str] = Query(None, description="Filter by doc type: prd, api, standard"),
+    vector_status: Optional[str] = Query(None, description="Filter by status: pending, processing, completed, failed"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    db: AsyncSession = Depends(get_db)
+):
+    """知识库文档列表（含过滤与分页）"""
+    query = select(KnowledgeDocument)
+    if project_id:
+        try:
+            query = query.where(KnowledgeDocument.project_id == uuid.UUID(project_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project ID format")
+    if doc_type:
+        query = query.where(KnowledgeDocument.doc_type == doc_type)
+    if vector_status:
+        query = query.where(KnowledgeDocument.vector_status == vector_status)
+
+    query = query.order_by(KnowledgeDocument.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(query)
+    docs = result.scalars().all()
+
+    total_result = await db.execute(select(func.count(KnowledgeDocument.id)))
+    # 列表不含全文，避免大 payload；详情走 /{id}
+    items = []
+    for d in docs:
+        item = d.to_dict()
+        item.pop("content", None)
+        items.append(item)
+
+    return {"code": 0, "data": items, "total": total_result.scalar() or 0}
+
+
+@router.get("/knowledge-documents/{doc_id}")
+async def get_knowledge_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """知识库文档详情（含全文，用于查看弹窗）"""
+    try:
+        did = uuid.UUID(doc_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+    result = await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.id == did))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"code": 0, "data": doc.to_dict()}
+
+
+@router.post("/knowledge-documents")
+async def create_knowledge_document(
+    request: KnowledgeDocumentCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    上传知识库文档：解析文件内容 → 落库 → 异步向量化（嵌入用 qwen provider，
+    需在 AI 设置配置 qwen key；未配置时文档保留为 pending，检索时不参与）
+    """
+    try:
+        project_uuid = uuid.UUID(request.project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    pr = await db.execute(select(Project).where(Project.id == project_uuid))
+    if not pr.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # 解析内容：文本直存；文件走 DocumentParser（file_bytes_b64 前端 base64 编码传输）
+    content = request.text_content or ""
+    raw_bytes = None
+    if request.file_bytes_b64:
+        import base64
+        try:
+            raw_bytes = base64.b64decode(request.file_bytes_b64)
+        except Exception:
+            raise HTTPException(status_code=400, detail="file_bytes_b64 不是合法的 base64")
+    elif request.file_bytes:
+        raw_bytes = request.file_bytes
+
+    if raw_bytes:
+        if len(raw_bytes) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(status_code=400, detail="文件大小超过 10MB 限制")
+        try:
+            from app.services.document_parser import DocumentParser
+            parser = DocumentParser()
+            parsed = await parser.parse(raw_bytes, request.file_type or "txt")
+            content = f"{content}\n\n{parsed}" if content else parsed
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"文档解析失败: {str(e)}")
+
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="文档内容为空")
+
+    doc = KnowledgeDocument(
+        project_id=project_uuid,
+        doc_name=request.doc_name or "未命名文档",
+        doc_type=request.doc_type,
+        content=content,
+        vector_status="pending",
+        created_by=DEFAULT_USER,
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+
+    # 异步向量化（embed 依赖 qwen provider；失败时 vector_status=failed，可重试）
+    vectorize_knowledge_document.delay(str(doc.id), content)
+
+    return {"code": 0, "message": "Document uploaded", "data": doc.to_dict()}
+
+
+@router.delete("/knowledge-documents/{doc_id}")
+async def delete_knowledge_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """删除知识库文档（chunks 级联删除）"""
+    try:
+        did = uuid.UUID(doc_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+    result = await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.id == did))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    await db.delete(doc)  # knowledge_chunk ON DELETE CASCADE
+    await db.commit()
+    return {"code": 0, "message": "Document deleted successfully", "data": {"id": doc_id}}
+
+
+@router.post("/knowledge-documents/{doc_id}/revectorize")
+async def revectorize_knowledge_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """重新向量化失败/待处理的文档"""
+    try:
+        did = uuid.UUID(doc_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+    result = await db.execute(select(KnowledgeDocument).where(KnowledgeDocument.id == did))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not doc.content:
+        raise HTTPException(status_code=400, detail="Document has no content to vectorize")
+
+    doc.vector_status = "processing"
+    await db.commit()
+
+    vectorize_knowledge_document.delay(str(doc.id), doc.content)
+    return {"code": 0, "message": "Vectorization started", "data": {"id": doc_id, "vector_status": "processing"}}

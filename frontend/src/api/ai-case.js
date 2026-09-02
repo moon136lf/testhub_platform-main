@@ -119,6 +119,54 @@ export const aiCaseAPI = {
     return response.data
   },
 
+  // 知识库文档管理（知识库页）
+  async listKnowledgeDocuments(projectId = '', docType = '', vectorStatus = '', skip = 0, limit = 20) {
+    const response = await axios.get(`${API_BASE}/knowledge-documents`, {
+      params: {
+        project_id: projectId || undefined,
+        doc_type: docType || undefined,
+        vector_status: vectorStatus || undefined,
+        skip, limit
+      }
+    })
+    return response.data
+  },
+
+  async getKnowledgeDocument(docId) {
+    const response = await axios.get(`${API_BASE}/knowledge-documents/${docId}`)
+    return response.data
+  },
+
+  // 上传知识库文档（文件 base64；后端解析+异步向量化）
+  async uploadKnowledgeDocument(projectId, docName, docType, file) {
+    let fileB64 = null
+    if (file) {
+      const buf = new Uint8Array(await file.arrayBuffer())
+      let bin = ''
+      for (let i = 0; i < buf.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000))
+      }
+      fileB64 = btoa(bin)
+    }
+    const response = await axios.post(`${API_BASE}/knowledge-documents`, {
+      project_id: projectId,
+      doc_name: docName,
+      doc_type: docType,
+      file_bytes_b64: fileB64
+    })
+    return response.data
+  },
+
+  async deleteKnowledgeDocument(docId) {
+    const response = await axios.delete(`${API_BASE}/knowledge-documents/${docId}`)
+    return response.data
+  },
+
+  async revectorizeKnowledgeDocument(docId) {
+    const response = await axios.post(`${API_BASE}/knowledge-documents/${docId}/revectorize`)
+    return response.data
+  },
+
   // 后端 RuleCreate 契约: {name(<=50), description(必填), prompt_template?}；
   // rule_type/content/created_by 非契约字段，不传（后端统一按自定义规则处理）
   async createRule(name, description, promptTemplate) {
