@@ -1,7 +1,14 @@
 <template>
-  <div class="ai-settings">
-    <el-card>
-      <template #header><span>AI 设置</span></template>
+  <div class="ai-settings page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>AI 设置</h2>
+        <div class="page-subtitle">配置 AI 供应商的 API Key 与接入参数，修改后即时生效</div>
+      </div>
+    </div>
+
+    <el-card shadow="never">
       <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px">
         provider 的 API Key / URL 存数据库，修改后即时生效（无需重启）。联调时在此填入真实 key。
       </el-alert>
@@ -128,5 +135,9 @@ onMounted(loadSettings)
 </script>
 
 <style scoped>
-.ai-settings { padding: 20px; }
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
 </style>

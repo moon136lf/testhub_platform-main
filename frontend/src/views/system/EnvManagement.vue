@@ -1,12 +1,15 @@
 <template>
-  <div class="env-management">
-    <el-card>
-      <template #header>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span>环境管理</span>
-          <el-button type="primary" @click="openCreate">新增环境</el-button>
-        </div>
-      </template>
+  <div class="env-management page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>环境管理</h2>
+        <div class="page-subtitle">管理被测环境地址，供回归执行时切换</div>
+      </div>
+      <el-button type="primary" @click="openCreate">新增环境</el-button>
+    </div>
+
+    <el-card shadow="never">
       <el-table :data="envs" v-loading="loading" border>
         <el-table-column prop="name" label="名称" width="150" />
         <el-table-column prop="url" label="URL" min-width="250" show-overflow-tooltip />
@@ -112,5 +115,9 @@ onMounted(load)
 </script>
 
 <style scoped>
-.env-management { padding: 20px; }
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
 </style>

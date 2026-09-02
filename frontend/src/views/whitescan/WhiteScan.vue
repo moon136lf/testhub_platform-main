@@ -1,7 +1,14 @@
 <template>
-  <div class="whitescan" v-loading="loading">
-    <el-card>
-      <template #header><span>白盒测试</span></template>
+  <div class="whitescan page-container" v-loading="loading">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>白盒测试</h2>
+        <div class="page-subtitle">仓库静态扫描，AI 修复建议与回归用例生成</div>
+      </div>
+    </div>
+
+    <el-card shadow="never">
 
       <!-- ① 扫描入口 -->
       <el-form inline>
@@ -267,6 +274,10 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <style scoped>
-.whitescan { padding: 20px; }
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
 .code-block { background: #f5f7fa; padding: 10px; font-family: monospace; font-size: 12px; max-height: 200px; overflow: auto; white-space: pre-wrap; }
 </style>

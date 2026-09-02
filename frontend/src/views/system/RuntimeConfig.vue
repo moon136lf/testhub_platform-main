@@ -1,7 +1,14 @@
 <template>
-  <div class="runtime-config">
-    <el-card>
-      <template #header><span>运行配置</span></template>
+  <div class="runtime-config page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>运行配置</h2>
+        <div class="page-subtitle">自愈引擎、超时与全局运行参数</div>
+      </div>
+    </div>
+
+    <el-card shadow="never">
       <el-form :model="form" label-width="200px" v-loading="loading">
         <el-card shadow="never" style="margin-bottom:16px">
           <template #header><span>自愈引擎</span></template>
@@ -97,5 +104,9 @@ onMounted(load)
 </script>
 
 <style scoped>
-.runtime-config { padding: 20px; }
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
+}
 </style>
