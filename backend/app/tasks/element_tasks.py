@@ -201,7 +201,20 @@ async def _fetch_elements_async(
         # 计算耗时
         duration = (datetime.now() - start_time).total_seconds()
 
-        # 阶段 8: 完成 (100%) - 写入页面缓存（三类 Redis 键之一）
+        # 阶段 8: 完成 (100%) - 元素落库 + 写入页面缓存（三类 Redis 键之一）
+        # 抓取结果持久化: page_repository(upsert) + element_repository + fetch_history
+        try:
+            imported = await _persist_fetch_result(
+                project_id, url, screenshot_url, verified_elements, bool(username and password))
+            await sse.send_message(
+                type="system", stage="complete",
+                content=f"已入库 {imported} 个元素到元素库",
+                progress=0.99,
+            )
+        except Exception as persist_err:
+            logger.error(f"Element persist failed | project_id={project_id} url={url}: {persist_err}")
+            imported = 0
+
         try:
             await ElementCacheService.cache_page(project_id, url, {
                 "url": url,
@@ -227,6 +240,7 @@ async def _fetch_elements_async(
             "screenshot_url": screenshot_url,
             "elements": verified_elements,
             "total_count": len(verified_elements),
+            "imported_count": imported,
             "duration_seconds": int(duration),
         }
 
@@ -251,3 +265,86 @@ async def _fetch_elements_async(
         except Exception:
             pass
         await pw_service.close()
+
+
+async def _persist_fetch_result(
+    project_id: str,
+    url: str,
+    screenshot_url: str,
+    elements: list,
+    used_login: bool,
+) -> int:
+    """抓取结果落库: page_repository upsert + element_repository 批量导入 + fetch_history.
+
+    返回入库元素数. 任务结果此前只写 redis 缓存 (有 TTL 即失), 元素库页面查不到 — 补此断链.
+    """
+    import uuid as _uuid
+
+    from sqlalchemy import delete, select
+
+    from app.core.database import AsyncSessionLocal
+    from app.models.element import ElementRepository, FetchHistory, PageRepository
+    from app.services.element_service import ElementService
+
+    # 注意: batch_import_elements 内部自行 commit, 因此这里不套 db.begin(),
+    # 每步独立提交 (页面行先落, 元素随之, 历史最后)
+    async with AsyncSessionLocal() as db:
+        # 1. 页面 upsert (同 project+url 复用既有行)
+        r = await db.execute(
+            select(PageRepository).where(
+                PageRepository.project_id == _uuid.UUID(project_id),
+                PageRepository.page_url == url))
+        page = r.scalar_one_or_none()
+        if page is None:
+            page = PageRepository(
+                project_id=_uuid.UUID(project_id),
+                page_name=url.rstrip("/").rsplit("/", 1)[-1] or "index",
+                page_url=url,
+            )
+            db.add(page)
+        page.screenshot_url = screenshot_url
+        page.last_fetch_at = datetime.now()
+        await db.commit()
+        await db.refresh(page)
+
+        # 2. 清掉该页旧元素 (重复抓取时以本次为准, 避免 unique 冲突), 再批量导入
+        await db.execute(delete(ElementRepository).where(ElementRepository.page_id == page.id))
+        await db.commit()
+
+        # 抓取产物字段名 (element_type/element_text/locator_strategies/semantic_info)
+        # 与 batch_import_elements 期望的 (type/text/coords/locator_chain) 不同 — 转换映射
+        import_items = []
+        for e in elements:
+            sem = e.get("semantic_info") or {}
+            coords = sem.get("coords") or {
+                "x": e.get("position_x"), "y": e.get("position_y"),
+                "width": e.get("width"), "height": e.get("height")}
+            attrs = e.get("attributes") or {}
+            import_items.append({
+                "type": e.get("element_type") or sem.get("type") or "other",
+                "text": e.get("element_text") or sem.get("text") or "",
+                "coords": coords,
+                "locator_chain": e.get("locator_strategies") or {"strategies": []},
+                "id": attrs.get("id"),
+                "class": attrs.get("class"),
+                "name": attrs.get("name"),
+                "placeholder": attrs.get("placeholder"),
+            })
+        imported_elems = await ElementService.batch_import_elements(db, page.id, import_items)
+
+        # 3. 抓取历史
+        db.add(FetchHistory(
+            page_id=page.id,
+            project_id=_uuid.UUID(project_id),
+            elements_found=len(elements),
+            elements_imported=len(imported_elems),
+            screenshot_url=screenshot_url[:500],
+            fetch_url=url[:500],
+            used_login=used_login,
+            status="success",
+        ))
+        await db.commit()
+        imported = len(imported_elems)
+
+    logger.info(f"Persisted fetch result | page_id={page.id} imported={imported}")
+    return imported

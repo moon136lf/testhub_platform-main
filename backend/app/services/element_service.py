@@ -4,6 +4,7 @@ Element Service - Business Logic
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
+from sqlalchemy import func
 from app.models.element import PageRepository, ElementRepository
 from typing import List, Dict, Optional
 import uuid
