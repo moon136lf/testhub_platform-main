@@ -199,3 +199,35 @@
 
 - spec 文件在 `backend/docs/2026-09-01-ui-redesign-design.md`（worktree 内，合回时挪主仓 docs/）
 - worktree frontend/node_modules 为指向主仓的 junction（验收用，合回前清理）
+
+## 快照 #5 — 2026-09-02（#12 合并 + 假成功清零 + AI 链路真化）
+
+**合并**：#12 UI 改造 4 批次全部完成并合入 master（`dfc22db`），19 页浅色风收官，worktree 已删。
+
+**假成功清单 P1 全清**（扫描→逐项真化）：
+- 规则管理 PUT/DELETE（`e99c471`/`a78f6e0`）
+- 生成历史整页 mock → 真 /sessions 三端点（`2bc5ba5`，counts 按项目聚合口径）
+- 报告推送桩 → 真 webhook 钉钉/企微/飞书/自定义（`e64a0fc`，migration `add_notify_category.sql` 已应用运行库）
+- 知识库页整页 mock → 真 CRUD+异步向量化（`b9465b2`）
+
+**P2 主项全清**：
+- 断言校验全类型真实化（`92f171f`）——回归报告的"通过"现在真校验
+- 生成向导弹轮询 → 3s 轮询至完成（`bd790d8`）
+- 精修异常路径 LLM 真实化+降级（`f7096ae`）
+- 知识上下文读所选文档全文（`70bd7ed`）
+- SSE 重连限制 3 次自动断开（`49e8018`）
+
+**AI 生成链路修复**（核心：文件从未被解析，AI 只见文件名 → 幻觉登录用例）：
+- 前端真上传 + parse-result 轮询（`4e89c40`）
+- 文档截断 5000→30000 字 / max_tokens 2000→8000 / prompt 中性化禁臆造
+- upload 422 两连修：JSON int-array 被 pydantic bytes 拒（`055c21f`）+ file_type='prd' 标签非法（`28b1d06`）
+- 环境修复：Redis lifespan/worker 连接（`4b1bca7`）、GLM model id `glm5.2`→`glm-5.2`
+
+**其他**：view_logs.bat LF→CRLF 修复（原脚本无法运行）；白盒扫描加刷新按钮（`6b454b5`）。
+
+**遗留**：
+- 向量化/RAG 检索依赖 qwen embedding 通道——网关 192.168.9.215:13000 无 embedding 模型，需环境侧打通
+- P2 小项：prompt_template 存而不用、评审筛选前端过滤、MinIO 降级 URL、CORS `*`
+- 测试全绿：511 passed
+
+**用户自测计划**：平台自己测自己验证 UI 自动化全流程（假成功点当靶子）。
