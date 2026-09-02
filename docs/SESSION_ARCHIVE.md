@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #48 — 2026-09-03 18:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- a13ed5b docs: session archive #47 - #case-batch two-level case management complete
+- 0cbb64f Merge branch 'worktree-case-batch'
+- dbf4995 fix(cases): restore build_batch_name wiped by T4 + script_tasks test mock
+- 0c76097 docs: session archive #46 (下班交接)
+- cb125d1 docs: session archive W12 #5
+- 28b1d06 fix(ai-gen): upload 422 for md files
+- 8f4d50e fix(ai-gen): b64 decode tolerant of raw-bytes callers
+- 055c21f fix(ai-gen): upload-document 422 — file_bytes int-array
+
+### 未提交变更
+- 工作区干净
+- 未跟踪：`backend/.en`、`docs/SESSION_HANDOFF_2026-08-26.md`（case-batch 计划文档已随合并入库）
+
+### 进度
+#case-batch（用例生成记录两级化，T1-T4 + 终审修复）已合并 master，全量 529 测试通过。待办：真实库执行 3 个迁移 SQL、manual 批次挂接、页面端到端走查（详见快照 #47）。
+
+---
+
 ## 快照 #47 — 2026-09-03（#case-batch 特性收官，人工存档）
 
 **当前分支**：master（merge 0cbb64f）
