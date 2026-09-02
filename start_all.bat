@@ -24,6 +24,8 @@ if errorlevel 1 (
 REM 2. kill stale celery processes (avoid double-worker task stealing)
 echo [2/6] kill stale celery processes...
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -like '*celery*worker*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Write-Host ('  stopped stale PID=' + $_.ProcessId) }"
+REM uvicorn --reload worker 子进程(spawn_main)不含 uvicorn 字样, 按端口兜底清理残留 API (防孤儿抢 8000)
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | Select-Object -Unique OwningProcess | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue; Write-Host ('  stopped stale port-8000 PID=' + $_.OwningProcess) }"
 
 REM 3. backend api
 echo [3/6] start backend api (port 8000)...
