@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #44 — 2026-09-02 23:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- ac98cbf fix(elements): screenshot proxy — MinIO bucket is private, direct URL 403s
+- b9465b2 feat(knowledge): real document management — CRUD + async vectorization (was fully mocked)
+- a172e33 feat: view_logs.bat — interactive log viewer (API/worker tail -f, notepad open)
+- 797e7b4 fix(bat): kill orphan uvicorn reload children via port-8000 lookup
+- e64a0fc feat(notify): real webhook push — dingtalk/wecom/feishu/custom (was log-only stub)
+- b712f78 docs: session archive #43 (auto)
+- b49dd7e fix(elements): missing SSE route + playwright async API fix
+- 2bc5ba5 feat(ai-gen): real generation history — sessions list/detail/delete
+
+### 未提交变更
+- `M backend/app/services/script_executor.py`、`M backend/app/services/script_pipeline.py`（另一会话进行中）
+- 未跟踪：`backend/.en`、`docs/SESSION_HANDOFF_2026-08-26.md`、`docs/superpowers/plans/2026-09-02-case-batch.md`
+
+### 进度
+元素抓取链路修复完毕：SSE 路由缺失、playwright async API 崩溃、双实例抢端口、MinIO 私有桶截图 403 四连修全部提交；worker 日志确认抓取任务真实执行（此前 0 元素疑因 localhost:3000 需登录，待用户换公开 URL 验证）；get_object_bytes 潜伏 TypeError 一并修复。
+
+---
+
 ## 快照 #43 — 2026-09-02 22:50（auto）
 
 **当前分支**：master（主仓）
