@@ -38,7 +38,7 @@ echo [5/6] waiting for backend ready...
 set /a TRIES=0
 :wait_backend
 timeout /t 2 /nobreak >nul
-curl -s -o nul -w "%%{http_code}" http://localhost:8000/api/v1/health 2>nul | findstr "200" >nul 2>&1
+curl -s -o nul -w "%%{http_code}" http://localhost:8000/api/v1/health/ 2>nul | findstr "200" >nul 2>&1
 if not errorlevel 1 (
     echo   backend ready.
     goto backend_ok

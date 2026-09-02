@@ -4,7 +4,7 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 测试规则表
-CREATE TABLE test_rule (
+CREATE TABLE IF NOT EXISTS test_rule (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(50) NOT NULL,
     description TEXT NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE test_rule (
 );
 
 -- 知识文档表
-CREATE TABLE knowledge_document (
+CREATE TABLE IF NOT EXISTS knowledge_document (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES project(id),
     doc_name VARCHAR(200) NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE knowledge_document (
 );
 
 -- 知识分块表
-CREATE TABLE knowledge_chunk (
+CREATE TABLE IF NOT EXISTS knowledge_chunk (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID REFERENCES knowledge_document(id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
@@ -42,11 +42,11 @@ CREATE TABLE knowledge_chunk (
 );
 
 -- 创建向量索引
-CREATE INDEX idx_knowledge_chunk_embedding ON knowledge_chunk
+CREATE INDEX IF NOT EXISTS idx_knowledge_chunk_embedding ON knowledge_chunk
 USING ivfflat (embedding vector_cosine_ops);
 
 -- 生成会话表
-CREATE TABLE generation_session (
+CREATE TABLE IF NOT EXISTS generation_session (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES project(id),
     document_content TEXT,
@@ -60,7 +60,7 @@ CREATE TABLE generation_session (
 );
 
 -- 幻觉检测配置表
-CREATE TABLE hallucination_config (
+CREATE TABLE IF NOT EXISTS hallucination_config (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     config_type VARCHAR(50) NOT NULL,
     config_value TEXT NOT NULL,

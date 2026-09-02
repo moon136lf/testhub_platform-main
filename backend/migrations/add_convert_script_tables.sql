@@ -28,7 +28,7 @@ DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.table_constraints
-    WHERE conname = 'fk_script_asset_project' AND table_name = 'script_asset'
+    WHERE constraint_name = 'fk_script_asset_project' AND table_name = 'script_asset'
   ) THEN
     ALTER TABLE script_asset
       ADD CONSTRAINT fk_script_asset_project
