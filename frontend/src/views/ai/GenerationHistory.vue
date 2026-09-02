@@ -1,13 +1,15 @@
 <template>
-  <div class="generation-history">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>生成历史</span>
-          <el-button type="primary" :icon="Refresh" @click="loadSessions">刷新</el-button>
-        </div>
-      </template>
+  <div class="generation-history page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>生成历史</h2>
+        <div class="page-subtitle">AI 用例生成会话记录与结果回看</div>
+      </div>
+      <el-button type="primary" :icon="Refresh" @click="loadSessions">刷新</el-button>
+    </div>
 
+    <el-card shadow="never">
       <el-form :inline="true" :model="queryParams">
         <el-form-item label="项目">
           <el-select v-model="queryParams.projectId" placeholder="选择项目" style="width: 200px" @change="loadSessions">
@@ -328,14 +330,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.generation-history {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .el-pagination {

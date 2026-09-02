@@ -1,14 +1,17 @@
 <template>
-  <div class="rule-management">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>测试规则管理</span>
-          <el-button type="primary" :icon="Plus" @click="showCreateDialog">
-            新建规则
-          </el-button>
-        </div>
-      </template>
+  <div class="rule-management page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>测试规则管理</h2>
+        <div class="page-subtitle">管理 AI 生成用例时参考的测试规则</div>
+      </div>
+      <el-button type="primary" :icon="Plus" @click="showCreateDialog">
+        新建规则
+      </el-button>
+    </div>
+
+    <el-card shadow="never">
 
       <el-form :inline="true" :model="queryParams">
         <el-form-item label="规则类型">
@@ -300,14 +303,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.rule-management {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .el-pagination {

@@ -1,15 +1,17 @@
 <template>
-  <div class="knowledge-management">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>知识库管理</span>
-          <el-button type="primary" :icon="Plus" @click="showUploadDialog">
-            上传文档
-          </el-button>
-        </div>
-      </template>
+  <div class="knowledge-management page-container">
+    <!-- 页头 -->
+    <div class="page-header">
+      <div>
+        <h2>知识库管理</h2>
+        <div class="page-subtitle">上传 PRD / 接口文档 / 测试规范，供 AI 生成时参考</div>
+      </div>
+      <el-button type="primary" :icon="Plus" @click="showUploadDialog">
+        上传文档
+      </el-button>
+    </div>
 
+    <el-card shadow="never">
       <el-form :inline="true" :model="queryParams">
         <el-form-item label="项目">
           <el-select v-model="queryParams.projectId" placeholder="选择项目" style="width: 200px" @change="loadDocuments">
@@ -370,14 +372,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.knowledge-management {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-subtitle {
+  font-size: 13px;
+  color: var(--mt-text-secondary);
+  margin-top: 4px;
 }
 
 .el-pagination {
