@@ -18,6 +18,8 @@ class StorageClient:
     _instance: Optional["StorageClient"] = None
 
     def __init__(self):
+        # fallback 内存存储无条件初始化 (client 初始化失败时降级用)
+        self._fallback_store = {}
         # Parse endpoint (remove http:// prefix for Minio client)
         endpoint = settings.STORAGE_ENDPOINT.replace("http://", "").replace("https://", "")
 
@@ -144,9 +146,11 @@ class StorageClient:
             if self.client is None:
                 return self._fallback_store.get(object_name, b"")
             response = self.client.get_object(self.bucket_name, object_name)
-            data = b"".join(response.stream)
-            response.close()
-            response.release_conn()
+            try:
+                data = response.read()
+            finally:
+                response.close()
+                response.release_conn()
             return data
         except S3Error as e:
             logger.error(f"Failed to get object {object_name}: {e}")

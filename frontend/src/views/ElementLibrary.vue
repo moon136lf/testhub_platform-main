@@ -265,7 +265,10 @@ const handleFetch = async () => {
         // 完成消息（type=success, progress=1.0）：加载元素结果
         if (data.type === 'success' && data.progress >= 1.0 && data.data?.elements) {
           elements.value = data.data.elements
-          screenshotUrl.value = data.data.screenshot_url || ''
+          const raw = data.data.screenshot_url || ''
+        // MinIO bucket 非公开, 直链 403 — 走后端代理
+        const m = String(raw).match(/\/moontest\/(.+)$/)
+        screenshotUrl.value = m ? `/api/v1/elements/screenshot?key=${encodeURIComponent(m[1])}` : raw
           fetching.value = false
           ElMessage.success(`元素抓取完成，共 ${elements.value.length} 个`)
           sseConnection?.close()

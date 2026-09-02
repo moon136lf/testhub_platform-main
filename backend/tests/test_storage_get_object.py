@@ -7,9 +7,9 @@ from app.core.storage import StorageClient
 def test_get_object_bytes_returns_bytes():
     client = StorageClient()
     client.client = MagicMock()
-    # minio get_object returns a response with .stream (iterable of bytes)
+    # minio get_object returns a response with .read()
     client.client.get_object.return_value = MagicMock(
-        stream=[b"<html>", b"report</html>"]
+        read=MagicMock(return_value=b"<html>report</html>")
     )
     data = client.get_object_bytes("reports/exec-1.html")
     assert b"<html>report</html>" in data

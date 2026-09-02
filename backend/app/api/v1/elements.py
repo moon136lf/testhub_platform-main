@@ -13,6 +13,7 @@ Element API endpoints - 元素库管理接口 (Task 15 重构)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
@@ -34,6 +35,22 @@ from app.services.change_detection_service import ChangeDetectionService
 from app.models.element import PageRepository, ElementRepository, FetchHistory, ChangeDetection
 
 router = APIRouter()
+
+
+@router.get("/screenshot")
+async def get_screenshot(key: str = Query(..., description="MinIO object key, e.g. screenshots/{project_id}/{uuid}.png")):
+    """截图代理端点: 前端 <img> 走 /api/v1/elements/screenshot?key=...,
+    由后端从 MinIO 拉取 (bucket 非公开, 直连 MinIO URL 会 AccessDenied)."""
+    from app.core.storage import storage_client
+    if not key.startswith("screenshots/") or ".." in key:
+        raise HTTPException(status_code=400, detail="Invalid screenshot key")
+    try:
+        import asyncio
+        data = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: storage_client.get_object_bytes(key))
+    except Exception:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    return Response(content=data, media_type="image/png")
 
 
 @router.post("/fetch", response_model=ElementFetchResponse)
