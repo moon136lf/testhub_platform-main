@@ -5,6 +5,30 @@
 
 ---
 
+## 快照 #39 — 2026-09-02 18:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+```
+dfc22db merge: #12 UI modern light theme — all 19 pages + form/table alignment + rules CRUD fixes
+73448bc feat(ui): batch-4 modern light theme — remaining 9 pages
+9d8d2a8 feat(ui): batch-3 modern light theme — AI pages (CaseGenerate/Knowledge/History/Rules)
+f74fd58 fix(whitescan): generated cases editable in case mgmt — case_type functional, step normalization, rollback on IntegrityError
+db20014 fix(ui): first column fixed width -> min-width
+96446d9 fix(ui): action column widths (Projects/GenHistory/EnvMgmt)
+986473e feat(ui): batch-2 modern light theme — Projects / Cases / CaseDetail
+986c6ec chore(whitescan): remove dead regression_case_generator + tick plan checkboxes (#func-gen T4)
+```
+
+### 未提交改动
+- 未跟踪：`backend/.en`（保留）、`docs/REQUIREMENTS_V1.1.md`、`docs/SESSION_HANDOFF_2026-08-26.md`
+
+### 进度
+#func-gen（功能回归用例生成 4 任务）代码层收官：终审 Ready，23 测试全绿，生成回归用例改走「clone→静态解析→AI 批量→落库」新逻辑；#12 UI 现代浅色主题 19 页全量已合（dfc22db）。剩真实 e2e（对 MoonTest 仓库实跑一次生成）待操作。
+
+---
+
 ## 快照 #38 — 2026-09-02 17:50（auto）
 
 **当前分支**：master（主仓，W9 已合回，当前做功能用例生成增强 #func-gen）
