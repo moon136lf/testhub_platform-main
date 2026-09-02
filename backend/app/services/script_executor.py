@@ -107,7 +107,10 @@ class ScriptExecutor:
     async def _check_assertion(self, page, assertion: dict) -> None:
         """断言校验 (TRANS assertion). page=None 时跳过 (mock 路径不验证).
 
-        #5a 最小实现: toast_message/field_value 做最小验证; 其他类型标 TODO 跳过。
+        实现类型: toast_message(页面含文本) / field_value(输入框值) /
+        row_visible(表格行含文本) / dialog_closed(无 modal 可见) /
+        status_changed(URL 或页面文本变化).
+        ambiguous/is_valid=False → 不验证 (设计如此, 非桩).
         验证失败抛 AssertionError → 由调用方归类为 assertion_failed。
         """
         if not assertion or not page:
@@ -116,6 +119,7 @@ class ScriptExecutor:
             return  # is_valid=False 不验证业务结果
         atype = assertion.get("type")
         expected = assertion.get("expected")
+        target = assertion.get("target")
         try:
             if atype == "toast_message":
                 # 期望页面文本包含 expected
@@ -125,12 +129,57 @@ class ScriptExecutor:
                         f"toast_message 断言失败: 期望含 '{expected}', 实际文本不含"
                     )
             elif atype == "field_value":
-                # 期望某输入框值等于 expected (target 暂用 body 文本兜底)
-                # TODO: 按 assertion.target 定位具体输入框, 当前最小实现仅占位
-                return
+                # 期望输入框值为 expected；target 优先按文本占位定位，其次全局输入框
+                if not expected:
+                    return
+                box = None
+                if target:
+                    # 先尝试 label/placeholder 文本关联定位
+                    for sel in (
+                        f'input[placeholder*="{target}"]',
+                        f'input[normalize-space(@aria-label)="{target}"]' if target else None,
+                    ):
+                        if sel and await page.locator(sel).count() > 0:
+                            box = page.locator(sel).first
+                            break
+                if box is None:
+                    box = page.locator("input:visible").first
+                actual = await box.input_value() if await box.count() else None
+                if actual is None or expected not in str(actual):
+                    raise AssertionError(
+                        f"field_value 断言失败: 期望含 '{expected}', 实际='{actual}'"
+                    )
+            elif atype == "row_visible":
+                # 期望表格/列表中出现含 expected 文本的行
+                if not expected:
+                    return
+                row = page.locator(f"tr:has-text('{expected}'), li:has-text('{expected}')").first
+                if await row.count() == 0 or not await row.is_visible():
+                    raise AssertionError(
+                        f"row_visible 断言失败: 未找到含 '{expected}' 的可见行"
+                    )
+            elif atype == "dialog_closed":
+                # 期望 modal/弹窗已关闭（el-dialog overlay 消失）
+                overlay = page.locator(".el-overlay:visible, .el-dialog:visible, [role=dialog]:visible")
+                if await overlay.count() > 0:
+                    raise AssertionError("dialog_closed 断言失败: 页面仍存在可见弹窗")
+            elif atype == "status_changed":
+                # 期望页面状态发生变化：URL 离开初始 URL，或页面文本包含 expected
+                if expected:
+                    text = await page.text_content("body")
+                    if text is None or expected not in text:
+                        raise AssertionError(
+                            f"status_changed 断言失败: 期望含 '{expected}', 实际文本不含"
+                        )
+                else:
+                    # 无 expected：与导航时 URL 比对
+                    current = page.url
+                    if target and current == target:
+                        raise AssertionError("status_changed 断言失败: URL 未变化")
+                    # 无 target 参照时无法判定，不误报
+                    return
             else:
-                # status_changed/row_visible/dialog_closed/ambiguous: 暂不验证, 标 TODO
-                # 不抛错, 避免误报; 真实化阶段按 type 细化
+                # ambiguous 或未知类型: 不验证 (标记为不验证业务结果, 非桩)
                 return
         except AssertionError:
             raise

@@ -281,6 +281,7 @@ def _build_step_mapping(actions: List[ActionWithLocator], asserts: List[Assertio
             "value": a.value,
             "assertion": {
                 "type": ap.assertion_type,
+                "target": ap.target,
                 "expected": ap.expected,
                 "is_valid": ap.is_valid,
             } if ap else None,
