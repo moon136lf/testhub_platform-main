@@ -5,6 +5,34 @@
 
 ---
 
+## 快照 #46 — 2026-09-03 17:50（下班交接）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- cb125d1 docs: session archive W12 #5 — UI merged, fake-success P1/P2 cleared, AI chain fixed
+- 28b1d06 fix(ai-gen): upload 422 for md files — file_type='prd' rejected by validator
+- 8f4d50e fix(ai-gen): b64 decode tolerant of raw-bytes callers
+- 055c21f fix(ai-gen): upload-document 422 — file_bytes as JSON int-array rejected
+- d63bc06 docs: session archive #45 (auto)
+- ec3a69d chore: view_logs.bat — ASCII-only output (GBK mojibake fix)
+- b945015 feat(elements): persist fetch results to DB (was redis-cache-only)
+- 70bd7ed feat(ai-gen): load real knowledge context into prompt
+
+### 未提交变更
+- 工作区干净（业务代码全部已提交）
+- 未跟踪：`backend/.en`、`docs/SESSION_HANDOFF_2026-08-26.md`、`docs/superpowers/plans/2026-09-02-case-batch.md`
+
+### 进度
+元素抓取全链路修复完毕并已提交（SSE 路由→playwright async→定位器验证恒 False→结果落库→截图代理）；ai-gen 上传/解析链 422 三连修（file_bytes/file_type/b64 兼容）。
+
+### 明日待办
+1. **元素库最终验证**：重启 celery worker → 元素库点抓取（URL 填 http://localhost:3000/）→ 确认页面/元素列表入库可见 + 截图显示（链路已修完，只差用户操作验证）
+2. 若验证通过，可将「假成功点清单」中元素库相关条目销号（见 memory 假成功点清单）
+3. 3 个未跟踪文件待定夺：backend/.en（疑似拼错名的 .env）、旧交接文档、case-batch 计划文档
+
+---
+
 ## 快照 #45 — 2026-09-03 00:50（auto）
 
 **当前分支**：master（主仓）
