@@ -18,7 +18,7 @@
 - Create: `backend/app/services/code_structure_analyzer.py`
 - Test: `backend/tests/test_code_structure_analyzer.py`
 
-- [ ] Step 1: 写失败测试
+- [x] Step 1: 写失败测试
 
 ```python
 """CodeStructureAnalyzer tests (pure regex parsing, zero mocks)."""
@@ -106,9 +106,9 @@ class TestAnalyzeBackend:
         assert CodeStructureAnalyzer().analyze_backend(str(tmp_path)) == []
 ```
 
-- [ ] Step 2: 跑测试确认失败（ModuleNotFoundError）
+- [x] Step 2: 跑测试确认失败（ModuleNotFoundError）
 
-- [ ] Step 3: 实现 `backend/app/services/code_structure_analyzer.py`
+- [x] Step 3: 实现 `backend/app/services/code_structure_analyzer.py`
 
 ```python
 """被测系统前后端代码结构静态解析 (Vue Router + FastAPI). 零 AI 零 DB."""
@@ -187,9 +187,9 @@ class CodeStructureAnalyzer:
         return out
 ```
 
-- [ ] Step 4: 跑测试确认通过（全绿）
+- [x] Step 4: 跑测试确认通过（全绿）
 
-- [ ] Step 5: Commit
+- [x] Step 5: Commit
 
 ```bash
 git add app/services/code_structure_analyzer.py tests/test_code_structure_analyzer.py
@@ -205,7 +205,7 @@ git commit -m "feat(whitescan): static code structure analyzer - vue router + fa
 - Create: `backend/app/services/functional_case_generator.py`
 - Test: `backend/tests/test_functional_case_generator.py`
 
-- [ ] Step 1: 写失败测试
+- [x] Step 1: 写失败测试
 
 ```python
 """FunctionalCaseGenerator tests (mock gateway/db, real batching logic)."""
@@ -326,9 +326,9 @@ class TestGenerateFromRepo:
         assert len(db.added) == 0
 ```
 
-- [ ] Step 2: 跑测试确认失败
+- [x] Step 2: 跑测试确认失败
 
-- [ ] Step 3: 实现 `backend/app/services/functional_case_generator.py`
+- [x] Step 3: 实现 `backend/app/services/functional_case_generator.py`
 
 ```python
 """功能回归用例生成器 (#9 增强): 静态解析代码结构 → AI 批量生成 → 落 test_case.
@@ -454,9 +454,9 @@ class FunctionalCaseGenerator:
             return None
 ```
 
-- [ ] Step 4: 跑测试确认通过
+- [x] Step 4: 跑测试确认通过
 
-- [ ] Step 5: Commit
+- [x] Step 5: Commit
 
 ```bash
 git add app/services/functional_case_generator.py tests/test_functional_case_generator.py
@@ -471,7 +471,7 @@ git commit -m "feat(whitescan): functional case generator - AI batch gen from co
 - Modify: `backend/app/api/v1/whitescan.py`（generate_cases 端点换调用）
 - Modify: `frontend/src/views/whitescan/WhiteScan.vue`（按钮文案 + 成功提示）
 
-- [ ] Step 1: 改后端端点
+- [x] Step 1: 改后端端点
 
 `whitescan.py` 的 `generate_cases` 端点：把 `RegressionCaseGenerator` 调用替换为：
 
@@ -504,7 +504,7 @@ git commit -m "feat(whitescan): functional case generator - AI batch gen from co
 
 **注意**：同步等待较长（分钟级），httpx/前端 axios timeout 需覆盖——前端 axios 默认无超时即可；uvicorn 默认无超时。若生成批次数很大（>30 批），提示用户后台跑属后续优化，v1 同步。
 
-- [ ] Step 2: 改前端
+- [x] Step 2: 改前端
 
 `WhiteScan.vue`：
 1. 按钮文案 `生成回归用例` → `生成功能回归用例`
@@ -513,7 +513,7 @@ git commit -m "feat(whitescan): functional case generator - AI batch gen from co
 ElMessage.success(`生成 ${d.generated_count || d.generated || 0} 条功能回归用例，请到用例管理页查看`)
 ```
 
-- [ ] Step 3: 测试
+- [x] Step 3: 测试
 
 ```bash
 cd /d/MoonTest/backend && python -m pytest tests/test_api_whitescan.py tests/test_code_scan_service.py tests/test_functional_case_generator.py -q
@@ -521,7 +521,7 @@ cd /d/MoonTest/backend && python -m pytest tests/test_api_whitescan.py tests/tes
 cd ../frontend && npx vite build
 ```
 
-- [ ] Step 4: Commit
+- [x] Step 4: Commit
 
 ```bash
 git add backend/app/api/v1/whitescan.py frontend/src/views/whitescan/WhiteScan.vue backend/tests/
@@ -532,7 +532,7 @@ git commit -m "feat(whitescan): generate-cases endpoint now generates functional
 
 ### Task 4: e2e 验证 + 收尾
 
-- [ ] Step 1: 全量后端测试 + 前端 build
+- [x] Step 1: 全量后端测试 + 前端 build
 ```bash
 cd /d/MoonTest/backend && python -m pytest tests/ -q --ignore=tests/test_batch_import_fix.py --deselect tests/test_storage_get_object.py
 cd ../frontend && npx vite build
@@ -540,4 +540,4 @@ cd ../frontend && npx vite build
 
 - [ ] Step 2: 真实 e2e——对 MoonTest 自身仓库（testhub_platform-main）跑一次生成，确认 test_case 表新增 > 100 条、用例管理页可见
 
-- [ ] Step 3: Commit（如有 fixup）
+- [x] Step 3: Commit（如有 fixup）
