@@ -5,6 +5,27 @@
 
 ---
 
+## 快照 #47 — 2026-09-03（#case-batch 特性收官，人工存档）
+
+**当前分支**：master（merge 0cbb64f）
+
+### 本会话完成：用例生成记录两级化（#case-batch T1-T4，9 提交合并，全量 529 passed / 0 failed）
+
+- **两级用例管理**：Cases.vue→生成记录列表（查看/删除）；CaseDetail.vue 批内用例双模式+批量定稿/评审/转脚本入口；ReviewCenter 支持 query 预筛选
+- **模型**：case_batch 表 + test_case.batch_id + script_asset.batch_name；迁移 SQL×3 幂等就绪（含 cleanup_legacy_cases.sql **未执行**）
+- **命名规范**（batch_naming.py）：白盒测试生成接口回归用例/UI回归用例+YYYYMMDDHHmmss、{需求前50字}生成的用例+ts、手工创建用例+ts；脚本名=批次名-自动化脚本HHmmss（撞名-2/-3）
+- **三个生成点挂批次**：白盒（UI+API 双批次）、AI 生成（需求文本前50字）；**手工创建未挂 manual 批次（遗留）**
+- **审查战果**：T2 抓 2 Critical（rollback 级联→savepoint 隔离+批次提前 commit）、T3 抓 1 Critical（router push 缺 param）、终审抓 1 Critical（T4 整文件覆盖 batch_naming.py 删掉 build_batch_name，dbf4995 恢复）
+
+### 待办（新会话接手）
+1. 真实库执行 3 个迁移 SQL（add_case_batch_table / add_script_asset_batch_name / cleanup_legacy_cases——cleanup 先 SELECT COUNT 确认）
+2. manual 批次挂接（手工新建用例记录列表不可见）
+3. 页面端到端走查：白盒生成→记录列表→查看→转脚本→脚本库来源列
+
+计划：`docs/superpowers/plans/2026-09-02-case-batch.md`；memory：`moontest-case-batch-progress`
+
+---
+
 ## 快照 #46 — 2026-09-03 17:50（下班交接）
 
 **当前分支**：master（主仓）
