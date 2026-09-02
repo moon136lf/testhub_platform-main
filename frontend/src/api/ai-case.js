@@ -106,6 +106,22 @@ export const aiCaseAPI = {
     return response.data
   },
 
+  // PUT /rules/{id} — RuleUpdate 契约: {name?, description?, prompt_template?}
+  async updateRule(ruleId, name, description, promptTemplate) {
+    const response = await axios.put(`${API_BASE}/rules/${ruleId}`, {
+      name,
+      description,
+      prompt_template: promptTemplate || null
+    })
+    return response.data
+  },
+
+  // DELETE /rules/{id} — 软删除（status -> inactive），仅自定义规则
+  async deleteRule(ruleId) {
+    const response = await axios.delete(`${API_BASE}/rules/${ruleId}`)
+    return response.data
+  },
+
   async getRules(skip = 0, limit = 100) {
     const response = await axios.get(`${API_BASE}/rules`, {
       params: {

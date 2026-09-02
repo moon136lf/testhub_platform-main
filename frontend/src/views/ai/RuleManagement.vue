@@ -43,7 +43,7 @@
             {{ formatDate(scope.row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
             <el-button type="primary" link :icon="View" @click="viewRule(scope.row)">查看</el-button>
             <el-button
@@ -242,7 +242,12 @@ const submitRule = async () => {
     submitting.value = true
     try {
       if (isEdit.value) {
-        // Update rule - API not implemented yet
+        await aiCaseAPI.updateRule(
+          ruleForm.value.id,
+          ruleForm.value.name,
+          ruleForm.value.content,        // 表单的"规则内容"即后端 description
+          null                            // prompt_template 暂不使用
+        )
         ElMessage.success('规则更新成功')
       } else {
         await aiCaseAPI.createRule(
@@ -275,7 +280,7 @@ const deleteRule = async (rule) => {
       }
     )
 
-    // Delete rule - API not implemented yet
+    await aiCaseAPI.deleteRule(rule.id)
     ElMessage.success('规则删除成功')
     loadRules()
   } catch {
