@@ -5,6 +5,31 @@
 
 ---
 
+## 快照 #38 — 2026-09-02 17:50（auto）
+
+**当前分支**：master（主仓，W9 已合回，当前做功能用例生成增强 #func-gen）
+
+### 最近 8 条提交
+```
+e99c471 feat(rules): PUT/DELETE /rules/{id} endpoints — update & soft-delete custom rules
+a6cbdf5 fix(whitescan): harden functional case generator - non-dict guard, batch dedup, token tracking (#func-gen T2 review)
+797cd13 fix(whitescan): truncate generated case title to 100 (TestCase.name is String(100)) (#func-gen T2 review)
+63c4c73 feat(whitescan): functional case generator - AI batch gen from code structure (#func-gen T2)
+8870b1e fix: migrations idempotency (IF NOT EXISTS, constraint_name col), dup id col; start_all.bat health trailing slash
+b93eba7 feat: CodeStructureAnalyzer — 静态解析 Vue Router 前端路由 + FastAPI 后端端点
+6c951d0 docs: functional case gen implementation plan (4 tasks)
+77046a6 docs: functional regression case generation spec
+```
+
+### 未提交改动
+- `M backend/tests/test_api_whitescan.py`（Task 3 端点替换 subagent 正在改，进行中）
+- 未跟踪：`backend/.en`（用户确认保留）、`docs/SESSION_HANDOFF_2026-08-26.md`
+
+### 进度
+功能回归用例生成 4 任务中 T1（CodeStructureAnalyzer）、T2（FunctionalCaseGenerator + 审查加固）已完成并提交；T3（generate-cases 端点替换 + 前端文案）subagent 实现中；T4（e2e）待做。
+
+---
+
 ## 快照 #37 — 2026-08-28（17:50 下班快照）
 
 **当前分支**：master
