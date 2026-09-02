@@ -25,6 +25,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="scanning" @click="onScan">开始扫描</el-button>
+          <el-button :icon="Refresh" :loading="loading" @click="loadScans">刷新</el-button>
         </el-form-item>
       </el-form>
 
@@ -126,6 +127,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { whitescanAPI } from '@/api/whitescan.js'
 import { projectAPI } from '@/api/project.js'
 import axios from '@/api/axios.js'
