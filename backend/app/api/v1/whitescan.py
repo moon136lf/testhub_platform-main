@@ -83,7 +83,7 @@ async def generate_cases(scan_id: str, project_id: str = Query(...),
                          svc: CodeScanService = Depends(get_scan_service),
                          db: AsyncSession = Depends(get_db)):
     """基于被测系统代码结构生成功能回归用例 (clone → 静态解析 → AI 批量 → 落库)."""
-    import os, subprocess, tempfile, shutil, re as _re
+    import asyncio, os, subprocess, tempfile, shutil, re as _re
     scan = await svc.get_scan(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail="scan not found")
@@ -92,10 +92,12 @@ async def generate_cases(scan_id: str, project_id: str = Query(...),
         raise HTTPException(status_code=400, detail="invalid repo_url")
     repo_path = tempfile.mkdtemp(prefix="funccase_")
     try:
-        clone = subprocess.run(
+        # run clone in executor: sync subprocess.run must not block the event loop
+        loop = asyncio.get_running_loop()
+        clone = await loop.run_in_executor(None, lambda: subprocess.run(
             ["git", "clone", "--depth", "1", "-b", branch, "--", repo_url, repo_path],
             capture_output=True, text=True, timeout=240,
-            env={**os.environ, "GIT_ALLOW_PROTOCOL": "https:http:ssh:file"})
+            env={**os.environ, "GIT_ALLOW_PROTOCOL": "https:http:ssh:file"}))
         if clone.returncode != 0:
             raise HTTPException(status_code=400, detail=f"git clone failed: {clone.stderr[:300]}")
         from app.services.functional_case_generator import FunctionalCaseGenerator

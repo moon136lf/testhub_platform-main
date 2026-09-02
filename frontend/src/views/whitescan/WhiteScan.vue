@@ -255,7 +255,7 @@ const onGenerateCases = async (row) => {
     const res = await whitescanAPI.generateCases(row.id, projectId.value)
     const d = res.data?.data || res.data || {}
     ElMessage.success(`生成 ${d.generated || 0} 条功能回归用例，请到用例管理页查看`)
-  } catch (e) { ElMessage.error('生成失败') } finally { loading.value = false }
+  } catch (e) { ElMessage.error(e?.response?.data?.detail || '生成失败') } finally { loading.value = false }
 }
 
 const onExport = (format) => {

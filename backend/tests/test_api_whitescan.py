@@ -134,6 +134,19 @@ class TestGenerateAndExport:
                         params={"project_id": PID})
         assert r.status_code == 400
 
+    def test_generate_cases_clone_failure(self, client):
+        svc = MagicMock()
+        svc.get_scan = AsyncMock(return_value={"id": SCAN,
+                                               "repo_url": "https://example.com/r.git",
+                                               "branch": "main"})
+        _override(svc)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stderr="fatal: repo not found")
+            r = client.post(f"/api/v1/whitescan/scans/{SCAN}/generate-cases",
+                            params={"project_id": PID})
+        assert r.status_code == 400
+        assert "git clone failed" in r.json()["detail"]
+
     def test_export_xlsx(self, client):
         svc = MagicMock()
         # Plan's test set svc.export_scan, but the endpoint calls
