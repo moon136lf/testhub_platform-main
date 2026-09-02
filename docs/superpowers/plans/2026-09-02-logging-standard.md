@@ -19,7 +19,7 @@
 - Modify: `backend/app/main.py:16-21`（换 basicConfig）
 - Test: `backend/tests/test_logging_setup.py`
 
-- [ ] Step 1: 写失败测试
+- [x] Step 1: 写失败测试
 
 ```python
 """logging_setup tests: 落文件+轮转+幂等."""
@@ -64,12 +64,12 @@ class TestSetupLogging:
         assert "still-logged" in content
 ```
 
-- [ ] Step 2: 跑测试确认失败
+- [x] Step 2: 跑测试确认失败
 
 Run: `cd /d/MoonTest/backend && timeout 100 python -m pytest tests/test_logging_setup.py -q -p no:cacheprovider`
 Expected: FAIL (ModuleNotFoundError: app.core.logging_setup)
 
-- [ ] Step 3: 实现 `backend/app/core/logging_setup.py`
+- [x] Step 3: 实现 `backend/app/core/logging_setup.py`
 
 ```python
 """统一日志配置: RotatingFileHandler + StreamHandler 双输出. 幂等."""
@@ -121,12 +121,12 @@ def setup_logging(log_dir: str = "logs",
     root.setLevel(min(fh.level, sh.level))
 ```
 
-- [ ] Step 4: 跑测试确认通过
+- [x] Step 4: 跑测试确认通过
 
 Run: `cd /d/MoonTest/backend && timeout 100 python -m pytest tests/test_logging_setup.py -q -p no:cacheprovider`
 Expected: 3 passed
 
-- [ ] Step 5: main.py 换用 setup_logging + .gitignore + commit
+- [x] Step 5: main.py 换用 setup_logging + .gitignore + commit
 
 `backend/app/main.py` 第 16-21 行：
 
@@ -161,7 +161,7 @@ git commit -m "feat(logging): setup_logging — rotating file + console dual out
 - Modify: `backend/app/tasks/__init__.py`（celery_app 定义后接 worker 日志信号）
 - Test: `backend/tests/test_logging_setup.py`（追加）
 
-- [ ] Step 1: 追加失败测试
+- [x] Step 1: 追加失败测试
 
 ```python
 class TestCeleryLogging:
@@ -172,12 +172,12 @@ class TestCeleryLogging:
         import app.tasks  # noqa: F401  导入即注册 signal, 不抛错
 ```
 
-- [ ] Step 2: 跑测试确认失败
+- [x] Step 2: 跑测试确认失败
 
 Run: `cd /d/MoonTest/backend && timeout 100 python -m pytest tests/test_logging_setup.py::TestCeleryLogging -q -p no:cacheprovider`
 Expected: FAIL (ImportError: setup_worker_logging)
 
-- [ ] Step 3: 实现
+- [x] Step 3: 实现
 
 `backend/app/core/logging_setup.py` 追加：
 
@@ -204,12 +204,12 @@ def _init_worker_logging(**_kwargs):
 
 更稳妥版（直接采用）：`setup_worker_logging` 传 `log_file="app-worker.log"`，logging_setup 的 `setup_logging` 加参数 `log_file: str = "app.log"`。
 
-- [ ] Step 4: 跑测试确认通过
+- [x] Step 4: 跑测试确认通过
 
 Run: `cd /d/MoonTest/backend && timeout 100 python -m pytest tests/test_logging_setup.py -q -p no:cacheprovider`
 Expected: 4 passed
 
-- [ ] Step 5: Commit
+- [x] Step 5: Commit
 
 ```bash
 cd /d/MoonTest && git add backend/app/core/logging_setup.py backend/app/tasks/__init__.py backend/tests/test_logging_setup.py
@@ -227,7 +227,7 @@ git commit -m "feat(logging): celery worker logs to app-worker.log (#logging T2)
 - Modify: 其余高频点：code_scan_service、script_executor、self_heal_engine、functional_case_generator（挑 logger.warning/error 已有的行补上下文）
 - Test: 无新增单测（日志文案改动不改变行为）；跑全量确认无回归
 
-- [ ] Step 1: 改造模式（每处一行改动）
+- [x] Step 1: 改造模式（每处一行改动）
 
 统一约定 `<事件> | key=value ...: <异常>`。示例（ai_gateway.py:85）：
 
@@ -268,12 +268,12 @@ except Exception as e:
 
 其余 code_scan_service/script_executor/self_heal_engine/functional_case_generator：grep `logger\.\(warning\|error\)` 逐处补，预计 ~10 处，同样的模式。
 
-- [ ] Step 2: 全量测试确认无回归
+- [x] Step 2: 全量测试确认无回归
 
 Run: `cd /d/MoonTest/backend && timeout 500 python -m pytest tests/ -q -p no:cacheprovider --ignore=tests/test_batch_import_fix.py --deselect tests/test_storage_get_object.py`
 Expected: 502+ passed, 0 failed
 
-- [ ] Step 3: Commit
+- [x] Step 3: Commit
 
 ```bash
 cd /d/MoonTest && git add backend/app/services/
@@ -288,7 +288,7 @@ git commit -m "feat(logging): error logs carry context (ids/provider) + no silen
 - Modify: `backend/app/main.py`（exception handler + middleware）
 - Test: `backend/tests/test_logging_middleware.py`
 
-- [ ] Step 1: 写失败测试
+- [x] Step 1: 写失败测试
 
 ```python
 """Request logging middleware + global exception handler tests."""
@@ -327,12 +327,12 @@ class TestGlobalExceptionHandler:
         app.router.routes = [rt for rt in app.router.routes if getattr(rt, "path", "") != "/api/v1/__boom__"]
 ```
 
-- [ ] Step 2: 跑测试确认失败
+- [x] Step 2: 跑测试确认失败
 
 Run: `cd /d/MoonTest/backend && timeout 100 python -m pytest tests/test_logging_middleware.py -q -p no:cacheprovider`
 Expected: FAIL (500 handler 未记日志 / 请求日志不存在)
 
-- [ ] Step 3: 实现（main.py，lifespan 定义之后、路由注册之前）
+- [x] Step 3: 实现（main.py，lifespan 定义之后、路由注册之前）
 
 ```python
 import time
@@ -360,14 +360,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 （`JSONResponse` 已在 main.py import；注意现有全局 handler 若已有（搜 `exception_handler`），保留原有业务 handler 只加兜底 Exception。）
 
-- [ ] Step 4: 跑测试确认通过 + 全量无回归
+- [x] Step 4: 跑测试确认通过 + 全量无回归
 
 Run: `cd /d/MoonTest/backend && timeout 100 python -m pytest tests/test_logging_middleware.py -q -p no:cacheprovider`
 Expected: 2 passed
 Run: `cd /d/MoonTest/backend && timeout 500 python -m pytest tests/ -q -p no:cacheprovider --ignore=tests/test_batch_import_fix.py --deselect tests/test_storage_get_object.py`
 Expected: 0 failed
 
-- [ ] Step 5: start_all.bat 加 LOG_LEVEL + Commit
+- [x] Step 5: start_all.bat 加 LOG_LEVEL + Commit
 
 `start_all.bat` 的 API 启动行前加：
 
@@ -384,15 +384,15 @@ git commit -m "feat(logging): request log middleware + unhandled exception handl
 
 ### Task 5: 真实启动验证 + 收尾
 
-- [ ] Step 1: 真实启动冒烟
+- [x] Step 1: 真实启动冒烟
 
 ```bash
 cd /d/MoonTest/backend && timeout 30 python -c "from app.main import app" && ls logs/
 # 启动 API: start_all.bat 或直接 uvicorn, 确认 logs/app.log 生成且含 lifespan 启动行
 ```
 
-- [ ] Step 2: 人为触发报错验证可查性
+- [x] Step 2: 人为触发报错验证可查性
 
 调用一个必然失败的接口（如无效 UUID 的 regression/list），在 logs/app.log 中确认：请求日志行 + 422/500 + 异常堆栈可检索。
 
-- [ ] Step 3: 如有 fixup 则 commit（勾选 plan checkboxes）
+- [x] Step 3: 如有 fixup 则 commit（勾选 plan checkboxes）
