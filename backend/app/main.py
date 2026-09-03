@@ -20,7 +20,9 @@ import os
 from app.core.logging_setup import setup_logging
 
 setup_logging(log_dir=os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs"),
-              level_console=os.getenv("LOG_LEVEL"))
+              level_console=os.getenv("LOG_LEVEL") or settings.LOG_LEVEL)
+logging.getLogger("sqlalchemy.engine").setLevel(settings.SQLALCHEMY_LEVEL.upper())
+logging.getLogger("uvicorn.access").disabled = True  # 用自己的访问日志
 logger = logging.getLogger(__name__)
 
 

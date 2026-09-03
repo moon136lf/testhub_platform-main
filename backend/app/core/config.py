@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 
+    # 日志治理 (#logging-v2)
+    LOG_LEVEL: str = "INFO"
+    SQLALCHEMY_LEVEL: str = "WARNING"
+    GRAYLOG_HOST: str = ""      # 空=不接 Graylog
+    GRAYLOG_PORT: int = 12201
+
     # Database
     DATABASE_URL: str = "postgresql://moontest:moontest123@localhost:5432/moontest"
 

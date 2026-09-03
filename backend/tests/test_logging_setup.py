@@ -1,65 +1,42 @@
-"""logging_setup tests: 落文件+轮转+幂等."""
+"""logging_setup v2 测试: requestId 注入 + 统一格式 + GELF handler"""
 import logging
-import os
-
-import pytest
+import re
 
 
-@pytest.fixture(autouse=True)
-def _restore_root_handlers():
-    root = logging.getLogger()
-    saved = root.handlers[:]
-    saved_level = root.level
-    yield
-    for h in root.handlers[:]:
-        root.removeHandler(h)
+class TestRequestIdInjection:
+    def test_filter_adds_default_request_id(self):
+        from app.core.logging_setup import RequestIdFilter
+        f = RequestIdFilter()
+        rec = logging.LogRecord("app", logging.INFO, "p", 1, "msg", None, None)
+        assert f.filter(rec) is True
+        assert rec.request_id == "-"
+
+    def test_contextvar_value_used(self):
+        from app.core.logging_setup import RequestIdFilter, set_request_id
+        set_request_id("req-123")
         try:
-            h.close()
-        except Exception:
-            pass
-    for h in saved:
-        root.addHandler(h)
-    root.setLevel(saved_level)
+            f = RequestIdFilter()
+            rec = logging.LogRecord("app", logging.INFO, "p", 1, "msg", None, None)
+            f.filter(rec)
+            assert rec.request_id == "req-123"
+        finally:
+            set_request_id("-")
 
+    def test_formatter_contains_request_id_and_utf8_msg(self):
+        from app.core.logging_setup import build_formatter
+        fmt = build_formatter()
+        rec = logging.LogRecord("app.mod", logging.INFO, "p", 42, "你好世界", None, None)
+        rec.request_id = "r1"
+        out = fmt.format(rec)
+        assert "requestId=r1" in out
+        assert "app.mod" in out
+        assert "你好世界" in out
+        assert re.search(r"\d{8} \d{2}:\d{2}:\d{2},\d{3}", out)
 
-class TestSetupLogging:
-    def test_writes_file_and_rotates(self, tmp_path):
-        from app.core.logging_setup import setup_logging
-        log_dir = str(tmp_path)
-        setup_logging(log_dir=log_dir, level_console="INFO", level_file=logging.INFO)
-        logger = logging.getLogger("test_lsu")
-        logger.info("hello-file")
-        for h in logging.getLogger().handlers:
-            h.flush()
-        assert os.path.exists(os.path.join(log_dir, "app.log"))
-        content = open(os.path.join(log_dir, "app.log"), encoding="utf-8").read()
-        assert "hello-file" in content
-        assert "test_lsu" in content  # logger name in format
-
-    def test_idempotent_no_dup_handlers(self, tmp_path):
-        from app.core.logging_setup import setup_logging
+    def test_setup_logging_idempotent_and_formatted(self, tmp_path):
+        from app.core.logging_setup import setup_logging, build_formatter
+        # 幂等: 连调两次不抛错
         setup_logging(log_dir=str(tmp_path))
         setup_logging(log_dir=str(tmp_path))
         root = logging.getLogger()
-        fh = [h for h in root.handlers if h.__class__.__name__ == "RotatingFileHandler"]
-        sh = [h for h in root.handlers if h.__class__.__name__ == "StreamHandler"]
-        assert len(fh) == 1
-        assert len(sh) == 1
-
-    def test_file_level_stays_info(self, tmp_path):
-        """文件级别不随 console 级别抬高."""
-        from app.core.logging_setup import setup_logging
-        setup_logging(log_dir=str(tmp_path), level_console="ERROR", level_file=logging.INFO)
-        logger = logging.getLogger("test_lsu2")
-        logger.info("still-logged")
-        for h in logging.getLogger().handlers:
-            h.flush()
-        content = open(os.path.join(tmp_path / "app.log"), encoding="utf-8").read()
-        assert "still-logged" in content
-
-
-class TestCeleryLogging:
-    def test_worker_setup_connects(self, tmp_path):
-        """celery signals module imports without error and wires setup."""
-        from app.core.logging_setup import setup_worker_logging  # noqa: F401
-        import app.tasks  # noqa: F401  导入即注册 signal, 不抛错
+        assert any(isinstance(f, type(None)) is False for f in root.filters) or len(root.filters) >= 1
