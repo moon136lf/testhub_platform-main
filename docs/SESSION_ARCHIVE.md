@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #49 — 2026-09-03 19:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- c320163 feat(logging): v2 unified format + requestId contextvar + GELF (#logging-v2 T1)
+- 71640bd fix(ai-gen): identify ReadTimeout + output truncation + format drift (3-part fix)
+- 26938e7 chore(logs): view_logs.bat force UTF8 console+read - mojibake fix
+- 668d782 fix(cases): default-select first project before initial batches fetch (422 fix)
+- d7431da fix(ai-gen): parse-result 404 — axios baseURL prepended /api/v1 to /sse path
+- 7f71a39 docs: session archive #48 (auto)
+- a13ed5b docs: session archive #47
+- 0cbb64f Merge branch 'worktree-case-batch'
+
+### 未提交变更
+- 工作区干净
+- 未跟踪：`backend/.en`、`docs/SESSION_HANDOFF_2026-08-26.md`、`docs/superpowers/plans/2026-09-03-logging-v2.md`（新计划文档）
+
+### 进度
+#logging-v2 启动（T1：统一格式+requestId contextvar+GELF 已提交）；ai-gen identify 链路三连修（ReadTimeout/截断/格式漂移）、cases 页 422、parse-result 404 修复。
+
+---
+
 ## 快照 #48 — 2026-09-03 18:50（auto）
 
 **当前分支**：master（主仓）
