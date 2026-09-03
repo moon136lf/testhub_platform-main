@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #51 — 2026-09-03 21:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- 67e9280 fix(logging): engine echo=True bypassed SQLAlchemy log level — SQL flood persisted
+- 8c5bb0e fix(logging): requestId filter on handlers, not root logger (propagation gap)
+- 53e9baa docs: session archive #50 (auto)
+- 1eb1a30 docs(logging): LOGGING.md — format/requestId/chinese action logs/graylog mapping (#logging-v2 T4)
+- 6c0b894 feat(logging): Chinese action logs for core services (#logging-v2 T3)
+- 32d16d1 fix(elements): import 422 — LocatorStrategy.priority never produced
+- 7591754 feat(logging): requestId middleware + normalized access line + SSE logs (#logging-v2 T2)
+- 06c524b fix(elements): success SSE message carries elements payload
+
+### 未提交变更
+- 工作区干净
+- 未跟踪：`backend/.en`、`docs/SESSION_HANDOFF_2026-08-26.md`、`docs/superpowers/plans/2026-09-03-logging-v2.md`
+
+### 进度
+#logging-v2 收尾两连修（requestId filter 挂 handler 而非 root、SQL echo 刷屏根除）；元素库五连修后待用户最终确认抓取→入库。
+
+---
+
 ## 快照 #50 — 2026-09-03 20:50（auto）
 
 **当前分支**：master（主仓）
