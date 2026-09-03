@@ -28,7 +28,8 @@ class SSEStream:
         content: str,
         progress: float = 0,
         tokens_used: int = 0,
-        tokens_estimated_total: int = 0
+        tokens_estimated_total: int = 0,
+        data: Optional[dict] = None
     ):
         """
         发送 SSE 消息到 Redis
@@ -40,6 +41,7 @@ class SSEStream:
             progress: 进度 (0.0-1.0)
             tokens_used: 已消耗 Token 数
             tokens_estimated_total: 预估总 Token 数
+            data: 附加载荷 (如抓取完成的 elements/screenshot_url)
         """
         message = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -50,6 +52,8 @@ class SSEStream:
             "tokens_used": tokens_used,
             "tokens_estimated_total": tokens_estimated_total
         }
+        if data is not None:
+            message["data"] = data
 
         try:
             # 推送到 Redis List

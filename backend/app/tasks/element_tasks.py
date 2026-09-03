@@ -228,6 +228,12 @@ async def _fetch_elements_async(
             type="success", stage="complete",
             content=f"抓取完成！共识别 {len(verified_elements)} 个有效元素，耗时 {duration:.1f}秒",
             progress=1.0,
+            data={
+                "elements": verified_elements,
+                "screenshot_url": screenshot_url,
+                "imported_count": imported,
+                "total_count": len(verified_elements),
+            },
         )
 
         logger.info(
