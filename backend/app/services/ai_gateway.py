@@ -66,7 +66,8 @@ class GLMProvider(AIProvider):
                 "max_tokens": kwargs.get("max_tokens", 2000)
             }
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            # 读超时 300s：识别大 PRD（max_tokens 8000）时生成耗时远超 60s（ReadTimeout 根因）
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
                 response = await client.post(
                     self.api_url,
                     json=payload,
