@@ -602,10 +602,24 @@ async def _generate_test_cases_async(
 
                 # Save test case
                 try:
+                    # 同项目下用例名唯一 (uq_test_case_project_name)：重名自动加序号后缀
+                    _base_name = ((case_data.get("name", "") or "未命名用例").strip())[:100]
+                    _n = 1
+                    while True:
+                        _cand = _base_name if _n == 1 else f"{_base_name} ({_n})"[:100]
+                        _dup = await db.execute(
+                            select(func.count(TestCase.id)).where(
+                                and_(TestCase.project_id == UUID(project_id),
+                                     TestCase.name == _cand)
+                            )
+                        )
+                        if (_dup.scalar() or 0) == 0:
+                            break
+                        _n += 1
                     test_case = TestCase(
                         project_id=UUID(project_id),
                         point_id=point.id,
-                        name=case_data.get("name", ""),
+                        name=_cand,
                         priority=case_data.get("priority", "P1"),
                         case_type="functional",
                         precondition=case_data.get("precondition", ""),
