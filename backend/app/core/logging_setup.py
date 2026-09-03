@@ -33,7 +33,10 @@ class RequestIdFilter(logging.Filter):
 
 
 class UnifiedFormatter(logging.Formatter):
-    """datefmt 不含 %f 时 Python 不会自动补毫秒, 用 formatTime 强制 ',SSS' 后缀."""
+    """datefmt 不含 %f 时 Python 不会自动补毫秒, 用 formatTime 强制 ',SSS' 后缀.
+
+    控制台输出时 ERROR/CRITICAL 整行染红（ANSI），文件输出不加色。
+    """
 
     def formatTime(self, record: logging.LogRecord, datefmt=None) -> str:
         import time as _time
@@ -42,14 +45,25 @@ class UnifiedFormatter(logging.Formatter):
                            self.converter(record.created))
         return "%s,%03d" % (s, record.msecs)
 
+    def format(self, record: logging.LogRecord) -> str:
+        line = super().format(record)
+        # 染色仅在控制台 handler 生效（_moontest_color 标记）；ERROR 红色
+        if getattr(self, "_moontest_color", False) and record.levelno >= logging.ERROR:
+            return f"[91m{line}[0m"
+        return line
 
-def build_formatter() -> logging.Formatter:
-    """统一格式: yyyyMMdd HH:mm:ss,SSS | LEVEL | logger:lineno | requestId=xx | msg"""
+
+def build_formatter(color: bool = False) -> logging.Formatter:
+    """统一格式: yyyyMMdd HH:mm:ss,SSS | LEVEL | logger:lineno | requestId=xx | msg
+
+    color=True 时 ERROR 及以上级别整行 ANSI 红色（仅控制台 handler 用）。
+    """
     fmt = UnifiedFormatter(
         "%(asctime)s | %(levelname)-7s | %(name)s:%(lineno)d | requestId=%(request_id)s | %(message)s",
         datefmt="%Y%m%d %H:%M:%S",
     )
     fmt._moontest_datefmt = "%Y%m%d %H:%M:%S"
+    fmt._moontest_color = color
     return fmt
 
 
@@ -100,14 +114,12 @@ def setup_logging(log_dir: str = "logs",
     for f in list(root.filters):
         root.removeFilter(f)
 
-    fmt = build_formatter()
-
     os.makedirs(log_dir, exist_ok=True)
     fh = RotatingFileHandler(os.path.join(log_dir, log_file),
                              maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT,
                              encoding="utf-8")
     fh.setLevel(level_file)
-    fh.setFormatter(fmt)
+    fh.setFormatter(build_formatter(color=False))
     # requestId filter 挂在 HANDLER 上（不是 root logger）：
     # logger filter 只对直接调用该 logger 的记录生效，子 logger propagate
     # 的记录不过 root filter —— 挂 handler 上则所有传播记录都会被注入
@@ -125,7 +137,7 @@ def setup_logging(log_dir: str = "logs",
         level_console = "INFO" if settings.DEBUG else "WARNING"
     sh = logging.StreamHandler()
     sh.setLevel(level_console)
-    sh.setFormatter(fmt)
+    sh.setFormatter(build_formatter(color=True))
     sh.addFilter(RequestIdFilter())
     root.addHandler(sh)
 
@@ -136,7 +148,7 @@ def setup_logging(log_dir: str = "logs",
         try:
             gh = GelfUdpHandler(settings.GRAYLOG_HOST, settings.GRAYLOG_PORT)
             gh.setLevel(logging.WARNING)
-            gh.setFormatter(fmt)
+            gh.setFormatter(build_formatter(color=False))
             gh.addFilter(RequestIdFilter())
             root.addHandler(gh)
         except Exception:
