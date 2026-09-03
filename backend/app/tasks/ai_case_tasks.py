@@ -382,6 +382,7 @@ async def _identify_test_points_async(
                 for point_data in test_points:
                     point = TestPoint(
                         project_id=UUID(project_id),
+                        session_id=UUID(session_id),  # 关联生成会话（第五步按会话过滤展示）
                         page_name=point_data.get("page_name", ""),
                         name=point_data.get("name", ""),
                         type_label=point_data.get("type_label", "正常流程"),

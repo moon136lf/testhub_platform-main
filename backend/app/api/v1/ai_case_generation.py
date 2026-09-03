@@ -386,6 +386,7 @@ async def identify_points(
 @router.get("/test-points")
 async def get_test_points(
     project_id: str = Query(..., description="Project ID"),
+    session_id: Optional[str] = Query(None, description="Filter by generation session (wizard shows only current run)"),
     status: Optional[str] = Query(None, description="Filter by status: pending, selected, generated"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
@@ -404,6 +405,9 @@ async def get_test_points(
     query = select(TestPoint).where(
         TestPoint.project_id == project_uuid
     )
+
+    if session_id:
+        query = query.where(TestPoint.session_id == uuid.UUID(session_id))
 
     if status:
         query = query.where(TestPoint.status == status)

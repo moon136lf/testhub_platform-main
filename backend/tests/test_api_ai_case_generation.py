@@ -285,7 +285,7 @@ class TestGetTestPointsEndpoint:
         mock_db.execute.return_value = mock_result
 
         # 签名: get_test_points(project_id, status, skip, limit, db)
-        response = await get_test_points(sample_project_id, None, 0, 100, mock_db)
+        response = await get_test_points(sample_project_id, None, None, 0, 100, mock_db)
 
         assert response["code"] == 0
         assert len(response["data"]) == 2

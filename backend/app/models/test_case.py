@@ -24,6 +24,7 @@ class TestPoint(Base):
     description = Column(String(500))
     source_ref = Column(String(500))
     status = Column(String(20), default="pending")
+    session_id = Column(UUID(as_uuid=True), ForeignKey("generation_session.id", ondelete="SET NULL"), comment="识别该测试点的生成会话")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

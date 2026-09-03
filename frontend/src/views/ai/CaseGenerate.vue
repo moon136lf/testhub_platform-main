@@ -338,6 +338,8 @@ const sseProgress = ref(0)
 const tokensUsed = ref(0)
 const tokensEstimate = ref(0)
 let eventSource = null
+// 本次识别会话 ID：第五步测试点按会话过滤，不混入历史运行数据
+const currentSessionId = ref('')
 
 const hasMaterial = computed(() =>
   !!(materials.value.prd || materials.value.design || materials.value.prototype || formData.value.requirementText?.trim())
@@ -457,6 +459,8 @@ const identifyTestPoints = async () => {
     )
     const data = res.data || res
     const sessionId = data.session_id || (data.data && data.data.session_id)
+    // 记录本次会话 ID：测试点按 session 过滤展示（不混入历史运行的数据）
+    currentSessionId.value = sessionId || ''
 
     // 订阅 SSE 文字直播
     if (sessionId) {
@@ -478,7 +482,7 @@ const pollIdentifyResult = async (maxWaitMs = 300000) => {
     while (Date.now() - start < maxWaitMs) {
       await new Promise(r => setTimeout(r, 3000))
       try {
-        const tpRes = await aiCaseAPI.getTestPoints(formData.value.projectId, 0, 500)
+        const tpRes = await aiCaseAPI.getTestPoints(formData.value.projectId, 0, 500, currentSessionId.value)
         const tpData = tpRes.data || tpRes
         const items = tpData.items || tpData || []
         if (items.length > 0 && sseProgress.value >= 1) {
@@ -603,6 +607,7 @@ const resetWizard = () => {
   testPoints.value = []
   generatedCases.value = []
   selectedPointIds.value = []
+  currentSessionId.value = ''
   sseMessages.value = []
   sseProgress.value = 0
   tokensUsed.value = 0

@@ -69,10 +69,11 @@ export const aiCaseAPI = {
     return response.data
   },
 
-  async getTestPoints(projectId, skip = 0, limit = 100) {
+  async getTestPoints(projectId, skip = 0, limit = 100, sessionId = '') {
     const response = await axios.get(`${API_BASE}/test-points`, {
       params: {
         project_id: projectId,
+        session_id: sessionId || undefined,
         skip,
         limit
       }
