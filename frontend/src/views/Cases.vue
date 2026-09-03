@@ -277,7 +277,11 @@ const handleImport = async (e) => {
 
 onMounted(async () => {
   await fetchProjects()
-  fetchBatches()
+  // project_id 必填：项目列表就绪后默认选中第一个项目，避免首拉 422
+  if (!filters.value.project_id && projects.value.length) {
+    filters.value.project_id = projects.value[0].id
+  }
+  await fetchBatches()
 })
 </script>
 
