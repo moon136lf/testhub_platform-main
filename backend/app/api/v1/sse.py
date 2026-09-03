@@ -39,7 +39,7 @@ async def stream_events(session_id: str):
     Returns:
         SSE 流响应
     """
-    logger.info(f"SSE connection established: {session_id}")
+    logger.info(f"【SSE】连接建立 | session={session_id}")
 
     sse = SSEStream(session_id)
 
@@ -52,7 +52,7 @@ async def stream_events(session_id: str):
             logger.error(f"SSE stream error for {session_id}: {e}")
             yield f"event: error\ndata: {str(e)}\n\n"
         finally:
-            logger.info(f"SSE connection closed: {session_id}")
+            logger.info(f"【SSE】连接关闭 | session={session_id}")
 
     return StreamingResponse(
         event_generator(),

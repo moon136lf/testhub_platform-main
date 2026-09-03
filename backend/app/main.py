@@ -6,8 +6,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import json
 import time
 import logging
+import uuid
 
 from app.core.config import settings
 from app.core.database import engine, init_db
@@ -17,7 +19,7 @@ from app.api import api_router
 # Configure logging
 import os
 
-from app.core.logging_setup import setup_logging
+from app.core.logging_setup import setup_logging, set_request_id
 
 setup_logging(log_dir=os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs"),
               level_console=os.getenv("LOG_LEVEL") or settings.LOG_LEVEL)
@@ -65,17 +67,61 @@ app.add_middleware(
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    # requestId: 透传上游 X-Request-Id（跨系统链路串联），无则生成
+    rid = request.headers.get("x-request-id") or str(uuid.uuid4())
+    set_request_id(rid)
     start = time.perf_counter()
     response = await call_next(request)
     ms = (time.perf_counter() - start) * 1000
-    line = f"{request.method} {request.url.path} -> {response.status_code} ({ms:.0f}ms)"
+    client = request.client.host if request.client else "-"
+
+    # SSE 流端点不记访问行（响应"完成"在流关闭时，通常数十分钟后，访问行无意义）；
+    # 建立/关闭日志由 sse.py 输出（requestId 由 root filter 自动注入）
+    media_type = getattr(response, "media_type", "") or ""
+    if "event-stream" in media_type or request.url.path.startswith("/api/sse"):
+        response.headers["X-Request-Id"] = rid
+        return response
+
+    # body 摘要（≤2KB JSON，敏感字段打码）
+    body_digest = "-"
+    try:
+        if (request.headers.get("content-type") or "").startswith("application/json"):
+            body_bytes = await request.body()
+            if 0 < len(body_bytes) <= 2048:
+                parsed = json.loads(body_bytes)
+                body_digest = json.dumps(_mask(parsed), ensure_ascii=False)[:512]
+            elif len(body_bytes) > 2048:
+                body_digest = "<2KB截断>"
+    except Exception:
+        pass
+
+    line = (f"HTTP {request.method} {request.url.path} -> {response.status_code}, "
+            f"requestId={rid}, costMs={ms:.0f}, client={client}, body={body_digest}")
     if response.status_code >= 500:
         logger.error(line)
     elif ms >= 3000:
         logger.warning(line)
     else:
         logger.info(line)
+    response.headers["X-Request-Id"] = rid
     return response
+
+
+# ---- 访问行 body 打码 ----
+_SENSITIVE_KEYS = {"password", "secret", "token", "api_key", "passwd", "authorization"}
+
+
+def _mask(value, depth: int = 0):
+    """body 摘要敏感字段打码: key 模糊匹配 → ***"""
+    if depth > 6:
+        return "..."
+    if isinstance(value, dict):
+        return {k: ("***" if any(s in str(k).lower() for s in _SENSITIVE_KEYS)
+                    else _mask(v, depth + 1))
+                for k, v in value.items()}
+    if isinstance(value, list):
+        return [_mask(v, depth + 1) for v in value]
+    return value
 
 
 # Global exception handler
