@@ -72,12 +72,13 @@ class Notifier:
                         pass
                 results[channel] = "ok"
                 sent = True
+                logger.info(f"【报告推送】推送成功 | 渠道={channel} exec={exec_id}")
             except Exception as e:
-                logger.error(f"notify push failed channel={channel}: {e}")
+                logger.error(f"【报告推送】推送失败 | 渠道={channel} exec={exec_id} 原因={e} 建议=检查webhook地址可达性")
                 results[channel] = f"error: {e}"
 
         if not results:
-            logger.info(f"[notifier] no webhook configured, report ready for {exec_id}: {meta}")
+            logger.info(f"【报告推送】未配置webhook渠道，跳过推送 | exec={exec_id} 建议=在系统设置(category=notify)配置钉钉/企微/飞书Webhook")
         return {"pushed": sent, "channels": results}
 
     def _build_body(self, channel: str, text: str, payload: dict) -> dict:

@@ -127,7 +127,7 @@ def _mask(value, depth: int = 0):
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception(f"Unhandled exception | {request.method} {request.url.path}: {exc}")
+    logger.exception(f"【系统】未处理异常 | path={request.url.path} 原因={exc}")
     return JSONResponse(
         status_code=500,
         content={

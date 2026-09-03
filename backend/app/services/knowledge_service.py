@@ -35,7 +35,7 @@ class KnowledgeService:
             Exception: If vectorization fails
         """
         try:
-            logger.info(f"Starting vectorization for document {doc_id}")
+            logger.info(f"【知识库】开始向量化 | 文档={doc_id}")
 
             # Split text into chunks
             chunks = KnowledgeService._split_text(content)
@@ -64,10 +64,10 @@ class KnowledgeService:
             doc.vector_status = "completed"
 
             await db.commit()
-            logger.info(f"Vectorization completed for document {doc_id}, {len(chunks)} chunks stored")
+            logger.info(f"【知识库】向量化完成 | 文档={doc_id} chunks={len(chunks)}")
 
         except Exception as e:
-            logger.error(f"Vectorization failed for document {doc_id}: {e}")
+            logger.error(f"【知识库】向量化失败 | 文档={doc_id} 原因={e} 建议=检查Embedding模型配置(需qwen)")
             await db.rollback()
 
             # Update document status to failed

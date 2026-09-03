@@ -87,7 +87,7 @@ def run_scan_task(scan_id: str, project_id: str, repo_url: str, branch: str = "m
 
         return _run_async(_impl())
     except Exception as e:
-        logger.error(f"scan task {scan_id} failed: {e}")
+        logger.error(f"【白盒扫描】扫描失败 | scan={scan_id} 原因={e} 建议=检查仓库地址可达性与分支")
         # mark failed with its own session (run may have died mid-way)
         try:
             async def _fail():

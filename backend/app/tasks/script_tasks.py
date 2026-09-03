@@ -28,7 +28,7 @@ async def convert_scripts_task_impl(session_id: str, cases: List[dict],
             await svc.persist(asset)
             generated += 1
         except Exception as e:
-            logger.warning(f"case {case.get('id')} convert failed: {type(e).__name__}: {e}")
+            logger.warning(f"【用例转脚本】单条转换失败(继续其余) | case={case.get('id')} 原因={type(e).__name__}: {e}")
             await sse.send_message(type="error", stage="convert_script",
                                    content=f"用例 {case.get('id')} 失败: {e}", progress=progress)
         tokens = getattr(gateway, "tokens", tokens)

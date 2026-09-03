@@ -185,7 +185,7 @@ class ScriptExecutor:
             raise
         except Exception as e:
             # 验证过程异常 (如 page 已关) 不应吞掉断言失败, 但也不应崩引擎
-            logger.warning(f"assertion check error (type={atype}): {e}")
+            logger.warning(f"【脚本执行】断言校验异常(不算失败) | type={atype} 原因={e}")
             return
 
     async def _do_writeback(self, writeback: dict):
@@ -201,7 +201,7 @@ class ScriptExecutor:
             svc = ElementService(self.db)
             await svc.writeback_healed_locator(writeback["element_id"], writeback["locator"])
         except Exception as e:
-            logger.warning(f"writeback to repo failed | element_id={writeback.get('element_id')}: {e}")
+            logger.warning(f"【脚本执行】定位器回写失败(非致命) | element_id={writeback.get('element_id')} 原因={e}")
 
     async def execute(self, script_asset: ScriptAsset, config, target_url: str,
                       sse, execution_record: Optional[ExecutionRecord] = None,
@@ -222,7 +222,7 @@ class ScriptExecutor:
                 page = await self._launch_browser(config, target_url)
                 launched = True
             except Exception as e:
-                logger.error(f"browser launch failed | script={script_asset.name} target_url={target_url}: {e}")
+                logger.error(f"【脚本执行】浏览器启动失败 | script={script_asset.name} target={target_url} 原因={e} 建议=检查chromium安装与target可达性")
                 page = None
         failures = 0
         overall_status = "pass"
@@ -299,6 +299,8 @@ class ScriptExecutor:
         await sse.send_message(type="system", stage="execute",
                                content=f"执行完成：{'通过' if overall_status == 'pass' else '失败'}",
                                progress=1.0, tokens_used=getattr(self.gateway, "tokens", 0))
+        logger.info(f"【脚本执行】执行完成 | script={script_asset.name} 结果={overall_status} "
+                    f"失败步数={failures} 耗时={int((time.time() - start) * 1000)}ms")
         # quick-run: 不落 ExecutionDetail (无 execution_record)
         if execution_record is None:
             return None

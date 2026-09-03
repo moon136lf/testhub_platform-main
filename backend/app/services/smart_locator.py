@@ -97,12 +97,12 @@ class SmartLocator:
         # 第 2 层：所有定位器失败，尝试自愈
         if self.semantic_info:
             try:
-                logger.info(f"🔧 Attempting self-healing for '{self.element_name}'...")
+                logger.info(f"【自愈引擎】触发自愈 | 元素={self.element_name} (定位器全失败, Level1-4 尝试中)")
                 result = await self._self_heal_and_interact(page, action, **kwargs)
-                logger.info(f"✅ Self-healing succeeded for '{self.element_name}'")
+                logger.info(f"【自愈引擎】自愈成功 | 元素={self.element_name}")
                 return result
             except Exception as e:
-                logger.error(f"❌ Self-healing failed for '{self.element_name}': {e}")
+                logger.error(f"【自愈引擎】自愈失败(Level1-4全失败) | 元素={self.element_name} 原因={e} 建议=检查页面是否改版")
 
         # 第 3 层：完全失败
         raise ElementNotFoundError(

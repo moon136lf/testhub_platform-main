@@ -212,7 +212,7 @@ async def _fetch_elements_async(
                 progress=0.99,
             )
         except Exception as persist_err:
-            logger.error(f"Element persist failed | project_id={project_id} url={url}: {persist_err}")
+            logger.error(f"【元素库】结果入库失败 | project_id={project_id} url={url} 原因={persist_err} 建议=检查数据库连接")
             imported = 0
 
         try:
@@ -237,7 +237,7 @@ async def _fetch_elements_async(
         )
 
         logger.info(
-            f"Task completed: {session_id}, {len(verified_elements)} elements, {duration:.1f}s"
+            f"【元素库】抓取完成 | session={session_id} 元素={len(verified_elements)} 耗时={duration:.1f}s 入库={imported}"
         )
 
         return {
@@ -252,7 +252,7 @@ async def _fetch_elements_async(
 
     except Exception as e:
         error_msg = f"抓取失败: {str(e)}"
-        logger.error(f"Task failed: {session_id} - {error_msg}", exc_info=True)
+        logger.error(f"【元素库】抓取失败 | session={session_id} 原因={error_msg} 建议=检查目标URL可达性与浏览器环境", exc_info=True)
 
         await sse.send_message(
             type="error", stage="error",

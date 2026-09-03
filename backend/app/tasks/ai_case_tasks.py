@@ -58,7 +58,7 @@ async def _parse_document_async(
     text_content: str
 ) -> Dict:
     """文档解析异步实现"""
-    logger.info(f"Task parse_document_task started: session_id={session_id}")
+    logger.info(f"【AI用例生成】开始解析文档 | session={session_id}")
     sse = SSEStream(session_id)
 
     # Input validation
@@ -95,7 +95,7 @@ async def _parse_document_async(
                 progress=0.7
             )
         except Exception as e:
-            logger.error(f"Document parsing failed: {e}")
+            logger.error(f"【AI用例生成】文档解析失败 | session={session_id} 原因={e} 建议=检查文件格式(docx/pdf/txt/md)与文件完整性")
             await sse.send_message(
                 type="error",
                 stage="parse_doc",
@@ -122,7 +122,7 @@ async def _parse_document_async(
     # （celery 返回值只进 celery-task-meta，前端拿不到；cache_result 走 redis）
     await sse.cache_result({"content": parsed_content})
 
-    logger.info(f"Task parse_document_task completed: session_id={session_id}")
+    logger.info(f"【AI用例生成】文档解析完成 | session={session_id} 共 {len(parsed_content)} 字")
     return {"content": parsed_content}
 
 
@@ -155,7 +155,7 @@ async def _retrieve_knowledge_async(
     doc_content: str
 ) -> Dict:
     """知识库检索异步实现（SSE stage 统一为 identify_point）"""
-    logger.info(f"Task retrieve_knowledge_task started: session_id={session_id}")
+    logger.info(f"【AI用例生成】开始知识库检索 | session={session_id}")
     sse = SSEStream(session_id)
 
     # Input validation
@@ -200,11 +200,11 @@ async def _retrieve_knowledge_async(
             progress=1.0
         )
 
-        logger.info(f"Task retrieve_knowledge_task completed: session_id={session_id}")
+        logger.info(f"【AI用例生成】知识库检索完成 | session={session_id} 命中 {len(results)} 条")
         return {"knowledge_results": results}
 
     except Exception as e:
-        logger.error(f"Knowledge retrieval failed: {e}")
+        logger.error(f"【AI用例生成】知识库检索失败 | session={session_id} 原因={e} 建议=检查Embedding模型配置(需qwen)")
         await sse.send_message(
             type="error",
             stage="identify_point",
@@ -256,7 +256,7 @@ async def _identify_test_points_async(
     rules: Dict
 ) -> Dict:
     """AI测试点识别异步实现"""
-    logger.info(f"Task identify_test_points_task started: session_id={session_id}")
+    logger.info(f"【AI用例生成】开始识别测试点 | session={session_id} 文档={len(doc_content)}字 规则={len(rule_ids)}")
     sse = SSEStream(session_id)
     total_tokens = 0  # W6: Token 累计器（CASE-08）
 
@@ -355,7 +355,7 @@ async def _identify_test_points_async(
                 # W6: 累加真实 Token（ai_gateway.chat 已返回 tokens）
                 # generate() 内部已消费 token，这里按点数粗估回补（粗估满足 CASE-08）
             except Exception as e:
-                logger.error(f"AI test point generation failed: {e}")
+                logger.error(f"【AI用例生成】AI识别失败 | session={session_id} 原因={e} 建议=检查AI网关配置与模型可用性")
                 await sse.send_message(
                     type="error",
                     stage="identify_point",
@@ -399,7 +399,7 @@ async def _identify_test_points_async(
                     await db.refresh(point)
 
             except Exception as e:
-                logger.error(f"Database save failed: {e}")
+                logger.error(f"【AI用例生成】测试点保存失败 | session={session_id} 原因={e} 建议=检查数据库连接")
                 await sse.send_message(
                     type="error",
                     stage="identify_point",
@@ -418,7 +418,7 @@ async def _identify_test_points_async(
                 tokens_estimated_total=tokens_estimated_total
             )
 
-            logger.info(f"Task identify_test_points_task completed: session_id={session_id}")
+            logger.info(f"【AI用例生成】识别完成 | session={session_id} 测试点={len(test_points)} token≈{tokens_estimated_total}")
 
             # Return persisted objects with IDs
             return {
@@ -435,7 +435,7 @@ async def _identify_test_points_async(
             }
 
     except Exception as e:
-        logger.error(f"Test point identification failed: {e}")
+        logger.error(f"【AI用例生成】识别任务失败 | session={session_id} 原因={e} 建议=查看上方AI识别失败日志")
         raise
 
 
@@ -471,7 +471,7 @@ async def _generate_test_cases_async(
     hallucination_strategy: str
 ) -> Dict:
     """批量生成测试用例异步实现"""
-    logger.info(f"Task generate_test_cases_task started: session_id={session_id}")
+    logger.info(f"【AI用例生成】开始生成用例 | session={session_id} 测试点数={len(point_ids)} 策略={hallucination_strategy}")
     sse = SSEStream(session_id)
     total_tokens = 0  # W6: Token 累计器（CASE-08）
 
