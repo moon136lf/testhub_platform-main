@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #54 — 2026-09-04 00:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- 71facad chore: track json_utils.py (fence-stripping helper)
+- a916fc8 feat(logging): color ERROR/CRITICAL lines red (ANSI)
+- ab0da20 feat(ui): highlight error lines in live logs
+- 04d89ef fix(generation-history): per-session stats via test_point.session_id
+- 47a616e docs: session archive #53 (auto)
+- 81cbd39 docs: session handoff 2026-08-26
+- fdcc7b2 docs: logging v2 plan
+- 388df76 docs: element enhancement design spec
+
+### 未提交变更（另一会话进行中，勿动）
+- 19 文件 M：AI 链路 glm-2.5 provider 重命名 + parse_llm_json 接入 + ai-case.js sessionId 透传（config/ai_gateway/test_case_generator/case_refiner/script_pipeline 及对应测试、CaseGenerate.vue 等）
+- 未跟踪：`backend/.en`
+
+### 进度
+元素库增强 P1 待开工：设计 spec 已提交（388df76），调研完成（fetch/import 接口结构、bounding box 字段、login-state 占位方案）；因另一会话在主仓有 19 文件未提交改动，已向用户请示开工时机。
+
+---
+
 ## 快照 #53 — 2026-09-03 23:50（auto）
 
 **当前分支**：master（主仓）
