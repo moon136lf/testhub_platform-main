@@ -104,6 +104,7 @@ export const elementAPI = {
    * @returns {EventSource}
    */
   createSSEConnection(sessionId) {
-    return new EventSource(`/api/v1/sse/element-fetch/${sessionId}`)
+    // 注意: SSE 路由挂在 /api/sse（非 /api/v1/sse），且 EventSource 不走 axios baseURL
+    return new EventSource(`/api/sse/element-fetch/${sessionId}`)
   }
 }
