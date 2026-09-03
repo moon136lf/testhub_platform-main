@@ -427,7 +427,7 @@ const prepareContent = async () => {
 }
 
 // 轮询解析结果：parse_document_task 完成后写 task_result:{session_id}
-const pollParseResult = async (sessionId, maxWaitMs = 30000) => {
+const pollParseResult = async (sessionId, maxWaitMs = 60000) => {
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
     await new Promise(r => setTimeout(r, 1500))

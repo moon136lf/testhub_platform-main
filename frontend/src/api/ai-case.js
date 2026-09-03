@@ -23,9 +23,12 @@ export const aiCaseAPI = {
   },
 
   // 轮询文档解析结果（parse_document_task 完成后写入 task_result:{session_id}）
+  // 注意：axios 实例 baseURL=/api/v1，此端点挂在 /api/sse 下（非 /api/v1）。
+  // 用 fetch + 完整路径，绕开 baseURL 拼接（此前 404 的根因：
+  // `/sse/parse-result/..` 被 baseURL 拼成 /api/v1/sse/... ）
   async getParseResult(sessionId) {
-    const response = await axios.get(`/sse/parse-result/${sessionId}`)
-    return response.data
+    const resp = await fetch(`/api/sse/parse-result/${sessionId}`)
+    return await resp.json()
   },
 
   // 纯文本输入也走 upload-document（text_content 分支），保证会话一致
