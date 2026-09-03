@@ -40,7 +40,10 @@ class LocatorStrategy(BaseModel):
         description="定位器类型：id/data-testid/name/role-text/text/css/xpath 等",
     )
     value: str = Field(..., description="定位器值")
-    priority: int = Field(..., ge=1, le=10, description="优先级 1-10")
+    priority: Optional[int] = Field(
+        None, ge=1, le=10,
+        description="优先级 1-10（可选；抓取产物不含此字段，排序按 score）",
+    )
     score: int = Field(..., ge=0, le=150, description="质量评分 0-150")
     unique: bool = Field(..., description="是否唯一定位")
     verified: bool = Field(True, description="是否已验证")
