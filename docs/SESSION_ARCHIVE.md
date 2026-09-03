@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #52 — 2026-09-03 22:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- cbdb774 fix(bat): stop_all LF->CRLF (double-click flash-quit) + kill orphan reload children
+- a40d355 docs: session archive #51 (auto)
+- 67e9280 fix(logging): engine echo=True bypassed SQLAlchemy log level
+- 8c5bb0e fix(logging): requestId filter on handlers, not root logger
+- 53e9baa docs: session archive #50 (auto)
+- 1eb1a30 docs(logging): LOGGING.md (#logging-v2 T4)
+- 6c0b894 feat(logging): Chinese action logs for core services (#logging-v2 T3)
+- 32d16d1 fix(elements): import 422 — LocatorStrategy.priority never produced
+
+### 未提交变更
+- 工作区干净
+- 未跟踪：`backend/.en`、`docs/SESSION_HANDOFF_2026-08-26.md`、`docs/superpowers/plans/2026-09-03-logging-v2.md`
+
+### 进度
+stop_all.bat 修 CRLF 编码+孤儿进程清理；元素库会话式抓取重构（方案V1）正在头脑风暴阶段——4 个决策问题已抛给用户（会话浏览器归属、探针策略、首页布局、多页入库冲突），待答复后出完整方案。
+
+---
+
 ## 快照 #51 — 2026-09-03 21:50（auto）
 
 **当前分支**：master（主仓）
