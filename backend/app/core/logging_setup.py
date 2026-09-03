@@ -99,7 +99,6 @@ def setup_logging(log_dir: str = "logs",
 
     for f in list(root.filters):
         root.removeFilter(f)
-    root.addFilter(RequestIdFilter())
 
     fmt = build_formatter()
 
@@ -109,6 +108,10 @@ def setup_logging(log_dir: str = "logs",
                              encoding="utf-8")
     fh.setLevel(level_file)
     fh.setFormatter(fmt)
+    # requestId filter 挂在 HANDLER 上（不是 root logger）：
+    # logger filter 只对直接调用该 logger 的记录生效，子 logger propagate
+    # 的记录不过 root filter —— 挂 handler 上则所有传播记录都会被注入
+    fh.addFilter(RequestIdFilter())
     root.addHandler(fh)
 
     # Windows 控制台强制 UTF-8, 避免中文日志乱码/UnicodeEncodeError
@@ -123,6 +126,7 @@ def setup_logging(log_dir: str = "logs",
     sh = logging.StreamHandler()
     sh.setLevel(level_console)
     sh.setFormatter(fmt)
+    sh.addFilter(RequestIdFilter())
     root.addHandler(sh)
 
     root.setLevel(min(fh.level, sh.level))
@@ -133,6 +137,7 @@ def setup_logging(log_dir: str = "logs",
             gh = GelfUdpHandler(settings.GRAYLOG_HOST, settings.GRAYLOG_PORT)
             gh.setLevel(logging.WARNING)
             gh.setFormatter(fmt)
+            gh.addFilter(RequestIdFilter())
             root.addHandler(gh)
         except Exception:
             pass  # Graylog 不可达不影响本地

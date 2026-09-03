@@ -39,4 +39,10 @@ class TestRequestIdInjection:
         setup_logging(log_dir=str(tmp_path))
         setup_logging(log_dir=str(tmp_path))
         root = logging.getLogger()
-        assert any(isinstance(f, type(None)) is False for f in root.filters) or len(root.filters) >= 1
+        # v2: requestId filter 挂在 handler 上（子 logger propagate 也生效），
+        # root.filters 不再有 filter——改为断言 handler 均带 RequestIdFilter
+        handlers = root.handlers
+        assert handlers, "root 应有 handler"
+        from app.core.logging_setup import RequestIdFilter
+        assert all(any(isinstance(f, RequestIdFilter) for f in h.filters) for h in handlers
+                   if not isinstance(h, logging.Handler) or True),             "每个 handler 都应挂 RequestIdFilter"
