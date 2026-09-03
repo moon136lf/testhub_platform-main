@@ -17,7 +17,10 @@ DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncp
 # Create async engine
 engine = create_async_engine(
     DATABASE_URL,
-    echo=settings.DEBUG,
+    # SQL 回显改由日志级别治理: SQLALCHEMY_LEVEL(默认 WARNING) 静默 SQL 刷屏。
+    # echo=True 会绕过 logger 级别直接强制输出——这里固定 False，调试 SQL 时
+    # 把 .env 的 SQLALCHEMY_LEVEL=DEBUG 即可。
+    echo=False,
     poolclass=NullPool,  # Use NullPool for better compatibility
     pool_pre_ping=True,
 )
