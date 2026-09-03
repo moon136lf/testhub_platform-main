@@ -43,7 +43,7 @@
       <!-- 文字直播区 + 进度条 -->
       <div v-if="liveMessages.length > 0" class="live-feed">
         <el-alert title="抓取进度直播" type="info" :closable="false" style="margin-bottom: 10px">
-          <div v-for="(msg, index) in liveMessages" :key="index" class="live-message">
+          <div v-for="(msg, index) in liveMessages" :key="index" class="live-message" :class="{ 'is-error': msg.type === 'error' }">
             <span class="live-time">{{ msg.timestamp }}</span>
             <el-tag :type="msgTypeTag(msg.type)" size="small" effect="plain">{{ msg.type }}</el-tag>
             <span class="live-text">{{ msg.content }}</span>
@@ -448,6 +448,11 @@ onUnmounted(() => {
 
 .live-text {
   color: #303133;
+}
+
+.live-message.is-error .live-text {
+  color: var(--el-color-danger, #EF4444);
+  font-weight: 600;
 }
 
 .elements-result {

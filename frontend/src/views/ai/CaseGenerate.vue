@@ -476,10 +476,11 @@ const identifyTestPoints = async () => {
   }
 }
 
-const pollIdentifyResult = async (maxWaitMs = 300000) => {
-  const start = Date.now()
+const pollIdentifyResult = async () => {
+  // 不设固定超时：以 SSE progress>=1（任务完成消息）为唯一退出条件。
+  // 识别可达十几分钟（122 点实测 16 分钟），轮询超时误关 SSE 掐断直播。
   try {
-    while (Date.now() - start < maxWaitMs) {
+    while (true) {
       await new Promise(r => setTimeout(r, 3000))
       try {
         const tpRes = await aiCaseAPI.getTestPoints(formData.value.projectId, 0, 500, currentSessionId.value)
@@ -498,10 +499,8 @@ const pollIdentifyResult = async (maxWaitMs = 300000) => {
         }
       } catch { /* 任务未完成，继续等 */ }
     }
-    ElMessage.warning('识别耗时较长，结果稍后可在「勾选测试点」步骤或测试点列表查看')
   } finally {
     identifying.value = false
-    sseProgress.value = 1
     if (eventSource) { eventSource.close(); eventSource = null }
   }
 }
@@ -569,10 +568,11 @@ const generateTestCases = async () => {
   }
 }
 
-const pollGenerateResult = async (maxWaitMs = 300000) => {
-  const start = Date.now()
+const pollGenerateResult = async () => {
+  // 不设固定超时：以 SSE progress>=1（任务完成消息）为唯一退出条件。
+  // 122 点实测 worker 需 16 分钟，原 5 分钟上限超时误关 SSE 掐断直播。
   try {
-    while (Date.now() - start < maxWaitMs) {
+    while (true) {
       await new Promise(r => setTimeout(r, 3000))
       try {
         const tcRes = await aiCaseAPI.getTestCases(formData.value.projectId, 0, 500)
@@ -588,10 +588,8 @@ const pollGenerateResult = async (maxWaitMs = 300000) => {
         }
       } catch { /* 任务未完成，继续等 */ }
     }
-    ElMessage.warning('生成耗时较长，结果稍后可在「结果预览」步骤或用例管理查看')
   } finally {
     generating.value = false
-    sseProgress.value = 1
     if (eventSource) { eventSource.close(); eventSource = null }
   }
 }
@@ -715,6 +713,11 @@ onUnmounted(() => {
 
 .log-line.type-error {
   color: var(--mt-danger);
+  font-weight: 600;
+}
+
+.log-line.type-error::before {
+  content: '✖ ';
 }
 
 .log-line.hallucination {
