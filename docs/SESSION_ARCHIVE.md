@@ -5,6 +5,52 @@
 
 ---
 
+## 快照 #55 — 2026-09-04 01:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- 79abd5a fix(case-gen): auto-suffix duplicate case names to avoid unique constraint failure
+- fe614af docs: session archive #54 (auto)
+- 71facad chore: track json_utils.py (fence-stripping helper)
+- a916fc8 feat(logging): color ERROR/CRITICAL lines red (ANSI)
+- ab0da20 feat(ui): highlight error lines in live logs
+- 04d89ef fix(generation-history): per-session stats via test_point.session_id
+- 47a616e docs: session archive #53 (auto)
+- 81cbd39 docs: session handoff 2026-08-26
+
+### 未提交变更（另一会话进行中，勿动）
+- 19 文件 M：AI 链路 glm-2.5 重命名 + parse_llm_json + ai-case sessionId 透传（同 #54）；另新增 case_refiner/test_case_service 等改动
+- 未跟踪：`backend/.en`
+
+### 进度
+元素库 P1 开工等待中：用户确认那 19 文件改动"还有用"（另一会话在用），选方案 1 等其提交后清场开工；期间不动 backend 代码。
+
+---
+
+## 快照 #55 — 2026-09-04 00:58（manual，本会话）
+
+**当前分支**：master（主仓）
+
+### 本会话完成的工作（5 个 commit）
+- 04d89ef fix(generation-history): 生成历史页修复——/sessions 列表+详情改按 test_point.session_id 精确聚合（测试点/用例数）、generate-cases 完成回写会话 status=completed/failed、identify-points 拦截空文档/纯文件名（400）、generation_session 时间戳改 DB now()
+- ab0da20 feat(ui): 前端实时日志 error 行红色+加粗+✖ 标记（CaseGenerate 向导 + ElementLibrary 抓取直播）
+- a916fc8 feat(logging): 后台 api/worker 控制台 ERROR/CRITICAL 整行 ANSI 红色（文件日志不加色）
+- 71facad chore: json_utils.py 补入版本控制（parse_llm_json 围栏剥离工具，另一会话产物未跟踪）
+- 79abd5a fix(case-gen): 用例重名自动加序号后缀 (2)/(3)…，解决 uq_test_case_project_name 唯一约束批量失败（日志里 failed 的根因）
+
+### 遗留 / 待办
+- 重启 backend + celery worker 后所有修复才生效（用户尚未重启）
+- generation_session 旧数据（7 行）时间是 UTC 裸值，前端显示仍差 8 小时，属历史数据不修
+- 前端「SSE 断连跳回第一步」行为待用户确认是否要改成保持当前步骤
+- 工作区仍有另一会话的未提交改动（glm-2.5 provider 重命名等 19 文件），勿动
+- backend/.en 待确认是否删（与 .env 重复）
+
+### 测试
+533 passed（backend 全量）
+
+---
+
 ## 快照 #54 — 2026-09-04 00:50（auto）
 
 **当前分支**：master（主仓）
