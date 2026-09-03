@@ -5,6 +5,29 @@
 
 ---
 
+## 快照 #50 — 2026-09-03 20:50（auto）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- 1eb1a30 docs(logging): LOGGING.md — format/requestId/chinese action logs/graylog mapping (#logging-v2 T4)
+- 6c0b894 feat(logging): Chinese action logs for core services (#logging-v2 T3)
+- 32d16d1 fix(elements): import 422 — LocatorStrategy.priority never produced by fetch pipeline
+- 7591754 feat(logging): requestId middleware + normalized access line + SSE logs (#logging-v2 T2)
+- 06c524b fix(elements): success SSE message carries elements payload (data.data.elements)
+- 1d1edfb fix(elements): SSE URL /api/v1/sse → /api/sse (EventSource bypasses axios baseURL)
+- ed87cc3 feat(ai-gen): test points scoped to session
+- b40f7a4 docs: session archive #49 (auto)
+
+### 未提交变更
+- 工作区干净
+- 未跟踪：`backend/.en`、`docs/SESSION_HANDOFF_2026-08-26.md`、`docs/superpowers/plans/2026-09-03-logging-v2.md`
+
+### 进度
+元素库抓取链路五连修收官（SSE URL 前缀、成功消息带 payload、import 422 priority）；#logging-v2 T1-T4 全部提交（requestId、中文动作日志、LOGGING.md 文档）。待用户最终走一遍抓取→入库确认全链路。
+
+---
+
 ## 快照 #49 — 2026-09-03 19:50（auto）
 
 **当前分支**：master（主仓）
