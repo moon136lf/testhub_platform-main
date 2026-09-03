@@ -2,11 +2,10 @@
 Generation session models
 """
 
-from sqlalchemy import Column, String, Text, Integer, Boolean, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, String, Text, Integer, Boolean, TIMESTAMP, ForeignKey, text as sa_text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.core.database import Base
 import uuid
-from datetime import datetime
 
 
 class GenerationSession(Base):
@@ -21,8 +20,9 @@ class GenerationSession(Base):
     hallucination_strategy = Column(String(20))
     current_step = Column(Integer, default=1)
     status = Column(String(20), default="active")
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # UTC 时间由 DB 生成（now() 带 DB 时区）；前端按 ISO 字符串展示
+    created_at = Column(TIMESTAMP, server_default=sa_text("now()"))
+    updated_at = Column(TIMESTAMP, server_default=sa_text("now()"))
 
 
 class HallucinationConfig(Base):
@@ -34,4 +34,4 @@ class HallucinationConfig(Base):
     config_value = Column(Text, nullable=False)
     description = Column(String(200))
     is_enabled = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    created_at = Column(TIMESTAMP, server_default=sa_text("now()"))

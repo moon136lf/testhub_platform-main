@@ -647,6 +647,21 @@ async def _generate_test_cases_async(
             except Exception as e:
                 logger.warning(f"update case batch count failed: {e}")
 
+        # 回写生成会话状态：生成结束（无论部分失败）即 completed；全部失败置 failed
+        try:
+            from app.models.generation import GenerationSession as _GS
+            r = await db.get(_GS, UUID(session_id))
+            if r is not None:
+                r.status = "completed" if success_count > 0 else "failed"
+                r.current_step = 7
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"update generation session status failed: {e}")
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
         # Send completion message
         if failed_count > 0:
             await sse.send_message(

@@ -320,6 +320,12 @@ async def identify_points(
     if not request.document_content or len(request.document_content.strip()) == 0:
         raise HTTPException(status_code=400, detail="document_content cannot be empty")
 
+    # 拦截纯文件名/占位内容：parsedContent 为空时前端会把 "[PRD文档] xxx.md" 这类
+    # 标题当正文传上来，AI 拿到空内容产生 0 测试点的空会话
+    _doc = request.document_content.strip()
+    if len(_doc) < 100 and ("[" in _doc and "]" in _doc or _doc.lower().endswith((".md", ".docx", ".pdf", ".txt"))):
+        raise HTTPException(status_code=400, detail="文档内容为空或仅有文件名，请回到第3步等待解析完成后再识别")
+
     # Validate project exists
     result = await db.execute(
         select(Project).where(Project.id == project_uuid)
@@ -555,7 +561,7 @@ async def generate_cases(
     if session:
         session.hallucination_strategy = request.hallucination_strategy
         session.current_step = 7
-        session.updated_at = datetime.utcnow()
+        # updated_at 交给 DB 默认值，无需手动赋值
     else:
         db.add(GenerationSession(
             id=uuid.UUID(request.session_id),
@@ -812,19 +818,23 @@ async def list_sessions(
 
     data = []
     for s in sessions:
-        # 聚合：该会话识别的测试点数（同项目 + 会话创建时间之后到下次会话前，简化口径：项目内全部）
-        # 精确关联需要 test_point 加 session_id 外键（V1.2 再做），此处按项目+时间窗粗略统计
+        # 聚合口径：test_point 带 session_id 外键，按会话精确统计；
+        # 用例经 test_point.session_id 归属到会话（跳过历史无 session 的点）
         pts_result = await db.execute(
-            select(func.count(TestPoint.id)).where(TestPoint.project_id == s.project_id)
+            select(func.count(TestPoint.id)).where(TestPoint.session_id == s.id)
         )
         cases_result = await db.execute(
             select(func.count(TestCase.id)).where(
-                and_(TestCase.project_id == s.project_id, TestCase.is_deleted.is_(False))
+                and_(TestCase.is_deleted.is_(False),
+                     TestCase.point_id.in_(
+                         select(TestPoint.id).where(TestPoint.session_id == s.id)
+                     ))
             )
         )
         tokens_result = await db.execute(
             select(func.coalesce(func.sum(AICallLog.tokens_used), 0)).where(
-                AICallLog.project_id == s.project_id
+                and_(AICallLog.project_id == s.project_id,
+                     AICallLog.created_at >= s.created_at)
             )
         )
         project_name = None
@@ -865,20 +875,20 @@ async def get_session_detail(
     if not s:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # 该会话时间窗内（创建→下次更新/现在）项目内的测试点与用例
+    # 精确口径：test_point 带 session_id 外键，直接按会话过滤；
+    # 用例经 test_point.session_id 归属到会话（兼容点缺 session 的历史数据不展示）
     pts_result = await db.execute(
-        select(TestPoint).where(
-            and_(TestPoint.project_id == s.project_id,
-                 TestPoint.created_at >= s.created_at)
-        ).order_by(TestPoint.created_at.desc())
+        select(TestPoint).where(TestPoint.session_id == s.id)
+        .order_by(TestPoint.created_at.desc())
     )
     points = pts_result.scalars().all()
 
     cases_result = await db.execute(
         select(TestCase).where(
-            and_(TestCase.project_id == s.project_id,
-                 TestCase.is_deleted.is_(False),
-                 TestCase.created_at >= s.created_at)
+            and_(TestCase.is_deleted.is_(False),
+                 TestCase.point_id.in_(
+                     select(TestPoint.id).where(TestPoint.session_id == s.id)
+                 ))
         ).order_by(TestCase.created_at.desc())
     )
     cases = cases_result.scalars().all()
