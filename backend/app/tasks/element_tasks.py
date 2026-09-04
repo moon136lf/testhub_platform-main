@@ -320,10 +320,15 @@ async def _persist_fetch_result(
     # 每步独立提交 (页面行先落, 元素随之, 历史最后)
     async with AsyncSessionLocal() as db:
         # 1. 页面 upsert (同 project+url 复用既有行)
+        # 历史脏数据可能存在同 URL 多行 (如手工导入未填 last_fetch_at 的页),
+        # 取最近一次抓取的行; 都没抓过则取最早创建的, 保证确定性
         r = await db.execute(
             select(PageRepository).where(
                 PageRepository.project_id == _uuid.UUID(project_id),
-                PageRepository.page_url == url))
+                PageRepository.page_url == url)
+            .order_by(PageRepository.last_fetch_at.desc().nullslast(),
+                      PageRepository.created_at)
+            .limit(1))
         page = r.scalar_one_or_none()
         if page is None:
             page = PageRepository(
