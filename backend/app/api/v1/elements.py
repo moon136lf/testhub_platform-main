@@ -254,6 +254,30 @@ async def delete_element(
 # ============================================================
 
 
+@router.get("/login-state")
+async def get_login_state(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """登录态摘要 (P1 占位: login_state 表 P3 才建, 无表/无行时返回 not_configured)."""
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    try:
+        from sqlalchemy import text
+        r = await db.execute(
+            text("SELECT cookie_count, localstorage_count, status, obtained_at "
+                 "FROM login_state WHERE project_id = :pid AND env = 'default' LIMIT 1"),
+            {"pid": str(project_uuid)})
+        row = r.first()
+    except Exception:
+        row = None  # 表不存在 (P1 无迁移)
+    if row is None:
+        return {"code": 0, "data": {"status": "not_configured", "cookie_count": 0,
+                                    "localstorage_count": 0, "obtained_at": None}}
+    return {"code": 0, "data": {"status": row.status, "cookie_count": row.cookie_count,
+                                "localstorage_count": row.localstorage_count,
+                                "obtained_at": row.obtained_at.isoformat() if row.obtained_at else None}}
+
+
 @router.post("/change-detection")
 async def trigger_change_detection(
     page_id: str = Query(..., description="页面 ID"),
