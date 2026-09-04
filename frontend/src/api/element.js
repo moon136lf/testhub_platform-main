@@ -56,6 +56,92 @@ export const elementAPI = {
     return this.listPages(projectId)
   },
 
+  // ---------------- P3 会话式抓取工作台 ----------------
+
+  /**
+   * 创建抓取会话
+   * @param {string} projectId
+   * @returns {Promise<Object>} { session_id, project_id }
+   */
+  async createCaptureSession(projectId) {
+    const response = await axios.post('/elements/capture/sessions', { project_id: projectId })
+    return response.data
+  },
+
+  /**
+   * 会话状态（工作台全量渲染数据）
+   * @param {string} sessionId
+   * @returns {Promise<Object>} { session_id, batches, elements, total_elements, included_count }
+   */
+  async getCaptureState(sessionId) {
+    const response = await axios.get(`/elements/capture/sessions/${sessionId}`)
+    return response.data
+  },
+
+  /** 丢弃会话 */
+  async discardCaptureSession(sessionId) {
+    const response = await axios.delete(`/elements/capture/sessions/${sessionId}`)
+    return response.data
+  },
+
+  /**
+   * 向会话追加抓取批次
+   * @param {string} sessionId
+   * @param {Object} data - { url, screenshot_url?, elements }
+   * @returns {Promise<Object>} { batch_idx, batch_count, added, total_elements }
+   */
+  async addCaptureBatch(sessionId, data) {
+    const response = await axios.post(`/elements/capture/sessions/${sessionId}/batches`, data)
+    return response.data
+  },
+
+  /** 单元素勾选/取消 */
+  async setCaptureElementIncluded(sessionId, tempId, included) {
+    const response = await axios.post(
+      `/elements/capture/sessions/${sessionId}/elements/included`,
+      { temp_id: tempId, included }
+    )
+    return response.data
+  },
+
+  /** 全选/全不选 */
+  async setCaptureAllIncluded(sessionId, included) {
+    const response = await axios.post(
+      `/elements/capture/sessions/${sessionId}/elements/included-all`,
+      { included }
+    )
+    return response.data
+  },
+
+  /** 删除会话内单个元素 */
+  async deleteCaptureElement(sessionId, tempId) {
+    const response = await axios.delete(`/elements/capture/sessions/${sessionId}/elements`, {
+      data: { temp_id: tempId }
+    })
+    return response.data
+  },
+
+  /** 删除会话内整批次 */
+  async deleteCaptureBatch(sessionId, batchIdx) {
+    const response = await axios.delete(`/elements/capture/sessions/${sessionId}/batches`, {
+      data: { batch_idx: batchIdx }
+    })
+    return response.data
+  },
+
+  /**
+   * 会话式入库（按勾选状态）
+   * @param {Object} data - { session_id, page_id?, page_name?, page_url?, screenshot_url? }
+   * @returns {Promise<Object>} { page_id, page_name, imported_count, failed_count, session_total }
+   */
+  async importFromCaptureSession(data) {
+    const response = await axios.post(
+      `/elements/capture/sessions/${data.session_id}/import`,
+      data
+    )
+    return response.data
+  },
+
   /**
    * 获取页面的所有 active 元素
    * @param {string} pageId

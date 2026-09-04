@@ -183,3 +183,97 @@ class FetchHistoryResponse(BaseModel):
     duration_seconds: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------- P3 会话式抓取工作台 ----------------
+
+
+class CaptureSessionCreateRequest(BaseModel):
+    """创建抓取会话"""
+
+    project_id: str = Field(..., description="项目 ID")
+
+
+class CaptureSessionCreateResponse(BaseModel):
+    """创建抓取会话响应"""
+
+    session_id: str = Field(..., description="会话 ID（后续抓取/操作/入库都用它）")
+    project_id: str = Field(..., description="项目 ID")
+
+
+class CaptureBatchAddRequest(BaseModel):
+    """向会话追加一个抓取批次（一次页面抓取的结果）"""
+
+    url: str = Field(..., description="抓取的页面 URL")
+    screenshot_url: Optional[str] = Field(None, description="页面截图 URL")
+    elements: List[ElementData] = Field(..., description="本批次抓到的元素")
+
+
+class CaptureBatchAddResponse(BaseModel):
+    """追加批次响应"""
+
+    batch_idx: int = Field(..., description="批次索引（从 0 起）")
+    batch_count: int = Field(..., description="会话累计批次数")
+    added: int = Field(..., description="本批次新增元素数")
+    total_elements: int = Field(..., description="会话累计元素总数")
+
+
+class CaptureElementOpRequest(BaseModel):
+    """单元素操作（勾选/取消勾选）"""
+
+    temp_id: str = Field(..., description="元素临时 ID")
+    included: bool = Field(..., description="是否纳入入库")
+
+
+class CaptureAllOpRequest(BaseModel):
+    """全选/全不选"""
+
+    included: bool = Field(..., description="true=全选 false=全不选")
+
+
+class CaptureElementDeleteRequest(BaseModel):
+    """删除单个元素"""
+
+    temp_id: str = Field(..., description="元素临时 ID")
+
+
+class CaptureBatchDeleteRequest(BaseModel):
+    """删除整个批次"""
+
+    batch_idx: int = Field(..., ge=0, description="批次索引")
+
+
+class CaptureStateResponse(BaseModel):
+    """会话状态（抓取工作台全量渲染数据）"""
+
+    session_id: str = Field(..., description="会话 ID")
+    project_id: str = Field(..., description="项目 ID")
+    created_at: Optional[str] = Field(None, description="创建时间")
+    batches: List[Dict[str, Any]] = Field(default_factory=list, description="批次列表")
+    elements: List[Dict[str, Any]] = Field(
+        default_factory=list, description="元素列表（含 included/batch_idx）"
+    )
+    total_elements: int = Field(0, description="元素总数")
+    included_count: int = Field(0, description="已勾选元素数")
+
+
+class CaptureImportRequest(BaseModel):
+    """会话式入库请求（按会话内勾选状态入库）"""
+
+    session_id: str = Field(..., description="会话 ID")
+    page_id: Optional[str] = Field(None, description="已有页面 ID（与 page_name 二选一）")
+    page_name: Optional[str] = Field(None, description="新建页面名称")
+    page_url: Optional[str] = Field(None, description="新建页面 URL")
+    screenshot_url: Optional[str] = Field(
+        None, description="页面截图 URL（缺省取最后批次的截图）"
+    )
+
+
+class CaptureImportResponse(BaseModel):
+    """会话式入库响应"""
+
+    page_id: str = Field(..., description="页面 ID")
+    page_name: str = Field(..., description="页面名称")
+    imported_count: int = Field(..., description="导入成功的元素数量")
+    failed_count: int = Field(0, description="导入失败的元素数量")
+    session_total: int = Field(0, description="会话剩余元素总数")

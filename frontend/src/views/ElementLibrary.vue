@@ -22,7 +22,17 @@
         v-model="fetchDialogVisible"
         :projects="projects"
         :loading="fetching"
+        :session-mode="sessionMode"
         @start="handleFetchStart"
+      />
+
+      <!-- P3 会话式抓取工作台 -->
+      <CaptureWorkbench
+        v-show="workbenchVisible"
+        ref="workbenchRef"
+        :session-id="captureSessionId"
+        @imported="handleCaptureImported"
+        @discarded="handleCaptureDiscarded"
       />
 
       <el-divider />
@@ -186,6 +196,7 @@ import { Search } from '@element-plus/icons-vue'
 import { elementAPI } from '@/api/element'
 import { projectAPI } from '@/api/project'
 import FetchDialog from '@/components/element/FetchDialog.vue'
+import CaptureWorkbench from '@/components/element/CaptureWorkbench.vue'
 import ElementHighlight from '@/components/element/ElementHighlight.vue'
 
 const hoverId = ref('')
@@ -223,14 +234,97 @@ const fetchForm = ref({
   password: '',
   text_filter: '',
   type_filter: '',
-  debug_mode: false
+  debug_mode: false,
+  include_text: false
 })
 
-// 弹窗 @start：写入表单并执行现有抓取流程
-const handleFetchStart = (params) => {
+// ---- P3 会话式抓取 ----
+const sessionMode = ref(true)          // FetchDialog 走会话模式
+const captureSessionId = ref('')
+const workbenchRef = ref(null)
+const workbenchVisible = computed(() => !!captureSessionId.value)
+
+const handleFetchStart = async (params) => {
   fetchForm.value = { ...fetchForm.value, ...params }
   fetchDialogVisible.value = false
+
+  if (sessionMode.value) {
+    // 会话式：创建/复用会话 -> 抓取 -> 结果进会话（不直接入库往返）
+    try {
+      if (!captureSessionId.value) {
+        const s = await elementAPI.createCaptureSession(fetchForm.value.project_id)
+        captureSessionId.value = s.session_id
+      }
+      await runCaptureIntoSession()
+    } catch (err) {
+      ElMessage.error('创建抓取会话失败: ' + (err.response?.data?.detail || err.message))
+    }
+    return
+  }
+  // 旧路径：一次性抓取
   handleFetch()
+}
+
+// 会话式抓取：走同样的 SSE 抓取流程，完成后把元素推进会话
+const runCaptureIntoSession = async () => {
+  fetching.value = true
+  liveMessages.value = []
+  progress.value = 0
+  try {
+    const response = await elementAPI.fetchElements(fetchForm.value)
+    const { session_id, sse_url } = response.data || response
+    sseConnection = elementAPI.createSSEConnection(session_id)
+    let lastScreenshot = ''
+    sseConnection.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        liveMessages.value.push({
+          timestamp: new Date(data.timestamp).toLocaleTimeString('zh-CN'),
+          content: data.content,
+          type: data.type
+        })
+        progress.value = data.progress || 0
+        if (data.type === 'success' && data.progress >= 1.0 && data.data?.elements) {
+          lastScreenshot = data.data.screenshot_url || ''
+          sseConnection?.close()
+          // 推入会话（批次累积）
+          const r = await elementAPI.addCaptureBatch(captureSessionId.value, {
+            url: fetchForm.value.url,
+            screenshot_url: lastScreenshot,
+            elements: data.data.elements
+          })
+          ElMessage.success(
+            `批次 ${r.batch_idx + 1} 已加入会话：+${r.added} 元素，累计 ${r.total_elements} 个`
+          )
+          fetching.value = false
+          workbenchRef.value?.refresh()
+        }
+        if (data.type === 'error') {
+          ElMessage.error(data.content || '抓取失败')
+          fetching.value = false
+          sseConnection?.close()
+        }
+      } catch (err) {
+        console.error('SSE parse error:', err)
+      }
+    }
+    sseConnection.onerror = () => {
+      sseConnection?.close()
+      fetching.value = false
+    }
+  } catch (error) {
+    ElMessage.error('抓取失败: ' + (error.response?.data?.detail || error.message))
+    fetching.value = false
+  }
+}
+
+const handleCaptureImported = (result) => {
+  captureSessionId.value = ''
+  ElMessage.success(`已入库 ${result.imported_count} 个元素`)
+}
+
+const handleCaptureDiscarded = () => {
+  captureSessionId.value = ''
 }
 
 const importForm = ref({

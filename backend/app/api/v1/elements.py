@@ -9,6 +9,16 @@ Element API endpoints - 元素库管理接口 (Task 15 重构)
 - GET  /pages/{page_id}/history      获取页面的抓取历史
 - DELETE /elements/{element_id}       删除元素（软删除）
 - POST /change-detection              触发变更检测 (ELEM-05)
+- --- P3 会话式抓取工作台 ---
+- POST /capture/sessions              创建抓取会话
+- GET  /capture/sessions/{sid}        会话状态（工作台全量渲染数据）
+- DELETE /capture/sessions/{sid}      丢弃会话
+- POST /capture/sessions/{sid}/batches    追加抓取批次
+- POST /capture/sessions/{sid}/elements/included   单元素勾选/取消
+- POST /capture/sessions/{sid}/elements/included-all 全选/全不选
+- DELETE /capture/sessions/{sid}/elements         删除单元素（body 带 temp_id）
+- DELETE /capture/sessions/{sid}/batches          删除整批次（body 带 batch_idx）
+- POST /capture/sessions/{sid}/import  按勾选入库
 - POST /change-detection/{id}/fix     一键更新定位器 (ELEM-07)
 """
 
@@ -28,7 +38,19 @@ from app.schemas.element_schema import (
     PageResponse,
     ElementResponse,
     FetchHistoryResponse,
+    CaptureSessionCreateRequest,
+    CaptureSessionCreateResponse,
+    CaptureBatchAddRequest,
+    CaptureBatchAddResponse,
+    CaptureElementOpRequest,
+    CaptureAllOpRequest,
+    CaptureElementDeleteRequest,
+    CaptureBatchDeleteRequest,
+    CaptureStateResponse,
+    CaptureImportRequest,
+    CaptureImportResponse,
 )
+from app.services.capture_session_service import CaptureSessionService
 from app.tasks.element_tasks import fetch_elements_task
 from app.services.element_service import ElementService
 from app.services.change_detection_service import ChangeDetectionService
@@ -347,3 +369,193 @@ async def fix_change_detection(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------- P3 capture workbench ----------------
+
+@router.post("/capture/sessions", response_model=CaptureSessionCreateResponse)
+async def create_capture_session(request: CaptureSessionCreateRequest):
+    try:
+        uuid.UUID(request.project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    state = await CaptureSessionService.create(request.project_id)
+    return CaptureSessionCreateResponse(
+        session_id=state["session_id"], project_id=state["project_id"]
+    )
+
+async def _load_session_or_404(session_id: str) -> dict:
+    state = await CaptureSessionService.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Capture session not found or expired")
+    return state
+
+@router.get("/capture/sessions/{session_id}", response_model=CaptureStateResponse)
+async def get_capture_state(session_id: str):
+    state = await _load_session_or_404(session_id)
+    elements = list(state.get("elements", {}).values())
+    return CaptureStateResponse(
+        session_id=session_id,
+        project_id=state["project_id"],
+        created_at=state.get("created_at"),
+        batches=state.get("batches", []),
+        elements=elements,
+        total_elements=len(elements),
+        included_count=sum(1 for e in elements if e.get("included")),
+    )
+
+@router.delete("/capture/sessions/{session_id}")
+async def discard_capture_session(session_id: str):
+    if not await CaptureSessionService.delete(session_id):
+        raise HTTPException(status_code=404, detail="Capture session not found or expired")
+    return {"discarded": True}
+
+@router.post("/capture/sessions/{session_id}/batches", response_model=CaptureBatchAddResponse)
+async def add_capture_batch(session_id: str, request: CaptureBatchAddRequest):
+    elements = []
+    for elem in request.elements:
+        d = elem.model_dump()
+        sem = d.get("semantic_info") or {}
+        coords = sem.get("coords") or {
+            "x": d.get("position_x"), "y": d.get("position_y"),
+            "width": d.get("width"), "height": d.get("height"),
+        }
+        elements.append({
+            "temp_id": d.get("temp_id"),
+            "element_type": d.get("element_type") or sem.get("type") or "other",
+            "element_text": d.get("element_text") or sem.get("text") or "",
+            "locator_strategies": d.get("locator_strategies") or {"strategies": []},
+            "semantic_info": sem,
+            "position_x": coords.get("x"),
+            "position_y": coords.get("y"),
+            "width": coords.get("width"),
+            "height": coords.get("height"),
+            "attributes": d.get("attributes"),
+        })
+    try:
+        result = await CaptureSessionService.add_batch(
+            session_id, request.url, request.screenshot_url or "", elements
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Capture session not found or expired")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return CaptureBatchAddResponse(**result)
+
+@router.post("/capture/sessions/{session_id}/elements/included")
+async def set_element_included(session_id: str, request: CaptureElementOpRequest):
+    if not await CaptureSessionService.set_element_included(
+        session_id, request.temp_id, request.included
+    ):
+        raise HTTPException(status_code=404, detail="Element not found in session")
+    return {"temp_id": request.temp_id, "included": request.included}
+
+@router.post("/capture/sessions/{session_id}/elements/included-all")
+async def set_all_included(session_id: str, request: CaptureAllOpRequest):
+    count = await CaptureSessionService.set_all_included(session_id, request.included)
+    return {"included": request.included, "count": count}
+
+@router.delete("/capture/sessions/{session_id}/elements")
+async def delete_capture_element(session_id: str, request: CaptureElementDeleteRequest):
+    if not await CaptureSessionService.delete_element(session_id, request.temp_id):
+        raise HTTPException(status_code=404, detail="Element not found in session")
+    return {"deleted": request.temp_id}
+
+@router.delete("/capture/sessions/{session_id}/batches")
+async def delete_capture_batch(session_id: str, request: CaptureBatchDeleteRequest):
+    removed = await CaptureSessionService.remove_batch(session_id, request.batch_idx)
+    if removed == 0:
+        state = await _load_session_or_404(session_id)
+        b = state.get("batches", [])
+        if request.batch_idx >= len(b) or b[request.batch_idx].get("removed"):
+            raise HTTPException(status_code=404, detail="Batch not found in session")
+    return {"removed_elements": removed}
+
+@router.post("/capture/sessions/{session_id}/import", response_model=CaptureImportResponse)
+async def import_from_capture_session(
+    session_id: str,
+    request: CaptureImportRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.project import Project
+
+    try:
+        project_uuid = uuid.UUID(request.project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    result = await db.execute(select(Project).where(Project.id == project_uuid))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    selected = await CaptureSessionService.get_selected_elements(session_id)
+    if selected is None:
+        raise HTTPException(status_code=404, detail="Capture session not found or expired")
+    if not selected["elements"]:
+        raise HTTPException(status_code=400, detail="No elements selected in session")
+
+    batches = (await CaptureSessionService.get(session_id) or {}).get("batches", [])
+    last_screenshot = ""
+    for b in reversed(batches):
+        if b.get("screenshot_url") and not b.get("removed"):
+            last_screenshot = b["screenshot_url"]
+            break
+    screenshot_url = request.screenshot_url or last_screenshot
+
+    if request.page_id:
+        try:
+            page_id = uuid.UUID(request.page_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid page ID format")
+    else:
+        page_name = request.page_name
+        page_url = request.page_url
+        if not page_url and batches:
+            page_url = next(
+                (b["url"] for b in reversed(batches) if b.get("url") and not b.get("removed")),
+                None,
+            )
+        if not page_name:
+            page_name = page_url or "unnamed page"
+        if not page_url:
+            raise HTTPException(status_code=400, detail="page_url required (no batches to infer)")
+        page = await ElementService.create_page(
+            db, project_id=project_uuid, page_name=page_name,
+            page_url=page_url, screenshot_url=screenshot_url,
+        )
+        page_id = page.id
+
+    selected_elements = []
+    for e in selected["elements"]:
+        sem = e.get("semantic_info") or {}
+        coords = sem.get("coords") or {
+            "x": e.get("position_x"), "y": e.get("position_y"),
+            "width": e.get("width"), "height": e.get("height"),
+        }
+        attrs = e.get("attributes") or {}
+        selected_elements.append({
+            "temp_id": e.get("temp_id"),
+            "type": e.get("element_type") or sem.get("type") or "other",
+            "text": e.get("element_text") or sem.get("text") or "",
+            "coords": coords,
+            "locator_chain": e.get("locator_strategies") or {"strategies": []},
+            "id": attrs.get("id"),
+            "class": attrs.get("class"),
+            "name": attrs.get("name"),
+            "placeholder": attrs.get("placeholder"),
+            "value": attrs.get("value"),
+            "href": attrs.get("href"),
+        })
+
+    imported = await ElementService.batch_import_elements(db, page_id, selected_elements)
+
+    # import done: close the session
+    await CaptureSessionService.delete(session_id)
+
+    return CaptureImportResponse(
+        page_id=str(page_id),
+        page_name=imported[0].element_name if imported else (request.page_name or ""),
+        imported_count=len(imported),
+        failed_count=0,
+        session_total=0,
+    )
