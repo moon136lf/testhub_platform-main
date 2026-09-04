@@ -63,6 +63,7 @@ def fetch_elements_task(
     text_filter: Optional[str] = "",
     type_filter: Optional[str] = "",
     debug_mode: bool = False,
+    include_text: bool = False,
 ):
     """
     异步抓取元素任务（带 SSE 直播）
@@ -79,7 +80,7 @@ def fetch_elements_task(
     """
     return asyncio.run(_fetch_elements_async(
         session_id, project_id, url, username, password,
-        text_filter, type_filter, debug_mode
+        text_filter, type_filter, debug_mode, include_text
     ))
 
 
@@ -92,6 +93,7 @@ async def _fetch_elements_async(
     text_filter: Optional[str] = "",
     type_filter: Optional[str] = "",
     debug_mode: bool = False,
+    include_text: bool = False,
 ):
     """实际的异步抓取逻辑"""
     sse = SSEStream(session_id)
@@ -136,7 +138,7 @@ async def _fetch_elements_async(
             content="正在扫描页面元素...",
             progress=0.35,
         )
-        raw_elements = await scan_interactive_elements(page)
+        raw_elements = await scan_interactive_elements(page, include_text=include_text)
         raw_elements = _apply_filters(raw_elements, text_filter, type_filter, debug_mode)
 
         await sse.send_message(

@@ -44,7 +44,7 @@ def mock_deps():
     # Mock scan / generate / verify / extract
     mock_elem = MagicMock()
 
-    async def fake_scan(page):
+    async def fake_scan(page, include_text: bool = False):
         return [mock_elem, mock_elem]  # 2 个元素
 
     async def fake_generate(page, elem):
@@ -307,3 +307,103 @@ class TestSemanticCoords:
         elems = [{"element_type": "span", "element_text": "x"}]
         out = _apply_filters(elems, text_filter=",", type_filter=" , ", debug_mode=False)
         assert out == elems
+
+
+class TestScanTextElements:
+    @staticmethod
+    def _make_elem(visible=True, box=None):
+        elem = AsyncMock()
+        elem.is_visible = AsyncMock(return_value=visible)
+        elem.bounding_box = AsyncMock(return_value=box)
+        return elem
+
+    @pytest.mark.asyncio
+    async def test_include_text_adds_text_elements(self):
+        """include_text=True 扫描文本元素, 空文本丢弃, 坐标去重沿用 (交互优先)."""
+        from app.services.playwright_locator_core import scan_interactive_elements
+
+        page = AsyncMock()
+
+        btn = TestScanTextElements._make_elem(visible=True, box={"x": 10, "y": 10, "width": 80, "height": 30})
+        overlap_span = TestScanTextElements._make_elem(visible=True, box={"x": 10, "y": 10, "width": 80, "height": 30})
+        overlap_span.inner_text = AsyncMock(return_value="按钮")
+        keep_span = TestScanTextElements._make_elem(visible=True, box={"x": 200, "y": 50, "width": 60, "height": 20})
+        keep_span.inner_text = AsyncMock(return_value="首页")
+
+        call_log = []
+
+        def locator_factory(selector):
+            call_log.append(selector)
+            mock_loc = AsyncMock()
+            if selector == "button":
+                mock_loc.all = AsyncMock(return_value=[btn])
+            elif selector == "span":
+                mock_loc.all = AsyncMock(return_value=[overlap_span, keep_span])
+            else:
+                mock_loc.all = AsyncMock(return_value=[])
+            return mock_loc
+
+        page.locator = MagicMock(side_effect=locator_factory)
+
+        result = await scan_interactive_elements(page, include_text=True)
+
+        assert len(result) == 2
+        assert "span" in call_log
+        assert result[0] is btn
+        assert result[1] is keep_span
+
+    @pytest.mark.asyncio
+    async def test_include_text_drops_empty_text(self):
+        """文本元素 inner_text 为空 → 丢弃 (布局占位)."""
+        from app.services.playwright_locator_core import scan_interactive_elements
+
+        page = AsyncMock()
+        empty_div = TestScanTextElements._make_elem(visible=True, box={"x": 1, "y": 1, "width": 10, "height": 10})
+        empty_div.inner_text = AsyncMock(return_value="   ")
+        text_p = TestScanTextElements._make_elem(visible=True, box={"x": 2, "y": 2, "width": 10, "height": 10})
+        text_p.inner_text = AsyncMock(return_value="正文内容")
+
+        def locator_factory(selector):
+            mock_loc = AsyncMock()
+            if selector == "p":
+                mock_loc.all = AsyncMock(return_value=[empty_div, text_p])
+            else:
+                mock_loc.all = AsyncMock(return_value=[])
+            return mock_loc
+
+        page.locator = MagicMock(side_effect=locator_factory)
+
+        result = await scan_interactive_elements(page, include_text=True)
+
+        assert len(result) == 1
+        assert result[0] is text_p
+
+    @pytest.mark.asyncio
+    async def test_no_text_scan_by_default(self):
+        """默认 include_text=False 不扫描文本选择器."""
+        from app.services.playwright_locator_core import scan_interactive_elements, TEXT_SELECTORS
+
+        page = AsyncMock()
+        call_log = []
+
+        def locator_factory(selector):
+            call_log.append(selector)
+            mock_loc = AsyncMock()
+            mock_loc.all = AsyncMock(return_value=[])
+            return mock_loc
+
+        page.locator = MagicMock(side_effect=locator_factory)
+
+        await scan_interactive_elements(page)
+
+        assert not set(TEXT_SELECTORS) & set(call_log)
+
+    def test_text_elements_filtered_by_type_filter(self):
+        """_apply_filters 对文本元素 type (span 等) 同样生效."""
+        from app.tasks.element_tasks import _apply_filters
+        elems = [
+            {"element_type": "span", "element_text": "首页"},
+            {"element_type": "button", "element_text": "登录"},
+        ]
+        out = _apply_filters(elems, text_filter="", type_filter="span", debug_mode=False)
+        assert len(out) == 1 and out[0]["element_type"] == "span"

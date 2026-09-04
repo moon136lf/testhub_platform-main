@@ -75,6 +75,7 @@ class ElementFetchRequest(BaseModel):
     text_filter: Optional[str] = Field(None, description="文本过滤，逗号分隔，任一词命中 element_text 保留")
     type_filter: Optional[str] = Field(None, description="类型过滤，逗号分隔白名单，如 button,input")
     debug_mode: bool = Field(False, description="调试模式：不过滤，返回全部元素")
+    include_text: bool = Field(False, description="抓取文字/不可点击元素")
 
 
 class ElementFetchResponse(BaseModel):

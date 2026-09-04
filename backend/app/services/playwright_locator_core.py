@@ -268,40 +268,55 @@ INTERACTIVE_SELECTORS = [
 ]
 
 
-async def scan_interactive_elements(page) -> List[Any]:
+TEXT_SELECTORS = ["span", "p", "h1", "h2", "h3", "h4", "label", "td", "th"]
+
+
+async def scan_interactive_elements(page, include_text: bool = False) -> List[Any]:
     """
     扫描页面上的可交互元素
 
     Args:
         page: Playwright Page 对象
+        include_text: 同时扫描文字/不可点击元素（span/p/标题等），非空 inner_text 才保留
 
     Returns:
-        可见的可交互元素 Locator 列表（基于坐标去重）
+        可见的元素 Locator 列表（基于坐标去重，交互元素优先于文本元素）
     """
     elements: List[Any] = []
     seen_coords = set()  # 基于坐标去重
 
-    for selector in INTERACTIVE_SELECTORS:
-        try:
-            found = await page.locator(selector).all()
-            for elem in found:
-                try:
-                    # 过滤不可见元素
-                    if not await elem.is_visible():
-                        continue
-
-                    # 坐标去重
-                    box = await elem.bounding_box()
-                    if box:
-                        coord_key = (int(box["x"]), int(box["y"]))
-                        if coord_key in seen_coords:
+    async def scan_selectors(selectors, require_text: bool):
+        for selector in selectors:
+            try:
+                found = await page.locator(selector).all()
+                for elem in found:
+                    try:
+                        # 过滤不可见元素
+                        if not await elem.is_visible():
                             continue
-                        seen_coords.add(coord_key)
 
-                    elements.append(elem)
-                except Exception:
-                    continue
-        except Exception:
-            continue
+                        # 文本元素必须有非空 inner_text（过滤布局占位）
+                        if require_text:
+                            raw = await elem.inner_text()
+                            if not raw.strip():
+                                continue
+
+                        # 坐标去重
+                        box = await elem.bounding_box()
+                        if box:
+                            coord_key = (int(box["x"]), int(box["y"]))
+                            if coord_key in seen_coords:
+                                continue
+                            seen_coords.add(coord_key)
+
+                        elements.append(elem)
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+
+    await scan_selectors(INTERACTIVE_SELECTORS, require_text=False)
+    if include_text:
+        await scan_selectors(TEXT_SELECTORS, require_text=True)
 
     return elements

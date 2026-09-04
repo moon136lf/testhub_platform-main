@@ -40,6 +40,10 @@
         <el-switch v-model="form.debug_mode" />
         <span class="hint-text">调试模式不过滤，返回全部元素及诊断信息</span>
       </el-form-item>
+      <el-form-item label="文字元素">
+        <el-switch v-model="form.include_text" />
+        <span class="hint-text">开启后同时抓取页面文字/不可点击元素（span/p/标题等）</span>
+      </el-form-item>
 
       <el-divider content-position="left">登录态</el-divider>
 
@@ -77,7 +81,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue', 'start'])
 
-const typeOptions = ['button', 'input', 'select', 'link', 'textarea', 'span']
+const typeOptions = ['button', 'input', 'select', 'link', 'textarea', 'span', 'p', 'h1', 'h2', 'h3', 'label', 'td']
 
 const form = reactive({
   project_id: '',
@@ -86,7 +90,8 @@ const form = reactive({
   password: '',
   textFilter: '',
   typeFilter: [],
-  debug_mode: false
+  debug_mode: false,
+  include_text: false
 })
 
 const loginStateLoading = ref(false)
@@ -145,7 +150,8 @@ const handleStart = () => {
     password: form.password,
     text_filter: form.textFilter,
     type_filter: form.typeFilter.join(','),
-    debug_mode: form.debug_mode
+    debug_mode: form.debug_mode,
+    include_text: form.include_text
   })
 }
 </script>

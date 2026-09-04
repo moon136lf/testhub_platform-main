@@ -90,6 +90,7 @@ async def fetch_elements(
         text_filter=request.text_filter,
         type_filter=request.type_filter,
         debug_mode=request.debug_mode,
+        include_text=request.include_text,
     )
 
     return ElementFetchResponse(
