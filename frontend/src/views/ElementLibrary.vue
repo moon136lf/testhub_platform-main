@@ -45,7 +45,7 @@
       <!-- 抓取结果：截图 + 元素列表 -->
       <div v-if="elements.length > 0" class="elements-result">
         <el-alert title="抓取结果" type="success" :closable="false" style="margin-bottom: 20px">
-          共抓取 {{ elements.length }} 个有效元素，已勾选 {{ selectedElementIds.length }} 个
+          共识别 {{ elements.length }} 个有效元素（{{ filterDescription }}），已勾选 {{ selectedElementIds.length }} 个
         </el-alert>
 
         <el-row :gutter="20">
@@ -223,6 +223,15 @@ const selectAll = computed({
 const selectedElementsData = computed(() =>
   elements.value.filter((e) => selectedElementIds.value.includes(e.temp_id))
 )
+
+const filterDescription = computed(() => {
+  const form = fetchForm.value
+  if (form.debug_mode) return '调试模式'
+  const parts = []
+  if (form.type_filter) parts.push(`类型: ${form.type_filter}`)
+  if (form.text_filter) parts.push(`文本: ${form.text_filter}`)
+  return parts.length > 0 ? parts.join('、') : '未过滤'
+})
 
 // 抓取元素
 const handleFetch = async () => {
