@@ -273,3 +273,24 @@ class TestFetchFilters:
         elems = [{"element_type": "span", "element_text": "x"}]
         out = _apply_filters(elems, text_filter="不存在", type_filter="button", debug_mode=True)
         assert len(out) == 1
+
+
+class TestSemanticCoords:
+    @pytest.mark.asyncio
+    async def test_semantic_coords_are_bounding_box(self):
+        """coords 必须来自 bounding_box (视口坐标), P2 高亮点选依赖."""
+        from unittest.mock import AsyncMock, MagicMock
+        from app.services.playwright_locator_core import extract_semantic_info
+
+        elem = MagicMock()
+        elem.evaluate = AsyncMock(return_value="button")  # tagName + parent/sibling 共用返回桩
+        elem.inner_text = AsyncMock(return_value="text")
+        elem.get_attribute = AsyncMock(return_value=None)
+        elem.bounding_box = AsyncMock(
+            return_value={"x": 10, "y": 20, "width": 30, "height": 40}
+        )
+
+        info = await extract_semantic_info(MagicMock(), elem)
+
+        elem.bounding_box.assert_awaited_once()
+        assert info["coords"] == {"x": 10, "y": 20, "width": 30, "height": 40}
