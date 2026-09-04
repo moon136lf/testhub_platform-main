@@ -81,9 +81,10 @@ export const aiCaseAPI = {
     return response.data
   },
 
-  async generateTestCases(projectId, testPointIds, generationMode = 'comprehensive', enableHallucinationCheck = true) {
+  async generateTestCases(projectId, testPointIds, generationMode = 'comprehensive', enableHallucinationCheck = true, sessionId = '') {
     const response = await axios.post(`${API_BASE}/generate-cases`, {
-      session_id: _genSessionId(),
+      // 复用第 4 步识别的会话 ID（测试点挂在它下面）；无则造新的（直连生成场景）
+      session_id: sessionId || _genSessionId(),
       project_id: projectId,
       point_ids: testPointIds,
       hallucination_strategy: enableHallucinationCheck ? 'moderate' : 'permissive'

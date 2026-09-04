@@ -313,7 +313,7 @@ class AIGateway:
 
         # Initialize GLM-4
         if settings.GLM_API_KEY:
-            self._providers["glm-4"] = GLMProvider(
+            self._providers["glm-2.5"] = GLMProvider(
                 api_key=settings.GLM_API_KEY,
                 api_url=settings.GLM_API_URL
             )

@@ -39,8 +39,8 @@ def gateway_with_mock_provider():
     AIGateway = ai_gateway_module.AIGateway
 
     gw = AIGateway.__new__(AIGateway)
-    gw._providers = {"glm-4": MagicMock()}
-    gw._providers["glm-4"].chat_completion = AsyncMock(return_value={"content": "hi", "tokens": 150})
+    gw._providers = {"glm-2.5": MagicMock()}
+    gw._providers["glm-2.5"].chat_completion = AsyncMock(return_value={"content": "hi", "tokens": 150})
     return gw, ai_gateway_module
 
 
@@ -50,7 +50,7 @@ async def test_chat_with_project_id_writes_log(gateway_with_mock_provider):
     with patch.object(ai_gateway_module, "log_ai_call", new=AsyncMock()) as mock_log:
         result = await gw.chat(
             [{"role": "user", "content": "x"}],
-            provider="glm-4",
+            provider="glm-2.5",
             project_id="00000000-0000-0000-0000-000000000001",
             stage="identify_point",
         )
@@ -58,7 +58,7 @@ async def test_chat_with_project_id_writes_log(gateway_with_mock_provider):
         mock_log.assert_awaited_once()
         call_kwargs = mock_log.call_args.kwargs
         assert call_kwargs["project_id"] == "00000000-0000-0000-0000-000000000001"
-        assert call_kwargs["provider_name"] == "glm-4"
+        assert call_kwargs["provider_name"] == "glm-2.5"
         assert call_kwargs["tokens"] == 150
         assert call_kwargs["stage"] == "identify_point"
 
@@ -67,7 +67,7 @@ async def test_chat_with_project_id_writes_log(gateway_with_mock_provider):
 async def test_chat_without_project_id_skips_log(gateway_with_mock_provider):
     gw, ai_gateway_module = gateway_with_mock_provider
     with patch.object(ai_gateway_module, "log_ai_call", new=AsyncMock()) as mock_log:
-        await gw.chat([{"role": "user", "content": "x"}], provider="glm-4")
+        await gw.chat([{"role": "user", "content": "x"}], provider="glm-2.5")
         mock_log.assert_not_awaited()
 
 
@@ -78,7 +78,7 @@ async def test_log_failure_does_not_break_chat(gateway_with_mock_provider):
         # should NOT raise — logging is best-effort
         result = await gw.chat(
             [{"role": "user", "content": "x"}],
-            provider="glm-4",
+            provider="glm-2.5",
             project_id="00000000-0000-0000-0000-000000000001",
             stage="identify_point",
         )

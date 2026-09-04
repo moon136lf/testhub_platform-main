@@ -41,11 +41,15 @@
       </el-alert>
 
       <el-table :data="cases" stripe @selection-change="s => (selectedCases = s)">
+        <el-table-column type="index" label="序号" width="70" align="center" />
         <el-table-column type="selection" width="50" />
-        <el-table-column prop="name" label="用例名称" min-width="220" show-overflow-tooltip>
+        <el-table-column prop="name" label="用例名称" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <el-link type="primary" @click="openCase(row)">{{ row.name }}</el-link>
           </template>
+        </el-table-column>
+        <el-table-column prop="point_name" label="测试点" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.point_name || '-' }}</template>
         </el-table-column>
         <el-table-column prop="priority" label="优先级" width="100">
           <template #default="{ row }">

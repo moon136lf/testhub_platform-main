@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Dict, List
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, func, and_
 
 from app.tasks import celery_app
 from app.core.database import AsyncSessionLocal

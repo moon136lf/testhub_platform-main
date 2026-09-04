@@ -6,6 +6,7 @@ import json
 import logging
 from typing import Dict
 
+from app.core.json_utils import parse_llm_json
 from app.services.ai_gateway import ai_gateway
 from app.models.test_case import TestPoint
 
@@ -73,21 +74,17 @@ class TestCaseGenerator:
                 {"role": "user", "content": user_prompt}
             ]
 
-            logger.info("Calling AI gateway with provider=glm-4")
+            logger.info("Calling AI gateway with provider=glm-2.5")
             response = await ai_gateway.chat(
-                messages, provider="glm-4",
+                messages, provider="glm-2.5",
                 project_id=str(point.project_id) if hasattr(point, "project_id") and point.project_id else None,
                 stage="generate_case",
             )
 
-            # Parse JSON response
-            content = response["content"]
-
-            try:
-                case_data = json.loads(content)
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON parse failed: {e}, content: {content[:200]}")
-                raise Exception("用例生成失败：AI返回格式错误") from e
+            # Parse JSON response（剥 ```json 围栏——GLM 无视「只返回JSON」提示时常见）
+            case_data = parse_llm_json(response["content"])
+            if not isinstance(case_data, dict):
+                raise Exception("用例生成失败：AI返回格式错误")
 
             # Validate JSON structure
             required_keys = ["name", "priority", "steps", "expected_result"]

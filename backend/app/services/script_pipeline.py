@@ -5,6 +5,7 @@
 import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Protocol
+from app.core.json_utils import parse_llm_json
 
 
 class NormalizeError(Exception):
@@ -77,7 +78,7 @@ async def step1_to_actions(case: NormalizedCase, gateway: LLMGatewayProto) -> Li
     prompt = STEP1_PROMPT.format(title=case.title, steps=_fmt_steps(case.steps))
     resp = await gateway.chat([{"role": "user", "content": prompt}])
     raw = resp["content"].strip()
-    items = json.loads(raw)
+    items = parse_llm_json(raw)
     actions = []
     for it in items:
         action = it.get("action")
@@ -137,7 +138,7 @@ async def step2_to_assertions(case: NormalizedCase, gateway: LLMGatewayProto) ->
         step_expected=_fmt_step_expected(case.steps),
     )
     resp = await gateway.chat([{"role": "user", "content": prompt}])
-    items = json.loads(resp["content"].strip())
+    items = parse_llm_json(resp["content"])
     plans = []
     for it in items:
         atype = it.get("assertion_type")

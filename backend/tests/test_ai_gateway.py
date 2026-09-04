@@ -15,8 +15,8 @@ sys.path.insert(0, str(backend_path))
 # Mock ONLY the specific config/settings dependency (not the whole app package),
 # so AIGateway can be imported without real API keys.
 mock_settings = MagicMock()
-mock_settings.AI_DEFAULT_PROVIDER = "glm-4"
-mock_settings.AI_FALLBACK_PROVIDERS = "glm-4,qwen,deepseek"
+mock_settings.AI_DEFAULT_PROVIDER = "glm-2.5"
+mock_settings.AI_FALLBACK_PROVIDERS = "glm-2.5,qwen,deepseek"
 mock_settings.AI_EMBEDDING_PROVIDER = "qwen"
 mock_settings.GLM_API_KEY = ""
 mock_settings.GLM_API_URL = "https://test.com"
@@ -310,8 +310,8 @@ class TestAIGateway:
         """测试部分 provider 配置 - 只有 GLM 和 Qwen 有 API key"""
         # Create a new mock settings with only some API keys set
         partial_settings = MagicMock()
-        partial_settings.AI_DEFAULT_PROVIDER = "glm-4"
-        partial_settings.AI_FALLBACK_PROVIDERS = "glm-4,qwen,deepseek"
+        partial_settings.AI_DEFAULT_PROVIDER = "glm-2.5"
+        partial_settings.AI_FALLBACK_PROVIDERS = "glm-2.5,qwen,deepseek"
         partial_settings.AI_EMBEDDING_PROVIDER = "qwen"
         partial_settings.GLM_API_KEY = "test-glm-key"
         partial_settings.GLM_API_URL = "https://test.com"
@@ -341,7 +341,7 @@ class TestAIGateway:
             gateway = ai_gateway_partial.AIGateway()
 
             # Verify only GLM and Qwen are initialized
-            assert "glm-4" in gateway._providers
+            assert "glm-2.5" in gateway._providers
             assert "qwen" in gateway._providers
             assert "deepseek" not in gateway._providers
             assert "claude" not in gateway._providers

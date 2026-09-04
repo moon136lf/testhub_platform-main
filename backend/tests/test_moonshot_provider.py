@@ -87,7 +87,7 @@ class TestAIGatewayRegistersMoonshot:
             mock_settings.QWEN_EMBEDDING_URL = ""
             gw = AIGateway()
             assert "moonshot" in gw._providers
-            assert "glm-4" in gw._providers  # glm 仍注册(键名不变)
+            assert "glm-2.5" in gw._providers  # glm 仍注册(键名不变)
 
     def test_moonshot_model_from_settings_not_dead(self):
         """审查 #7: settings.MOONSHOT_MODEL 应注入 provider (非死配置)."""

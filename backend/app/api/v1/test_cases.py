@@ -11,7 +11,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.models.case_batch import CaseBatch
-from app.models.test_case import TestCase
+from app.models.test_case import TestCase, TestPoint
 from app.services.test_case_service import get_test_case_service, TestCaseService
 from app.services.import_export_service import ImportExportService
 from app.schemas.test_case import (
@@ -109,16 +109,23 @@ async def list_case_batches(
 
 @router.get("/batches/{batch_id}/cases")
 async def list_batch_cases(batch_id: UUID, db: AsyncSession = Depends(get_db)):
-    """批内用例列表（查看页数据源）。"""
+    """批内用例列表（查看页数据源）。附测试点名称（point_name），供列表展示。"""
     try:
         r = await db.execute(
-            select(TestCase).where(TestCase.batch_id == batch_id,
-                                   TestCase.is_deleted.is_(False))
+            select(TestCase, TestPoint.name)
+            .outerjoin(TestPoint, TestCase.point_id == TestPoint.id)
+            .where(TestCase.batch_id == batch_id,
+                   TestCase.is_deleted.is_(False))
             .order_by(TestCase.created_at))
-        cases = r.scalars().all()
+        rows = r.all()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-    return {"code": 0, "data": [c.to_dict() for c in cases]}
+    data = []
+    for case, point_name in rows:
+        d = case.to_dict()
+        d["point_name"] = point_name
+        data.append(d)
+    return {"code": 0, "data": data}
 
 
 @router.delete("/batches/{batch_id}", status_code=204)

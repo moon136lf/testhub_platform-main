@@ -104,9 +104,9 @@ class TestPointGenerator:
                 {"role": "user", "content": user_prompt}
             ]
 
-            logger.info("Calling AI gateway with provider=glm-4")
+            logger.info("Calling AI gateway with provider=glm-2.5")
             response = await ai_gateway.chat(
-                messages, provider="glm-4",
+                messages, provider="glm-2.5",
                 project_id=str(project_id) if project_id else None,
                 stage="identify_point",
                 max_tokens=16000  # 大文档测试点多；8000 会被截断（Unterminated string）

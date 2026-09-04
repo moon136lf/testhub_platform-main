@@ -122,7 +122,7 @@ class TestGetUsage:
         # by_model rows: (model, sum)
         # daily rows: (date_trunc, sum) — one None date
         stage_rows = [(None, 300), ("identify_point", 700)]
-        model_rows = [("glm-4", 1000)]
+        model_rows = [("glm-2.5", 1000)]
         daily_rows = [(d, 1000), (None, 500)]
         mock_db.execute.side_effect = [
             Mock(all=Mock(return_value=stage_rows)),
@@ -136,7 +136,7 @@ class TestGetUsage:
         assert labels["unknown"] == 300
         assert labels["identify_point"] == 700
         # model passthrough
-        assert {item.label: item.tokens for item in usage.by_model} == {"glm-4": 1000}
+        assert {item.label: item.tokens for item in usage.by_model} == {"glm-2.5": 1000}
         # None date -> "" ; valid date -> "2026-08-25"
         daily = {entry["date"]: entry["tokens"] for entry in usage.daily}
         assert daily["2026-08-25"] == 1000

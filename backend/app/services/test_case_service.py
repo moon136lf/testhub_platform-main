@@ -648,7 +648,7 @@ class TestCaseService:
         try:
             base_condition = and_(
                 TestCase.project_id == UUID(project_id),
-                TestCase.is_deleted == False
+                TestCase.is_deleted.is_(False)
             )
 
             # Total cases count

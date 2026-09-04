@@ -553,7 +553,8 @@ const generateTestCases = async () => {
       formData.value.projectId,
       selectedPointIds.value,
       'comprehensive',
-      formData.value.hallucinationStrategy !== 'permissive'
+      formData.value.hallucinationStrategy !== 'permissive',
+      currentSessionId.value  // 复用识别会话：用例经 test_point.session_id 归属到同一会话
     )
     const data = res.data || res
     const sessionId = data.session_id || (data.data && data.data.session_id)

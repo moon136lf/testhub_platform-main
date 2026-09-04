@@ -36,11 +36,11 @@ class Settings(BaseSettings):
     MODEL_API_URL: str = ""
     MODEL_API_KEY: str = ""
     MODEL_NAME: str = "qwen-plus"
-    MODEL_DEBUG_NAME: str = "glm-4"
+    MODEL_DEBUG_NAME: str = "glm-2.5"
 
     # AI Gateway Configuration
-    AI_DEFAULT_PROVIDER: str = "glm-4"
-    AI_FALLBACK_PROVIDERS: str = "glm-4,qwen,deepseek"
+    AI_DEFAULT_PROVIDER: str = "glm-2.5"
+    AI_FALLBACK_PROVIDERS: str = "glm-2.5,qwen,deepseek"
     AI_EMBEDDING_PROVIDER: str = "qwen"
 
     # GLM-4 Configuration

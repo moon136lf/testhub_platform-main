@@ -119,7 +119,7 @@ class SystemSettingService:
 
     def _guess_category(self, key: str) -> str:
         """Heuristic: ai.* keys -> ai, else runtime."""
-        # provider keys like 'glm-4.api_key' or 'ai.default_provider'
+        # provider keys like 'glm-2.5.api_key' or 'ai.default_provider'
         if key.startswith("ai.") or any(seg in key for seg in (".api_key", ".api_url")):
             return "ai"
         return "runtime"

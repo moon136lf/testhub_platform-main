@@ -7,6 +7,8 @@ import json
 import logging
 from typing import Dict, List, Optional, Any
 
+from app.core.json_utils import parse_llm_json
+
 logger = logging.getLogger(__name__)
 
 # 永真断言黑名单（软断言词）— 这些动作不验证业务结果
@@ -164,7 +166,7 @@ class CaseRefiner:
                 stage="refine",
                 max_tokens=1000,
             )
-            data = json.loads(response["content"])
+            data = parse_llm_json(response["content"])
             out = []
             for i, item in enumerate(data if isinstance(data, list) else []):
                 out.append({

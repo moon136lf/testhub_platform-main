@@ -26,7 +26,7 @@ class SettingResponse(BaseModel):
 
 
 class TestConnectionRequest(BaseModel):
-    provider: str = Field(..., description="provider name: glm-4/qwen/deepseek/claude")
+    provider: str = Field(..., description="provider name: glm-2.5/qwen/deepseek/claude")
 
 
 class TestConnectionResponse(BaseModel):

@@ -37,14 +37,14 @@ class TestGetSet:
         from app.core.security import encrypt_value
         cipher = encrypt_value("sk-real-key")
         row = Mock()
-        row.id = "id2"; row.category = "ai"; row.key = "glm-4.api_key"
+        row.id = "id2"; row.category = "ai"; row.key = "glm-2.5.api_key"
         row.value = None; row.value_encrypted = cipher
         row.value_type = "string"; row.is_secret = True
         row.description = None; row.updated_by = None; row.updated_at = None
         mock_db.execute.return_value = Mock(scalar_one_or_none=Mock(return_value=row))
 
         svc = SystemSettingService(mock_db)
-        val = await svc.get("glm-4.api_key")
+        val = await svc.get("glm-2.5.api_key")
         assert val == "sk-real-key"
 
     @pytest.mark.asyncio
