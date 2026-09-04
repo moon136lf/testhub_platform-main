@@ -53,7 +53,15 @@
             <el-card>
               <template #header><span>页面截图</span></template>
               <div class="screenshot-container">
-                <img v-if="screenshotUrl" :src="screenshotUrl" alt="页面截图" class="screenshot" />
+                <ElementHighlight
+                  v-if="screenshotUrl"
+                  :screenshot-url="screenshotUrl"
+                  :elements="elements"
+                  :selected-ids="selectedElementIds"
+                  :hover-id="hoverId"
+                  @pick="togglePick"
+                  @card-hover="hoverId = $event || ''"
+                />
                 <div v-else class="no-screenshot">暂无截图</div>
               </div>
             </el-card>
@@ -74,7 +82,14 @@
               </template>
               <div class="element-list">
                 <el-checkbox-group v-model="selectedElementIds">
-                  <div v-for="element in elements" :key="element.temp_id" class="element-item">
+                  <div
+                    v-for="element in elements"
+                    :key="element.temp_id"
+                    class="element-item"
+                    :data-eid="element.temp_id"
+                    @mouseenter="hoverId = element.temp_id"
+                    @mouseleave="hoverId = ''"
+                  >
                     <el-checkbox :label="element.temp_id">
                       <div class="element-info">
                         <el-tag :type="getElementTypeColor(element.element_type)" size="small">
@@ -167,12 +182,28 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { elementAPI } from '@/api/element'
 import { projectAPI } from '@/api/project'
 import FetchDialog from '@/components/element/FetchDialog.vue'
+import ElementHighlight from '@/components/element/ElementHighlight.vue'
+
+const hoverId = ref('')
+
+// 点截图上的高亮框 → 切换勾选 + 右侧卡片滚动可见
+const togglePick = async (tempId) => {
+  const i = selectedElementIds.value.indexOf(tempId)
+  if (i >= 0) {
+    selectedElementIds.value.splice(i, 1)
+  } else {
+    selectedElementIds.value.push(tempId)
+  }
+  await nextTick()
+  const el = document.querySelector(`[data-eid="${tempId}"]`)
+  el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
 
 const fetching = ref(false)
 const fetchDialogVisible = ref(false)
