@@ -14,7 +14,7 @@
         </el-select>
       </el-form-item>
       <el-form-item label="页面URL" required>
-        <el-input v-model="form.url" placeholder="https://example.com/login" />
+        <el-input v-model="form.url" placeholder="请输入目标页面地址，如 http://localhost:3000/" />
       </el-form-item>
       <el-form-item label="用户名">
         <el-input v-model="form.username" placeholder="留空则跳过登录" />
