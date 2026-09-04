@@ -49,7 +49,7 @@
         </el-alert>
 
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="16">
             <el-card>
               <template #header><span>页面截图</span></template>
               <div class="screenshot-container">
@@ -67,20 +67,15 @@
             </el-card>
           </el-col>
 
-          <el-col :span="12">
+          <el-col :span="8">
             <el-card>
               <template #header>
-                <div class="element-list-header">
-                  <span>元素列表（含定位策略）</span>
-                  <div>
-                    <el-checkbox v-model="selectAll" @change="handleSelectAll">全选</el-checkbox>
-                    <el-button type="primary" size="small" @click="showImportDialog">
-                      一键入库 ({{ selectedElementIds.length }})
-                    </el-button>
-                  </div>
-                </div>
+                <span>元素列表（含定位策略）</span>
               </template>
               <div class="element-list">
+                <div class="element-list-toolbar">
+                  <el-checkbox v-model="selectAll" @change="handleSelectAll">全选</el-checkbox>
+                </div>
                 <el-checkbox-group v-model="selectedElementIds">
                   <div
                     v-for="element in elements"
@@ -105,6 +100,9 @@
                     </el-checkbox>
                   </div>
                 </el-checkbox-group>
+                <el-button type="primary" style="width: 100%" @click="showImportDialog">
+                  一键入库 ({{ selectedElementIds.length }})
+                </el-button>
               </div>
             </el-card>
           </el-col>
@@ -510,7 +508,6 @@ onUnmounted(() => {
 
 .screenshot {
   max-width: 100%;
-  max-height: 600px;
   border-radius: 4px;
 }
 
@@ -519,15 +516,24 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-.element-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.element-list-toolbar {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  padding: 8px 0;
+  z-index: 1;
 }
 
 .element-list {
-  max-height: 500px;
+  max-height: 400px;
   overflow-y: auto;
+}
+
+.element-list > .el-button {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: 8px;
 }
 
 .element-item {
