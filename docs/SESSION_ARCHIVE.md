@@ -5,6 +5,67 @@
 
 ---
 
+## 快照 #57 — 2026-09-04（元素库三期收官+会话式需求确认，重点存档）
+
+**当前分支**：master（主仓）
+
+### 自 #56 以来 23 条提交（元素库增强三期全记录）
+- 0bdd581 chore: svg favicon（渐变紫+🌙）
+- 434b5e2 feat(elements): 会话式/一次性双 tab（按原型）
+- e1c4470 feat(elements): P3 capture workbench — redis 暂存会话+批次累积+选择入库
+- e8b753a feat(elements): 文字元素抓取（include_text 开关）
+- f91c656 feat(elements): 布局调整（截图放大/全选粘顶/入库粘底）
+- cb6d0ba docs: P2.5 plan
+- 105cfe3 feat(logging): 测试日志分流 logs/test.log
+- d32ba15 chore: 抓取弹窗 URL placeholder 中性化
+- df63d63 fix(elements): 同 URL 多行页面致入库失败 → 取最近行
+- 2205f4c feat(elements): P2 截图高亮+双向联动
+- 6e503f2 docs: P2 plan
+- a1839fa fix(elements): /import 500（ElementData pydantic .get）
+- 5ab8b0b fix(elements): 类型过滤值域 a→link 归一化 + localStorage_count 拼写
+- cdb81f0 feat(elements): 结果摘要带过滤上下文（P1 T5）
+- b346c69 feat(elements): FetchDialog 过滤/调试/登录态卡片（P1 T4）
+- dfcc99d feat(elements): login-state 占位接口（P1 T3）
+- 55afd39 fix(elements): 空词过滤串不再清空全部（P1 T1 fixup）
+- ac7c980 fix: SSE redis 跨事件循环重连 + CaseDetail 路由刷新 + 向导全选
+- f8831ce feat(elements): bounding box 视口坐标锁定（P1 T2）
+- d27fcab feat(elements): fetch 文本/类型过滤+调试模式（P1 T1）
+- f0845c6 docs: P1 实现计划
+- e536afd feat(ai-gen): glm-2.5 provider 重命名 + parse_llm_json + sessionId 透传（另一会话的 20 文件）
+- 4c7bbf6 docs: 下班交接 #56
+
+### 未提交变更（另一会话进行中，勿动）
+- 14 文件 M：ai_case_generation/json_utils/logging_setup/sse/test_case/case_batch/case_refiner/functional_case_generator/test_case_service 及测试、router/CaseDetail/ScriptConvert、view_logs.bat
+- 未跟踪：CLAUDE.md、backend/tail_log_color.ps1、docs/ROADMAP_PHASE2_TODO.md、docs/SESSION_HANDOFF_2026-09-04-refactor-plan.md、backend/.en
+
+### 元素库增强状态（重点功能）
+- **P1 完成**：文本/类型过滤、调试模式、登录态卡片、结果摘要、bounding box 坐标入库（含 3 轮审查修复：a→link 值域、import 500 pydantic、空词守卫）
+- **P2 完成**：截图高亮框（红/hover/绿勾选/闪烁）+ 右侧面板双向联动（点框勾选滚动、卡片悬停框闪烁）
+- **P2.5 完成**：布局（截图放大/列表粘顶粘底）+ 文字元素抓取（include_text 开关，span/p/h1-h4/label/td/th）
+- **P3 后端+工作台 v1 完成**：Redis 暂存会话（批次累积20上限）、10 个 /capture/sessions/* 端点、CaptureWorkbench 前端、双 tab 布局
+- 全量后端 553 passed；测试日志已分流 logs/test.log
+- 修复过的问题：SSE URL 前缀 404、playwright async API、同 URL 多行页面、截图 MinIO 403 代理、favicon 404
+
+### ⚠️ 用户验收反馈——会话式抓取核心交互重构需求（已记录待实现）
+用户试用了会话式工作台后提出终态流程（详见 memory moontest-element-p3-workbench）：
+1. 一次性抓取弹窗加「是否需要登录」开关
+2. 需要登录 → **弹出有头浏览器** → 用户人工登录（验证码/短信）→ 页面停在目标站
+3. 抓取时**左侧保持浏览器实时可见**（截图+红框），右侧元素列表
+4. **点选补抓**：漏掉的元素用户点击 → 活 DOM 反查再获取（spec 2.3 pick-element 设计已有）
+5. 入库后「释放页面」= 用户可**接管浏览器**继续操作，不是关闭
+6. **每次入库独立**（无统一入库）；入库时可选不同页面
+7. **新增页面选父级层级**：page_repository 加 parent_id（页面树 el-tree）
+8. 元素别名默认中文描述（类型+序号兜底，aria-label/placeholder 优先）
+9. 元素库首页加「已入库元素」列表区（近7日筛选+刷新按钮）
+技术前提（已确认）：headed 浏览器活在 FastAPI 进程内存、单 worker、桌面会话；storage_state 复用登录态；点选用 elementFromPoint 活 DOM 反查。
+
+### 明日待办
+1. **实现上述会话式抓取交互重构**（ headed 登录 + 浏览器保持 + 点选补抓 + 页面树层级 + 独立入库）——这是元素库的收官大件
+2. 元素别名默认中文描述 + 已入库元素列表区（近7日/刷新）
+3. 另一会话的 14 文件未提交改动待其收尾
+
+---
+
 ## 快照 #56 — 2026-09-04 17:50（下班交接）
 
 **当前分支**：master（主仓）
