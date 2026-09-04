@@ -138,10 +138,32 @@ async def import_elements(
         page_id = page.id
 
     # 过滤用户勾选的元素（按 temp_id）
-    selected_elements = [
-        elem for elem in request.elements_data
-        if elem.get("temp_id") in request.selected_element_ids
-    ]
+    # 注意: request.elements_data 已被 pydantic 解析为 ElementData 对象 (非 dict)，
+    # 必须用属性访问；再转成 batch_import_elements 期望的 dict 契约
+    # (type/text/coords/locator_chain —— 与 _persist_fetch_result 的映射一致)
+    selected_elements = []
+    for elem in request.elements_data:
+        if elem.temp_id not in request.selected_element_ids:
+            continue
+        d = elem.model_dump()
+        sem = d.get("semantic_info") or {}
+        coords = sem.get("coords") or {
+            "x": d.get("position_x"), "y": d.get("position_y"),
+            "width": d.get("width"), "height": d.get("height")}
+        attrs = d.get("attributes") or {}
+        selected_elements.append({
+            "temp_id": d.get("temp_id"),
+            "type": d.get("element_type") or sem.get("type") or "other",
+            "text": d.get("element_text") or sem.get("text") or "",
+            "coords": coords,
+            "locator_chain": d.get("locator_strategies") or {"strategies": []},
+            "id": attrs.get("id"),
+            "class": attrs.get("class"),
+            "name": attrs.get("name"),
+            "placeholder": attrs.get("placeholder"),
+            "value": attrs.get("value"),
+            "href": attrs.get("href"),
+        })
 
     if not selected_elements:
         raise HTTPException(status_code=400, detail="No elements selected")
