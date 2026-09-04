@@ -294,3 +294,9 @@ class TestSemanticCoords:
 
         elem.bounding_box.assert_awaited_once()
         assert info["coords"] == {"x": 10, "y": 20, "width": 30, "height": 40}
+
+    def test_empty_term_filter_strings_return_all(self):
+        from app.tasks.element_tasks import _apply_filters
+        elems = [{"element_type": "span", "element_text": "x"}]
+        out = _apply_filters(elems, text_filter=",", type_filter=" , ", debug_mode=False)
+        assert out == elems

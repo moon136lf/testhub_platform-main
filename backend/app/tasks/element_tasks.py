@@ -43,10 +43,12 @@ def _apply_filters(elements: list, text_filter: str, type_filter: str, debug_mod
     out = elements
     if text_filter:
         words = [w.strip() for w in text_filter.split(",") if w.strip()]
-        out = [e for e in out if e.get("element_text") and any(w in e["element_text"] for w in words)]
+        if words:
+            out = [e for e in out if e.get("element_text") and any(w in e["element_text"] for w in words)]
     if type_filter:
         types = {t.strip() for t in type_filter.split(",") if t.strip()}
-        out = [e for e in out if e.get("element_type") in types]
+        if types:
+            out = [e for e in out if e.get("element_type") in types]
     return out
 
 
