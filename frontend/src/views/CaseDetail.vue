@@ -367,7 +367,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Edit, Delete, Check, Close, View, MagicStick } from '@element-plus/icons-vue'
@@ -410,8 +410,25 @@ const loadBatchCases = async () => {
 }
 
 const openCase = (row) => {
+  // 同组件路由跳转（批内模式 → 单用例详情）不会重建实例，用 watch fullPath 兜底重载
   router.push({ name: 'CaseDetail', params: { id: row.id } })
 }
+
+// 组件复用时 onMounted 不再触发：监听路由变化，离开批内模式（batch_id 消失）重载为单用例详情
+watch(() => route.fullPath, () => {
+  if (route.name !== 'CaseDetail') return
+  if (route.query.batch_id) {
+    const newBatchId = String(route.query.batch_id)
+    if (newBatchId === batchId.value && batchMode.value) return
+    batchMode.value = true
+    batchId.value = newBatchId
+    batchName.value = String(route.query.batch_name || '未命名记录')
+    loadBatchCases()
+  } else if (batchMode.value) {
+    batchMode.value = false
+    loadCaseDetail()
+  }
+})
 
 const handleBatchFinalize = async () => {
   try {

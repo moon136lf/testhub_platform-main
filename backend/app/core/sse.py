@@ -9,8 +9,23 @@ from typing import AsyncGenerator, Optional
 import logging
 
 from app.core.redis import redis_client
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+async def _ensure_redis():
+    """确保 redis 连接绑定在当前事件循环上。
+
+    Celery worker 用 asyncio.run(每个任务一次) 执行协程，每次都是新循环；
+    redis.asyncio 连接绑定创建它的循环，跨循环复用会报 'Event loop is closed'。
+    检测到连接不存在或绑定的循环已关闭时重建连接。
+    """
+    r = redis_client.redis
+    if r is None or getattr(r, "_closed", False) or (
+        getattr(r, "_loop", None) is not None and r._loop.is_closed()
+    ):
+        await redis_client.connect()
 
 
 class SSEStream:
@@ -56,7 +71,8 @@ class SSEStream:
             message["data"] = data
 
         try:
-            # 推送到 Redis List
+            # 推送到 Redis List（先确保连接绑定当前事件循环，见 _ensure_redis）
+            await _ensure_redis()
             await redis_client.redis.lpush(self.redis_key, json.dumps(message))
             # 设置过期时间
             await redis_client.redis.expire(self.redis_key, self.ttl)

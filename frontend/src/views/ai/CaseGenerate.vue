@@ -209,7 +209,12 @@
             :title="`${pageName} (${points.length})`"
             :name="pageName"
           >
-            <el-table :data="points" border size="small" @selection-change="onPageSelectionChange">
+            <el-table
+              :ref="el => setPointTableRef(pageName, el)"
+              :data="points"
+              border size="small"
+              @selection-change="onPageSelectionChange"
+            >
               <el-table-column type="selection" width="45" :selectable="canSelect" />
               <el-table-column prop="name" label="测试点" min-width="200" />
               <el-table-column prop="type_label" label="类型" width="100">
@@ -531,8 +536,18 @@ const onPageSelectionChange = (selection) => {
   selectedPointIds.value = Array.from(new Set([...selectedPointIds.value, ...ids]))
 }
 
+// 各分组表格实例（pageName → table ref），供全选/反选同步勾选框
+const pointTableRefs = {}
+const setPointTableRef = (pageName, el) => {
+  if (el) pointTableRefs[pageName] = el
+}
+
 const selectAllPoints = () => {
   selectedPointIds.value = testPoints.value.map(p => p.id)
+  // 同步各分组表格的勾选框（用户预期：点全选后表格复选框也打上勾）
+  for (const [, table] of Object.entries(pointTableRefs)) {
+    table?.toggleRowSelection?.(table.getData?.() || [], true)
+  }
 }
 
 const invertSelection = () => {
@@ -540,6 +555,12 @@ const invertSelection = () => {
   selectedPointIds.value = testPoints.value
     .filter(p => !selectedPointIds.value.includes(p.id))
     .map(p => p.id)
+  for (const [, table] of Object.entries(pointTableRefs)) {
+    const rows = table.getData?.() || []
+    for (const row of rows) {
+      table.toggleRowSelection(row, selectedPointIds.value.includes(row.id))
+    }
+  }
 }
 
 // Step 6: 生成用例
