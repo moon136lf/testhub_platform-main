@@ -51,7 +51,7 @@
             未配置登录态，可在下方填写账密自动登录
           </span>
           <span v-else-if="loginStatus === 'active'" class="state-text state-green">
-            登录态有效 · {{ loginStateInfo.cookie_count || 0 }} Cookie + {{ loginStateInfo.localStorage_count || 0 }} localStorage 项
+            登录态有效 · {{ loginStateInfo.cookie_count || 0 }} Cookie + {{ loginStateInfo.localstorage_count || 0 }} localStorage 项
           </span>
           <span v-else class="state-text state-gray">未配置登录态，可在下方填写账密自动登录</span>
         </template>

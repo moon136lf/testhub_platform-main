@@ -234,6 +234,8 @@ async def extract_semantic_info(page, element) -> Dict[str, Any]:
 
     # 基本信息
     elem_type = await element.evaluate("el => el.tagName.toLowerCase()")
+    # 归一化到语义类别 (与 models/element.py element_type 注释域一致: button/input/link/select/other)
+    elem_type = {"a": "link"}.get(elem_type, elem_type)
     raw_text = await element.inner_text()
     elem_text = raw_text.strip()[:100] if raw_text else ""
 

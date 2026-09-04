@@ -268,6 +268,13 @@ class TestFetchFilters:
         out = _apply_filters(elems, text_filter="", type_filter="button", debug_mode=False)
         assert len(out) == 1 and out[0]["element_type"] == "button"
 
+    def test_type_filter_link_matches_anchor(self):
+        """tagName 'a' 归一化为 'link' 后, type_filter='link' 应命中锚点元素."""
+        from app.tasks.element_tasks import _apply_filters
+        elems = [{"element_type": "link", "element_text": "详情"}]
+        out = _apply_filters(elems, text_filter="", type_filter="link", debug_mode=False)
+        assert len(out) == 1
+
     def test_debug_mode_bypasses_filters(self):
         from app.tasks.element_tasks import _apply_filters
         elems = [{"element_type": "span", "element_text": "x"}]
