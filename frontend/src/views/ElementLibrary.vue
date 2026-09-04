@@ -10,33 +10,20 @@
 
     <el-card shadow="never">
 
-      <!-- 抓取表单 -->
-      <el-form :inline="true" :model="fetchForm" class="fetch-form">
-        <el-form-item label="项目">
-          <el-select v-model="fetchForm.project_id" placeholder="选择项目" style="width: 200px">
-            <el-option
-              v-for="project in projects"
-              :key="project.id"
-              :label="project.name"
-              :value="project.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="页面URL">
-          <el-input v-model="fetchForm.url" placeholder="https://example.com/login" style="width: 300px" />
-        </el-form-item>
-        <el-form-item label="用户名">
-          <el-input v-model="fetchForm.username" placeholder="留空则跳过登录" style="width: 150px" />
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input v-model="fetchForm.password" type="password" placeholder="留空则跳过登录" style="width: 150px" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :icon="Search" :loading="fetching" @click="handleFetch">
-            抓取元素
-          </el-button>
-        </el-form-item>
-      </el-form>
+      <!-- 抓取入口 -->
+      <div class="fetch-entry">
+        <el-button type="primary" :icon="Search" :loading="fetching" @click="fetchDialogVisible = true">
+          一次性抓取
+        </el-button>
+      </div>
+
+      <!-- 从 URL 抓取弹窗 -->
+      <FetchDialog
+        v-model="fetchDialogVisible"
+        :projects="projects"
+        :loading="fetching"
+        @start="handleFetchStart"
+      />
 
       <el-divider />
 
@@ -185,8 +172,10 @@ import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { elementAPI } from '@/api/element'
 import { projectAPI } from '@/api/project'
+import FetchDialog from '@/components/element/FetchDialog.vue'
 
 const fetching = ref(false)
+const fetchDialogVisible = ref(false)
 const importing = ref(false)
 const elements = ref([])
 const selectedElementIds = ref([])
@@ -202,8 +191,18 @@ const fetchForm = ref({
   project_id: '',
   url: '',
   username: '',
-  password: ''
+  password: '',
+  text_filter: '',
+  type_filter: '',
+  debug_mode: false
 })
+
+// 弹窗 @start：写入表单并执行现有抓取流程
+const handleFetchStart = (params) => {
+  fetchForm.value = { ...fetchForm.value, ...params }
+  fetchDialogVisible.value = false
+  handleFetch()
+}
 
 const importForm = ref({
   pageMode: 'new',
@@ -425,7 +424,7 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 
-.fetch-form {
+.fetch-entry {
   margin-bottom: 20px;
 }
 

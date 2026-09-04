@@ -15,6 +15,16 @@ export const elementAPI = {
   },
 
   /**
+   * 获取项目登录态配置状态
+   * @param {string} projectId
+   * @returns {Promise<Object>} { status, cookie_count, localStorage_count }
+   */
+  async loginState(projectId) {
+    const response = await axios.get(`/elements/login-state?project_id=${projectId}`)
+    return response.data
+  },
+
+  /**
    * 批量导入元素到库
    * @param {Object} data - { project_id, page_id?, page_name?, page_url?, screenshot_url?, selected_element_ids, elements_data }
    * @returns {Promise<Object>} { page_id, page_name, imported_count, failed_count }
