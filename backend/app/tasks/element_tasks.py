@@ -36,6 +36,20 @@ logger = logging.getLogger(__name__)
 MIN_LOCATOR_SCORE = 60
 
 
+def _apply_filters(elements: list, text_filter: str, type_filter: str, debug_mode: bool) -> list:
+    """扫描后过滤: debug_mode 直通; text_filter 任一词是 element_text 子串保留; type_filter 白名单."""
+    if debug_mode:
+        return elements
+    out = elements
+    if text_filter:
+        words = [w.strip() for w in text_filter.split(",") if w.strip()]
+        out = [e for e in out if e.get("element_text") and any(w in e["element_text"] for w in words)]
+    if type_filter:
+        types = {t.strip() for t in type_filter.split(",") if t.strip()}
+        out = [e for e in out if e.get("element_type") in types]
+    return out
+
+
 @celery_app.task(bind=True, name="fetch_elements_task")
 def fetch_elements_task(
     self,
@@ -44,6 +58,9 @@ def fetch_elements_task(
     url: str,
     username: Optional[str] = None,
     password: Optional[str] = None,
+    text_filter: Optional[str] = "",
+    type_filter: Optional[str] = "",
+    debug_mode: bool = False,
 ):
     """
     异步抓取元素任务（带 SSE 直播）
@@ -59,7 +76,8 @@ def fetch_elements_task(
         抓取结果字典 {session_id, url, screenshot_url, elements, total_count, duration_seconds}
     """
     return asyncio.run(_fetch_elements_async(
-        session_id, project_id, url, username, password
+        session_id, project_id, url, username, password,
+        text_filter, type_filter, debug_mode
     ))
 
 
@@ -69,6 +87,9 @@ async def _fetch_elements_async(
     url: str,
     username: Optional[str],
     password: Optional[str],
+    text_filter: Optional[str] = "",
+    type_filter: Optional[str] = "",
+    debug_mode: bool = False,
 ):
     """实际的异步抓取逻辑"""
     sse = SSEStream(session_id)
@@ -114,6 +135,7 @@ async def _fetch_elements_async(
             progress=0.35,
         )
         raw_elements = await scan_interactive_elements(page)
+        raw_elements = _apply_filters(raw_elements, text_filter, type_filter, debug_mode)
 
         await sse.send_message(
             type="system", stage="scan",

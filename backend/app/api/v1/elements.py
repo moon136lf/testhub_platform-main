@@ -87,6 +87,9 @@ async def fetch_elements(
         url=request.url,
         username=request.username,
         password=request.password,
+        text_filter=request.text_filter,
+        type_filter=request.type_filter,
+        debug_mode=request.debug_mode,
     )
 
     return ElementFetchResponse(

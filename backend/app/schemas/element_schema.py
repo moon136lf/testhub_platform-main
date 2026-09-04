@@ -72,6 +72,9 @@ class ElementFetchRequest(BaseModel):
     url: str = Field(..., description="目标 URL")
     username: Optional[str] = Field(None, description="登录用户名（可选）")
     password: Optional[str] = Field(None, description="登录密码（可选）")
+    text_filter: Optional[str] = Field(None, description="文本过滤，逗号分隔，任一词命中 element_text 保留")
+    type_filter: Optional[str] = Field(None, description="类型过滤，逗号分隔白名单，如 button,input")
+    debug_mode: bool = Field(False, description="调试模式：不过滤，返回全部元素")
 
 
 class ElementFetchResponse(BaseModel):

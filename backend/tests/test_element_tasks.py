@@ -251,3 +251,25 @@ class TestFetchElementsAsync:
         filename = upload_args[0][1]
         assert filename.startswith(f"screenshots/{project_id}/")
         assert filename.endswith(".png")
+
+
+class TestFetchFilters:
+    def test_text_filter_keeps_matching(self):
+        """text_filter 逗号分隔, 任一词是 element_text 子串则保留."""
+        from app.tasks.element_tasks import _apply_filters
+        elems = [{"element_text": "新增设备"}, {"element_text": "删除"}, {"element_text": "搜索"}]
+        out = _apply_filters(elems, text_filter="+,删除", type_filter="", debug_mode=False)
+        assert len(out) == 1 and out[0]["element_text"] == "删除"
+
+    def test_type_filter(self):
+        from app.tasks.element_tasks import _apply_filters
+        elems = [{"element_type": "button", "element_text": "a"},
+                 {"element_type": "input", "element_text": "b"}]
+        out = _apply_filters(elems, text_filter="", type_filter="button", debug_mode=False)
+        assert len(out) == 1 and out[0]["element_type"] == "button"
+
+    def test_debug_mode_bypasses_filters(self):
+        from app.tasks.element_tasks import _apply_filters
+        elems = [{"element_type": "span", "element_text": "x"}]
+        out = _apply_filters(elems, text_filter="不存在", type_filter="button", debug_mode=True)
+        assert len(out) == 1
