@@ -10,32 +10,149 @@
 
     <el-card shadow="never">
 
-      <!-- 抓取入口 -->
-      <div class="fetch-entry">
-        <el-button type="primary" :icon="Search" :loading="fetching" @click="fetchDialogVisible = true">
-          一次性抓取
-        </el-button>
+      <!-- 抓取模式 tab（对齐原型：一次性 / 会话式） -->
+      <el-tabs v-model="activeTab" class="fetch-tabs">
+        <el-tab-pane label="一次性抓取" name="oneshot" />
+        <el-tab-pane label="会话式抓取" name="session" />
+      </el-tabs>
+
+      <!-- 一次性抓取 tab 内容 -->
+      <div v-show="activeTab === 'oneshot'">
+        <div class="fetch-entry">
+          <el-button type="primary" :icon="Search" :loading="fetching" @click="openOneShotDialog">
+            抓取元素
+          </el-button>
+        </div>
+
+        <FetchDialog
+          v-model="fetchDialogVisible"
+          :projects="projects"
+          :loading="fetching"
+          @start="handleFetchStart"
+        />
+
+        <!-- 一次性抓取直播 + 结果区（原有内容整体保留在该 tab 内） -->
+        <div v-if="liveMessages.length > 0" class="live-feed">
+          <el-alert title="抓取进度直播" type="info" :closable="false" style="margin-bottom: 10px">
+            <div v-for="(msg, index) in liveMessages" :key="index" class="live-message" :class="{ 'is-error': msg.type === 'error' }">
+              <span class="live-time">{{ msg.timestamp }}</span>
+              <el-tag :type="msgTypeTag(msg.type)" size="small" effect="plain">{{ msg.type }}</el-tag>
+              <span class="live-text">{{ msg.content }}</span>
+            </div>
+          </el-alert>
+          <el-progress
+            :percentage="Math.round(progress * 100)"
+            :status="progress >= 1 ? 'success' : undefined"
+          />
+        </div>
+
+        <div v-if="elements.length > 0" class="elements-result">
+          <el-alert title="抓取结果" type="success" :closable="false" style="margin-bottom: 20px">
+            共识别 {{ elements.length }} 个有效元素（{{ filterDescription }}），已勾选 {{ selectedElementIds.length }} 个
+          </el-alert>
+
+          <el-row :gutter="20">
+            <el-col :span="16">
+              <el-card>
+                <template #header><span>页面截图</span></template>
+                <div class="screenshot-container">
+                  <ElementHighlight
+                    v-if="screenshotUrl"
+                    :screenshot-url="screenshotUrl"
+                    :elements="elements"
+                    :selected-ids="selectedElementIds"
+                    :hover-id="hoverId"
+                    @pick="togglePick"
+                    @card-hover="hoverId = $event || ''"
+                  />
+                  <div v-else class="no-screenshot">暂无截图</div>
+                </div>
+              </el-card>
+            </el-col>
+
+            <el-col :span="8">
+              <el-card>
+                <template #header>
+                  <span>元素列表（含定位策略）</span>
+                </template>
+                <div class="element-list">
+                  <div class="element-list-toolbar">
+                    <el-checkbox v-model="selectAll" @change="handleSelectAll">全选</el-checkbox>
+                  </div>
+                  <el-checkbox-group v-model="selectedElementIds">
+                    <div
+                      v-for="element in elements"
+                      :key="element.temp_id"
+                      class="element-item"
+                      :data-eid="element.temp_id"
+                      @mouseenter="hoverId = element.temp_id"
+                      @mouseleave="hoverId = ''"
+                    >
+                      <el-checkbox :label="element.temp_id">
+                        <div class="element-info">
+                          <el-tag :type="getElementTypeColor(element.element_type)" size="small">
+                            {{ element.element_type }}
+                          </el-tag>
+                          <span class="element-text">{{ element.element_text || element.temp_id }}</span>
+                          <el-tooltip :content="formatStrategies(element.locator_strategies)" placement="top">
+                            <el-tag size="small" type="info" effect="plain">
+                              {{ strategyCount(element.locator_strategies) }} 策略
+                            </el-tag>
+                          </el-tooltip>
+                        </div>
+                      </el-checkbox>
+                    </div>
+                  </el-checkbox-group>
+                  <div class="element-list-footer">
+                    <el-button type="primary" :disabled="selectedElementIds.length === 0" @click="showImportDialog">
+                      一键入库 ({{ selectedElementIds.length }})
+                    </el-button>
+                  </div>
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </div>
+
+        <el-empty v-if="elements.length === 0 && liveMessages.length === 0" description="请先抓取页面元素" />
       </div>
 
-      <!-- 从 URL 抓取弹窗 -->
-      <FetchDialog
-        v-model="fetchDialogVisible"
-        :projects="projects"
-        :loading="fetching"
-        :session-mode="sessionMode"
-        @start="handleFetchStart"
-      />
+      <!-- 会话式抓取 tab 内容 -->
+      <div v-show="activeTab === 'session'">
+        <div class="fetch-entry" style="margin-bottom: 12px">
+          <el-button type="primary" :icon="Search" :loading="fetching" @click="handleSessionFetchClick">
+            {{ captureSessionId ? '抓取下一页（加入当前会话）' : '开始会话式抓取' }}
+          </el-button>
+          <span v-if="captureSessionId" class="session-hint">
+            会话进行中，每抓取一页元素都会累积到下方工作台，最后统一勾选入库
+          </span>
+        </div>
 
-      <!-- P3 会话式抓取工作台 -->
-      <CaptureWorkbench
-        v-show="workbenchVisible"
-        ref="workbenchRef"
-        :session-id="captureSessionId"
-        @imported="handleCaptureImported"
-        @discarded="handleCaptureDiscarded"
-      />
+        <!-- 会话式抓取直播 -->
+        <div v-if="liveMessages.length > 0 && fetching" class="live-feed">
+          <el-alert title="抓取进度直播" type="info" :closable="false" style="margin-bottom: 10px">
+            <div v-for="(msg, index) in liveMessages" :key="index" class="live-message" :class="{ 'is-error': msg.type === 'error' }">
+              <span class="live-time">{{ msg.timestamp }}</span>
+              <el-tag :type="msgTypeTag(msg.type)" size="small" effect="plain">{{ msg.type }}</el-tag>
+              <span class="live-text">{{ msg.content }}</span>
+            </div>
+          </el-alert>
+          <el-progress :percentage="Math.round(progress * 100)" />
+        </div>
 
-      <el-divider />
+        <!-- P3 会话式抓取工作台 -->
+        <CaptureWorkbench
+          v-if="captureSessionId"
+          ref="workbenchRef"
+          :session-id="captureSessionId"
+          :projects="projects"
+          @imported="handleCaptureImported"
+          @discarded="handleCaptureDiscarded"
+        />
+        <el-empty v-else description="尚未开始会话，点击上方按钮开始（可连续抓取多页后统一入库）" />
+      </div>
+
+      <el-divider style="display: none" />
 
       <!-- 文字直播区 + 进度条 -->
       <div v-if="liveMessages.length > 0" class="live-feed">
@@ -239,16 +356,24 @@ const fetchForm = ref({
 })
 
 // ---- P3 会话式抓取 ----
-const sessionMode = ref(true)          // FetchDialog 走会话模式
+const activeTab = ref('oneshot')
 const captureSessionId = ref('')
 const workbenchRef = ref(null)
-const workbenchVisible = computed(() => !!captureSessionId.value)
+
+const openOneShotDialog = () => {
+  fetchDialogVisible.value = true
+}
+
+// 会话式：点按钮 -> 用当前项目创建/复用会话 -> 弹 URL 输入（复用 FetchDialog 但走会话分支）
+const handleSessionFetchClick = () => {
+  fetchDialogVisible.value = true
+}
 
 const handleFetchStart = async (params) => {
   fetchForm.value = { ...fetchForm.value, ...params }
   fetchDialogVisible.value = false
 
-  if (sessionMode.value) {
+  if (activeTab.value === 'session') {
     // 会话式：创建/复用会话 -> 抓取 -> 结果进会话（不直接入库往返）
     try {
       if (!captureSessionId.value) {
@@ -261,7 +386,7 @@ const handleFetchStart = async (params) => {
     }
     return
   }
-  // 旧路径：一次性抓取
+  // 一次性抓取（旧路径）
   handleFetch()
 }
 
