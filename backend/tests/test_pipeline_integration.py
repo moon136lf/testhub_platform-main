@@ -17,10 +17,10 @@ class FakeElementService:
 class TestElementLocatorLookup:
     def test_adapter_returns_locator_string(self):
         fake = FakeElementService({"用户名": type("El", (), {
-            "locator_strategies": [{"type": "label", "value": "用户名"}]})()})
+            "locator_strategies": [{"type": "text", "value": "用户名", "score": 80}]})()})
         lookup = ElementLocatorLookup(fake)
         result = asyncio.run(step3_match_locators(
             [ActionIntent(step=1, action="fill", target="用户名", value="admin")],
             "p1", lookup, ai_optimize=False, gateway=None))
-        assert result[0].locator == 'page.get_by_label("用户名")'
+        assert result[0].locator == 'page.get_by_text("用户名")'
         assert result[0].locator_status == "matched"
