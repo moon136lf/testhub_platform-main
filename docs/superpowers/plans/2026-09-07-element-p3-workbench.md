@@ -18,7 +18,7 @@
 - Create: `backend/app/services/browser_session_manager.py`
 - Test: `backend/tests/test_browser_session_manager.py`
 
-- [ ] Step 1: 失败测试（mock PlaywrightService）
+- [x] Step 1: 失败测试（mock PlaywrightService）
 
 ```python
 """BrowserSessionManager tests — 进程内会话浏览器池."""
@@ -93,9 +93,9 @@ async def test_close_session(mock_pw):
     assert sid not in mgr.sessions
 ```
 
-- [ ] Step 2: 确认失败
+- [x] Step 2: 确认失败
 
-- [ ] Step 3: 实现 `BrowserSessionManager`
+- [x] Step 3: 实现 `BrowserSessionManager`
 
 ```python
 """进程内会话浏览器池（P3 会话式抓取）.
@@ -203,7 +203,7 @@ class BrowserSessionManager:
                 await self.release(sid)
 ```
 
-- [ ] Step 4: 测试绿 → Commit `feat(elements): BrowserSessionManager — in-process session browser pool (#elem-p3w T1)`
+- [x] Step 4: 测试绿 → Commit `feat(elements): BrowserSessionManager — in-process session browser pool (#elem-p3w T1)`
 
 ---
 
@@ -214,7 +214,7 @@ class BrowserSessionManager:
 - Modify: `backend/app/main.py`（lifespan 挂 manager 单例 + reap 后台任务）
 - Test: `backend/tests/test_api_capture_session.py`（新建）
 
-- [ ] Step 1: 失败测试（参照 test_api_elements.py 的 TestClient + override 风格，patch `app.api.v1.elements.browser_mgr`）
+- [x] Step 1: 失败测试（参照 test_api_elements.py 的 TestClient + override 风格，patch `app.api.v1.elements.browser_mgr`）
 
 覆盖：
 1. `POST /capture/browser/open` `{project_id, url, need_login}` → 200 `{session_id, state}`；need_login 时 state="awaiting_login"，否则 "ready"
@@ -224,7 +224,7 @@ class BrowserSessionManager:
 5. `POST /capture/browser/{sid}/release` → 释放浏览器保留会话
 6. `POST /capture/browser/{sid}/close` → 关闭整个会话
 
-- [ ] Step 2: 确认失败 → 实现
+- [x] Step 2: 确认失败 → 实现
 
 要点：
 - `elements.py` 顶部 `from app.services.browser_session_manager import BrowserSessionManager; browser_mgr = BrowserSessionManager()`（模块级单例）
@@ -243,8 +243,8 @@ el = await page.evaluate(
 - main.py lifespan：`app.state.browser_mgr = browser_mgr`；`asyncio.create_task` 周期 reap（60s 间隔，shutdown 时 cancel）
 - need_login 流程 v1 简化：state="awaiting_login" 时前端展示「请在浏览器中完成登录，然后点 [登录完成]」按钮 → 调 status 确认 URL 离开登录页 → state→ready（轻量校验按 spec：URL 含 login/signin/auth 判未过）
 
-- [ ] Step 3: 测试绿 + 既有全量不回归
-- [ ] Step 4: Commit `feat(elements): session browser endpoints — open/status/capture/pick/release (#elem-p3w T2)`
+- [x] Step 3: 测试绿 + 既有全量不回归
+- [x] Step 4: Commit `feat(elements): session browser endpoints — open/status/capture/pick/release (#elem-p3w T2)`
 
 ---
 
@@ -255,7 +255,7 @@ el = await page.evaluate(
 - Modify: `frontend/src/api/element.js`（+5 方法）
 - Modify: `frontend/src/views/ElementLibrary.vue`（会话 tab 流程串联）
 
-- [ ] Step 1: element.js 新增
+- [x] Step 1: element.js 新增
 
 ```js
 async openBrowserSession(data) {   // {project_id, url, need_login}
@@ -280,7 +280,7 @@ async releaseBrowser(sessionId) {
 },
 ```
 
-- [ ] Step 2: CaptureWorkbench 重写为状态机视图
+- [x] Step 2: CaptureWorkbench 重写为状态机视图
 
 ```
 state: idle → awaiting_login → ready → capturing(短暂) → ready
@@ -293,9 +293,9 @@ state: idle → awaiting_login → ready → capturing(短暂) → ready
 │        + [释放页面]（关浏览器保留数据，可再 open）+ [入库]（沿用现有入库表单，独立每次入库）
 ```
 
-- [ ] Step 3: ElementLibrary.vue 会话 tab 串联（原 handleSessionFetchClick 改调 workbench.open 流程；工作台 imported 事件后刷新列表）
-- [ ] Step 4: vite build 绿
-- [ ] Step 5: Commit `feat(elements): workbench main loop — headed login/keep-alive/pick-补抓 (#elem-p3w T3)`
+- [x] Step 3: ElementLibrary.vue 会话 tab 串联（原 handleSessionFetchClick 改调 workbench.open 流程；工作台 imported 事件后刷新列表）
+- [x] Step 4: vite build 绿
+- [x] Step 5: Commit `feat(elements): workbench main loop — headed login/keep-alive/pick-补抓 (#elem-p3w T3)`
 
 ---
 
@@ -308,25 +308,25 @@ state: idle → awaiting_login → ready → capturing(短暂) → ready
 - Modify: `frontend/src/components/element/FetchDialog.vue` / CaptureWorkbench 入库表单（父页面下拉）
 - Modify: `frontend/src/views/ElementLibrary.vue`（页面树 el-tree + 已入库元素列表区：近7日筛选 + 刷新）
 
-- [ ] Step 1: 迁移 SQL（幂等）
+- [x] Step 1: 迁移 SQL（幂等）
 ```sql
 ALTER TABLE page_repository ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES page_repository(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_page_repository_parent ON page_repository(parent_id);
 ```
-- [ ] Step 2: 别名默认中文：入库时 element_name 生成逻辑——优先级：用户填 > aria_label > placeholder > element_text > `{类型中文}{序号}`（类型中文映射：button→按钮/input→输入框/link→链接/select→下拉框/span→文本/other→元素）。在 batch_import_elements 内实现（element_service.py）
-- [ ] Step 3: 页面树：`GET /pages` 返回加 children 结构（或前端按 parent_id 组树）；入库弹窗父页面下拉（el-tree-select 或级联）
-- [ ] Step 4: 已入库元素列表区（元素库首页新卡片）：`GET /pages/{id}/elements` 已有；近7日筛选（created_at >= now-7d 参数）+ 刷新按钮；左页面树点击切换
-- [ ] Step 5: 测试（迁移 SQL 幂等跑一次验证 + 别名生成测试 + 树组装测试）→ 全量绿
-- [ ] Step 6: Commit `feat(elements): page hierarchy + chinese alias defaults + elements list area (#elem-p3w T4)`
+- [x] Step 2: 别名默认中文：入库时 element_name 生成逻辑——优先级：用户填 > aria_label > placeholder > element_text > `{类型中文}{序号}`（类型中文映射：button→按钮/input→输入框/link→链接/select→下拉框/span→文本/other→元素）。在 batch_import_elements 内实现（element_service.py）
+- [x] Step 3: 页面树：`GET /pages` 返回加 children 结构（或前端按 parent_id 组树）；入库弹窗父页面下拉（el-tree-select 或级联）
+- [x] Step 4: 已入库元素列表区（元素库首页新卡片）：`GET /pages/{id}/elements` 已有；近7日筛选（created_at >= now-7d 参数）+ 刷新按钮；左页面树点击切换
+- [x] Step 5: 测试（迁移 SQL 幂等跑一次验证 + 别名生成测试 + 树组装测试）→ 全量绿
+- [x] Step 6: Commit `feat(elements): page hierarchy + chinese alias defaults + elements list area (#elem-p3w T4)`
 
 ---
 
 ### Task 5: 端到端验证 + 收尾
 
-- [ ] Step 1: 全量后端测试 + vite build
-- [ ] Step 2: 真实流程验证（controller 协助用户）：抓 localhost:3000 需登录开关关 → 抓取 → 勾选入库 → 别名中文 → 页面树层级 → 点选补抓一个漏掉元素 → 释放页面 → 再开抓第二页
-- [ ] Step 3: 验收 checklist 对照需求 9 点逐条勾
-- [ ] Step 4: Commit（如有 fixup）+ 更新快照
+- [x] Step 1: 全量后端测试 + vite build
+- [x] Step 2: 真实流程验证（controller 协助用户）：抓 localhost:3000 需登录开关关 → 抓取 → 勾选入库 → 别名中文 → 页面树层级 → 点选补抓一个漏掉元素 → 释放页面 → 再开抓第二页
+- [x] Step 3: 验收 checklist 对照需求 9 点逐条勾
+- [x] Step 4: Commit（如有 fixup）+ 更新快照
 
 ---
 
