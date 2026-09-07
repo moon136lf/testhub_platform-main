@@ -320,3 +320,65 @@ async def scan_interactive_elements(page, include_text: bool = False) -> List[An
         await scan_selectors(TEXT_SELECTORS, require_text=True)
 
     return elements
+
+
+# elementFromPoint 命中后打标记，用专用属性选择器拿 Locator（避免元素句柄跨传输）
+_PICK_MARKER_JS = """
+([x, y]) => {
+  const e = document.elementFromPoint(x, y);
+  if (!e) return null;
+  e.setAttribute('data-pick-hit', '1');
+  return {tag: e.tagName.toLowerCase(), text: (e.innerText || '').slice(0, 100)};
+}
+"""
+
+PICK_HIT_SELECTOR = "[data-pick-hit='1']"
+
+
+async def _pick_element_via_dom(page, x: float, y: float) -> Optional[Dict[str, Any]]:
+    """
+    点选补抓：按坐标 elementFromPoint 命中元素 → 生成并验证定位器 → 提取语义。
+
+    Returns:
+        与 element_tasks 阶段5 产物同构的元素 dict；未命中返回 None。
+    """
+    from app.tasks.element_tasks import MIN_LOCATOR_SCORE
+    import uuid as _uuid
+
+    hit = await page.evaluate(_PICK_MARKER_JS, [x, y])
+    if not hit:
+        return None
+
+    try:
+        locator = page.locator(PICK_HIT_SELECTOR).first
+        try:
+            candidates = await generate_locators_for_element(page, locator)
+            verified_locators = []
+            for candidate in candidates:
+                verified = await verify_and_score_locator(page, candidate, locator)
+                if verified and verified["score"] >= MIN_LOCATOR_SCORE:
+                    verified_locators.append(verified)
+            semantic = await extract_semantic_info(page, locator)
+        finally:
+            # 无论成败都移除标记，避免污染后续扫描
+            await page.evaluate(
+                "el => el.removeAttribute('data-pick-hit')",
+                locator,
+            )
+    except Exception as e:
+        logger.debug(f"pick-element pipeline failed at ({x}, {y}): {e}")
+        return None
+
+    verified_locators.sort(key=lambda c: c["score"], reverse=True)
+    return {
+        "temp_id": f"elem_pick_{_uuid.uuid4().hex[:8]}",
+        "element_type": semantic["type"],
+        "element_text": semantic["text"],
+        "locator_strategies": {"strategies": verified_locators},
+        "semantic_info": semantic,
+        "position_x": semantic["coords"]["x"],
+        "position_y": semantic["coords"]["y"],
+        "width": semantic["coords"]["width"],
+        "height": semantic["coords"]["height"],
+        "attributes": {"pick_tag": hit.get("tag")} or None,
+    }

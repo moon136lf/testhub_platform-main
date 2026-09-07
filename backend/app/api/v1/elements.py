@@ -51,12 +51,28 @@ from app.schemas.element_schema import (
     CaptureImportResponse,
 )
 from app.services.capture_session_service import CaptureSessionService
+from app.services.browser_session_manager import BrowserSessionManager
 from app.tasks.element_tasks import fetch_elements_task
 from app.services.element_service import ElementService
 from app.services.change_detection_service import ChangeDetectionService
 from app.models.element import PageRepository, ElementRepository, FetchHistory, ChangeDetection
+from app.schemas.element_schema import (
+    BrowserOpenRequest,
+    BrowserPickRequest,
+)
+from app.services.playwright_locator_core import (
+    scan_interactive_elements,
+    generate_locators_for_element,
+    verify_and_score_locator,
+    extract_semantic_info,
+    _pick_element_via_dom,
+)
+from app.tasks.element_tasks import MIN_LOCATOR_SCORE
 
 router = APIRouter()
+
+# P3.5 会话浏览器管理器（模块级单例；lifespan 挂 app.state 复用同一实例）
+browser_mgr = BrowserSessionManager()
 
 
 @router.get("/screenshot")
@@ -559,3 +575,167 @@ async def import_from_capture_session(
         failed_count=0,
         session_total=0,
     )
+
+
+# ---------------- P3.5 会话浏览器（headed 人工登录 + 点选补抓） ----------------
+
+_LOGIN_URL_HINTS = ("login", "signin", "sign-in", "auth", "sso")
+
+
+@router.post("/capture/browser/open")
+async def open_browser_session(request: BrowserOpenRequest):
+    """打开（或复用）会话浏览器并导航到 url。need_login=True 时 headed 模式人工登录。"""
+    try:
+        uuid.UUID(request.project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    headless = not request.need_login
+    sid = await browser_mgr.open(
+        request.project_id, request.url, headless=headless,
+        need_login=request.need_login,
+    )
+    state = "awaiting_login" if request.need_login else "ready"
+    return {"code": 0, "data": {"session_id": sid, "state": state}}
+
+
+def _browser_sess_or_404(sid: str):
+    sess = browser_mgr.get_session(sid)
+    if sess is None:
+        raise HTTPException(status_code=404, detail="Browser session not found")
+    return sess
+
+
+@router.get("/capture/browser/{sid}/status")
+async def browser_session_status(sid: str):
+    """会话状态 + 实时截图（base64）。awaiting_login 时按 URL 轻校验是否已离开登录页。"""
+    sess = _browser_sess_or_404(sid)
+    if sess.page is None:
+        return {"code": 0, "data": {"state": "released", "url": None,
+                                    "title": None, "screenshot_b64": None}}
+    state = getattr(sess, "state", None) or "ready"
+    url = sess.page.url
+    if state == "awaiting_login":
+        # 轻校验：URL 不含登录关键字视为登录完成
+        if not any(h in (url or "").lower() for h in _LOGIN_URL_HINTS):
+            state = "ready"
+            sess.state = "ready"
+    title = await sess.page.title()
+    import base64
+    screenshot_b64 = base64.b64encode(await sess.page.screenshot()).decode()
+    return {"code": 0, "data": {"state": state, "url": url,
+                                "title": title, "screenshot_b64": screenshot_b64}}
+
+
+async def _verify_elements(page, raw_elements) -> list:
+    """定位器生成 → 验证评分 → 语义提取（与 element_tasks 阶段5 同流水线）。"""
+    verified_elements = []
+    for idx, elem in enumerate(raw_elements):
+        candidates = await generate_locators_for_element(page, elem)
+        verified_locators = []
+        for candidate in candidates:
+            verified = await verify_and_score_locator(page, candidate, elem)
+            if verified and verified["score"] >= MIN_LOCATOR_SCORE:
+                verified_locators.append(verified)
+        if not verified_locators:
+            continue
+        semantic = await extract_semantic_info(page, elem)
+        attributes = {
+            "id": await elem.get_attribute("id"),
+            "class": await elem.get_attribute("class"),
+            "name": await elem.get_attribute("name"),
+            "type": await elem.get_attribute("type"),
+            "data-testid": await elem.get_attribute("data-testid"),
+        }
+        attributes = {k: v for k, v in attributes.items() if v} or None
+        verified_locators_sorted = sorted(
+            verified_locators, key=lambda x: x["score"], reverse=True
+        )
+        verified_elements.append({
+            "temp_id": f"elem_{idx}_{uuid.uuid4().hex[:8]}",
+            "element_type": semantic["type"],
+            "element_text": semantic["text"],
+            "locator_strategies": {"strategies": verified_locators_sorted},
+            "semantic_info": semantic,
+            "position_x": semantic["coords"]["x"],
+            "position_y": semantic["coords"]["y"],
+            "width": semantic["coords"]["width"],
+            "height": semantic["coords"]["height"],
+            "attributes": attributes,
+        })
+    return verified_elements
+
+
+@router.post("/capture/browser/{sid}/capture")
+async def capture_browser_page(sid: str):
+    """抓当前页元素 → 复用 P3 staging（CaptureSessionService）追加批次。"""
+    sess = _browser_sess_or_404(sid)
+    page = browser_mgr.get_page(sid)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Browser released — open session first")
+
+    raw_elements = await scan_interactive_elements(page, include_text=True)
+    elements = await _verify_elements(page, raw_elements)
+
+    # 截图上传 MinIO → 批次截图 URL
+    screenshot_url = ""
+    try:
+        png = await page.screenshot()
+        key = f"screenshots/{sess.project_id}/{uuid.uuid4().hex}.png"
+        from app.core.storage import storage_client
+        screenshot_url = await storage_client.upload_bytes(png, key)
+    except Exception:
+        screenshot_url = ""
+
+    # staging 会话懒创建（复用 P3 redis staging）
+    staging_id = getattr(sess, "staging_id", None)
+    if staging_id:
+        state = await CaptureSessionService.get(staging_id)
+        if state is None:
+            staging_id = None
+    if not staging_id:
+        created = await CaptureSessionService.create(sess.project_id)
+        staging_id = created["session_id"]
+        sess.staging_id = staging_id
+
+    result = await CaptureSessionService.add_batch(staging_id, page.url, screenshot_url, elements)
+    return {
+        "code": 0,
+        "data": {
+            "elements": elements,
+            "total_count": len(elements),
+            "batch_idx": result["batch_idx"],
+            "batch_count": result["batch_count"],
+            "staging_session_id": staging_id,
+        },
+    }
+
+
+@router.post("/capture/browser/{sid}/pick-element")
+async def pick_browser_element(sid: str, request: BrowserPickRequest):
+    """点选补抓：按坐标命中元素 → 定位卡片数据。"""
+    _browser_sess_or_404(sid)
+    page = browser_mgr.get_page(sid)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Browser released — open session first")
+
+    element = await _pick_element_via_dom(page, request.x, request.y)
+    if element is None:
+        raise HTTPException(status_code=404, detail="No element at the given point")
+    return {"code": 0, "data": {"element": element}}
+
+
+@router.post("/capture/browser/{sid}/release")
+async def release_browser_session(sid: str):
+    """释放页面：关浏览器保留会话数据（可再 open 复用）。"""
+    _browser_sess_or_404(sid)
+    await browser_mgr.release(sid)
+    return {"code": 0, "data": {"released": True, "state": "released"}}
+
+
+@router.post("/capture/browser/{sid}/close")
+async def close_browser_session(sid: str):
+    """关闭并删除整个会话。"""
+    _browser_sess_or_404(sid)
+    await browser_mgr.close_session(sid)
+    return {"code": 0, "data": {"closed": True}}

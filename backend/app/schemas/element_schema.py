@@ -277,3 +277,21 @@ class CaptureImportResponse(BaseModel):
     imported_count: int = Field(..., description="导入成功的元素数量")
     failed_count: int = Field(0, description="导入失败的元素数量")
     session_total: int = Field(0, description="会话剩余元素总数")
+
+
+# ---------------- P3.5 会话浏览器（headed 人工登录 + 点选补抓） ----------------
+
+
+class BrowserOpenRequest(BaseModel):
+    """打开会话浏览器（headed 人工登录或 headless 直接抓取）"""
+
+    project_id: str = Field(..., description="项目 ID")
+    url: str = Field(..., description="起始 URL")
+    need_login: bool = Field(False, description="是否需要人工登录（headed 模式）")
+
+
+class BrowserPickRequest(BaseModel):
+    """点选补抓坐标"""
+
+    x: float = Field(..., description="页面坐标 x")
+    y: float = Field(..., description="页面坐标 y")
