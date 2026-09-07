@@ -298,3 +298,25 @@ class BrowserPickRequest(BaseModel):
 
     x: float = Field(..., description="页面坐标 x")
     y: float = Field(..., description="页面坐标 y")
+
+
+# ---------------- 元素资产管理（阶段1） ----------------
+
+
+class ElementUpdateRequest(BaseModel):
+    """元素编辑（白名单字段在 service 校验）"""
+
+    element_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    element_type: Optional[str] = Field(None, max_length=50)
+    element_text: Optional[str] = Field(None, max_length=200)
+
+
+class LocatorReorderRequest(BaseModel):
+    index: int = Field(..., ge=0, description="被移动的定位器下标")
+    direction: str = Field(..., pattern="^(up|down)$")
+
+
+class LocatorAddRequest(BaseModel):
+    type: str = Field(..., max_length=30, description="id/css/data-testid/text/xpath/自定义")
+    value: str = Field(..., min_length=1, max_length=500)
+    score: int = Field(50, ge=0, le=150)

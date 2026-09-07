@@ -779,3 +779,95 @@ async def close_browser_session(sid: str):
     _browser_sess_or_404(sid)
     await browser_mgr.close_session(sid)
     return {"code": 0, "data": {"closed": True}}
+
+
+# ---- 元素资产管理（阶段1） ----
+from app.services.element_asset_service import ElementAssetService
+from app.schemas.element_schema import (
+    ElementUpdateRequest,
+    LocatorReorderRequest,
+    LocatorAddRequest,
+)
+
+
+def _element_uuid_or_400(element_id: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(element_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid element ID format")
+
+
+@router.put("/elements/{element_id}")
+async def update_element(element_id: str, request: ElementUpdateRequest,
+                         db: AsyncSession = Depends(get_db)):
+    """编辑元素（白名单字段）。"""
+    try:
+        el = await ElementAssetService(db).update_element(
+            element_id, request.model_dump(exclude_unset=True))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": el.to_dict()}
+
+
+@router.post("/elements/{element_id}/locators/reorder")
+async def reorder_locator(element_id: str, request: LocatorReorderRequest,
+                          db: AsyncSession = Depends(get_db)):
+    """定位器调序（上移/下移，score 跟随位置）。"""
+    try:
+        await ElementAssetService(db).reorder_locator(element_id, request.index, request.direction)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "reordered"}
+
+
+@router.post("/elements/{element_id}/locators")
+async def add_locator(element_id: str, request: LocatorAddRequest,
+                      db: AsyncSession = Depends(get_db)):
+    """新增自定义定位器（手工来源）。"""
+    try:
+        await ElementAssetService(db).add_locator(element_id, request.type, request.value, request.score)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "added"}
+
+
+@router.get("/elements/{element_id}/references")
+async def element_references(element_id: str, project_id: str = Query(...),
+                             db: AsyncSession = Depends(get_db)):
+    """元素引用计数 + 引用脚本清单（删除确认弹窗数据源）。"""
+    el = await db.get(ElementRepository, _element_uuid_or_400(element_id))
+    if not el:
+        raise HTTPException(status_code=404, detail="元素不存在")
+    svc = ElementAssetService(db)
+    name = el.element_name or ""
+    return {"code": 0, "data": {
+        "count": await svc.count_references(project_id, name),
+        "scripts": await svc.list_referring_scripts(project_id, name),
+    }}
+
+
+@router.post("/elements/{element_id}/recycle")
+async def recycle_element(element_id: str, db: AsyncSession = Depends(get_db)):
+    """软删进回收站（引用确认由前端先调 references 端点）。"""
+    try:
+        await ElementAssetService(db).recycle_element(element_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "recycled"}
+
+
+@router.post("/elements/{element_id}/restore")
+async def restore_element(element_id: str, db: AsyncSession = Depends(get_db)):
+    """从回收站恢复。"""
+    try:
+        await ElementAssetService(db).restore_element(element_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "restored"}
+
+
+@router.get("/recycle-bin")
+async def recycle_bin(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """回收站列表。"""
+    els = await ElementAssetService(db).list_recycled(project_id)
+    return {"code": 0, "data": [e.to_dict() for e in els]}

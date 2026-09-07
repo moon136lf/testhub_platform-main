@@ -1,7 +1,8 @@
-"""ElementAssetService 测试（mock db）—— 阶段1 引用计数部分"""
+"""ElementAssetService 测试（mock db）—— 阶段1 引用计数 + CRUD/调序/回收站"""
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 from uuid import uuid4
+from datetime import datetime as _dt
 
 from app.services.element_asset_service import ElementAssetService
 
@@ -102,3 +103,179 @@ class TestListReferringScripts:
         db.execute = _exec_return([])
         svc = ElementAssetService(db)
         assert await svc.list_referring_scripts("p1", "x") == []
+
+
+class TestElementCRUD:
+    @pytest.mark.asyncio
+    async def test_update_element_name(self):
+        db = _db()
+        el = MagicMock()
+        el.element_name = "旧名"
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.update_element(str(uuid4()), {"element_name": "新名"})
+        assert el.element_name == "新名"
+        db.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_update_rejects_unknown_field(self):
+        db = _db()
+        el = MagicMock()
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError):
+            await svc.update_element(str(uuid4()), {"hack_field": "x"})
+
+    @pytest.mark.asyncio
+    async def test_update_missing_element_raises(self):
+        db = _db()
+
+        async def _get(cls, eid):
+            return None
+        db.get = _get
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError, match="不存在"):
+            await svc.update_element(str(uuid4()), {"element_name": "x"})
+
+
+class TestReorder:
+    @pytest.mark.asyncio
+    async def test_reorder_down_swaps_and_rescores(self):
+        """调序 = 相邻交换，score 跟随位置重排（150-pos*10），排序即置信度"""
+        db = _db()
+        el = MagicMock()
+        el.locator_strategies = {"strategies": [
+            {"type": "id", "value": "#a", "score": 100, "unique": True, "verified": True},
+            {"type": "css", "value": ".b", "score": 80, "unique": True, "verified": True},
+        ]}
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.reorder_locator(str(uuid4()), 0, "down")
+        sts = el.locator_strategies["strategies"]
+        assert sts[0]["value"] == ".b"   # css 升到第一
+        assert sts[0]["score"] == 150    # score 跟随位置
+        assert sts[1]["value"] == "#a" and sts[1]["score"] == 140
+
+    @pytest.mark.asyncio
+    async def test_reorder_up(self):
+        db = _db()
+        el = MagicMock()
+        el.locator_strategies = {"strategies": [
+            {"type": "id", "value": "#a", "score": 150, "unique": True, "verified": True},
+            {"type": "css", "value": ".b", "score": 140, "unique": True, "verified": True},
+            {"type": "text", "value": "t", "score": 130, "unique": True, "verified": True},
+        ]}
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.reorder_locator(str(uuid4()), 2, "up")  # 最后一条上移
+        sts = el.locator_strategies["strategies"]
+        assert [s["value"] for s in sts] == ["#a", "t", ".b"]
+
+    @pytest.mark.asyncio
+    async def test_reorder_at_boundary_is_noop(self):
+        db = _db()
+        el = MagicMock()
+        el.locator_strategies = {"strategies": [
+            {"type": "id", "value": "#a", "score": 150, "unique": True, "verified": True},
+        ]}
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.reorder_locator(str(uuid4()), 0, "up")  # 已在最上，静默
+        assert el.locator_strategies["strategies"][0]["value"] == "#a"
+        db.commit.assert_not_awaited()
+
+
+class TestAddLocator:
+    @pytest.mark.asyncio
+    async def test_add_custom_locator(self):
+        db = _db()
+        el = MagicMock()
+        el.locator_strategies = {"strategies": []}
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.add_locator(str(uuid4()), "css", ".my-custom", score=50)
+        sts = el.locator_strategies["strategies"]
+        assert len(sts) == 1
+        assert sts[0]["value"] == ".my-custom"
+        assert sts[0]["source"] == "manual"
+        assert sts[0]["unique"] is False
+
+    @pytest.mark.asyncio
+    async def test_add_locator_empty_value_raises(self):
+        db = _db()
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError):
+            await svc.add_locator(str(uuid4()), "css", "  ")
+
+
+class TestRecycleBin:
+    @pytest.mark.asyncio
+    async def test_soft_delete_sets_recycled_at(self):
+        db = _db()
+        el = MagicMock()
+        el.status = "active"
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.recycle_element(str(uuid4()))
+        assert el.status == "deleted"
+        assert el.recycled_at is not None
+
+    @pytest.mark.asyncio
+    async def test_restore_from_recycle(self):
+        db = _db()
+        el = MagicMock()
+        el.status = "deleted"
+        el.recycled_at = _dt(2026, 9, 1)
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.restore_element(str(uuid4()))
+        assert el.status == "active"
+        assert el.recycled_at is None
+
+    @pytest.mark.asyncio
+    async def test_list_recycled_filters_project_and_deleted(self):
+        db = _db()
+        els = [MagicMock(), MagicMock()]
+        db.execute = _exec_return(els)
+
+        svc = ElementAssetService(db)
+        out = await svc.list_recycled("p1")
+        assert out == els
