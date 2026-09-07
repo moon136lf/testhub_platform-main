@@ -9,7 +9,7 @@
 
 ### 下次会话开工顺序
 1. **T10 真浏览器验收**（8 项清单见 handoff 第一节末；建议在 worktree 验收）
-2. **合并阶段1**：worktree-elem-assets-phase1 → master（16 commits），合并后跑全量测试
+2. **合并阶段1**：worktree-elem-assets-phase1 → master（17 commits 含进度文档），合并后跑全量测试
 3. **开工阶段2**（转脚本+测试集）：步骤化脚本编辑器（用户点名核心件，含 assert_db）→ 转脚本页改造 → test_set 模型 + UI自动化测试页 → 删回归页（隐藏代码）
 4. 阶段3（回归独立+菜单重组+登录态复用）照原方案
 
