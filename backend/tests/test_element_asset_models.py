@@ -25,3 +25,8 @@ class TestModelFields:
         d = el.to_dict()
         assert d["scope"] == "global"
         assert d["recycled_at"] == "2026-09-07T10:00:00"
+
+    def test_global_element_page_id_none_serialization(self):
+        el = ElementRepository(scope="global", page_id=None)
+        d = el.to_dict()
+        assert d["page_id"] is None

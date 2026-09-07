@@ -101,7 +101,7 @@ class ElementRepository(Base):
     def to_dict(self):
         return {
             "id": str(self.id),
-            "page_id": str(self.page_id),
+            "page_id": str(self.page_id) if self.page_id else None,
             "project_id": str(self.project_id),
             "element_id": self.element_id,
             "element_name": self.element_name,
