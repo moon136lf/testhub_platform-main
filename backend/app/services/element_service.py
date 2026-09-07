@@ -8,6 +8,7 @@ from sqlalchemy import func
 from app.models.element import PageRepository, ElementRepository
 from typing import List, Dict, Optional
 import uuid
+import re
 import logging
 
 logger = logging.getLogger(__name__)
@@ -333,9 +334,11 @@ class ElementLocatorLookup:
         if isinstance(strategies, dict):
             strategies = strategies.get("strategies", [])
         norm = normalize_strategies(strategies)
-        if not norm:
-            return None
-        return strategy_to_playwright(norm[0])
+        for s in norm:
+            loc = strategy_to_playwright(s)
+            if loc:
+                return loc
+        return None
 
 
 # ---- 定位器选择（阶段1 统一置信度方案）----
@@ -392,7 +395,6 @@ def strategy_to_playwright(s: dict) -> Optional[str]:
         return f'page.get_by_text("{v}")'
     if t == "role-text":
         # value 形如 "button[role='button']:has-text('提交')" → get_by_role(role, name=text)
-        import re
         m = re.match(r"^(\w+)\[role='([\w-]+)'\]:has-text\('(.+)'\)$", v)
         if m:
             return f'page.get_by_role("{m.group(2)}", name="{m.group(3)}")'

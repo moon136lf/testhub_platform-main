@@ -98,3 +98,45 @@ class TestToPlaywright:
     def test_unsupported_type_returns_none(self):
         assert strategy_to_playwright({"type": "label", "value": "x"}) is None
         assert strategy_to_playwright({"type": "css", "value": ""}) is None
+
+    def test_role_text_malformed_returns_none(self):
+        # 正则不匹配的畸形 role-text value
+        assert strategy_to_playwright({"type": "role-text", "value": "garbage[[["}) is None
+
+
+class TestFindFallback:
+    """ElementLocatorLookup.find 对转换失败策略的回退"""
+
+    def _fake_svc(self, el):
+        import asyncio
+        from unittest.mock import MagicMock
+        svc = MagicMock()
+        svc.find_by_name = MagicMock(side_effect=None)
+        async def _find(*a, **k):
+            return el
+        svc.find_by_name = _find
+        return svc
+
+    def test_falls_back_when_primary_unconvertible(self):
+        import asyncio
+        from unittest.mock import MagicMock
+        from app.services.element_service import ElementLocatorLookup
+
+        el = MagicMock()
+        el.locator_strategies = {"strategies": [
+            {"type": "label", "value": "用户名", "score": 100},
+            {"type": "css", "value": ".username-input", "score": 70},
+        ]}
+        lookup = ElementLocatorLookup(self._fake_svc(el))
+        result = asyncio.run(lookup.find("p1", "用户名"))
+        assert result == 'page.locator(".username-input")'
+
+    def test_returns_none_when_all_unconvertible(self):
+        import asyncio
+        from unittest.mock import MagicMock
+        from app.services.element_service import ElementLocatorLookup
+
+        el = MagicMock()
+        el.locator_strategies = [{"type": "label", "value": "x"}]
+        lookup = ElementLocatorLookup(self._fake_svc(el))
+        assert asyncio.run(lookup.find("p1", "x")) is None
