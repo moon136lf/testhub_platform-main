@@ -3,12 +3,24 @@
  headed 浏览器活在 FastAPI 进程内存（单 worker + 桌面会话前提），
  release() 只关浏览器保留会话数据，open() 二次调用复用会话（新浏览器导航到新 URL）。
  进程重启丢失（可接受，前端重开即可）。
+
+== 事件循环桥接（Windows 关键） ==
+uvicorn --reload 在 Windows 强制 SelectorEventLoop（asyncio_setup(use_subprocess=True)
+→ WindowsSelectorEventLoopPolicy），而 SelectorEventLoop **不支持子进程**——
+Playwright 的 async_playwright().start() 需要 create_subprocess_exec 启动 driver，
+在 Selector loop 上直接 NotImplementedError。
+
+解法：本模块自持一个**专用工作线程 + ProactorEventLoop**（Windows 子进程只有
+Proactor 支持），所有 Playwright 操作经 _bridge() 投递到该 loop 执行；
+宿主 loop（无论 Proactor 还是 Selector）只做 await 桥接，不碰子进程。
 """
 import uuid
 import time
 import logging
+import asyncio
+import threading
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Coroutine
 
 from app.services.playwright_service import PlaywrightService
 
@@ -32,8 +44,88 @@ class BrowserSession:
         self.last_active = time.time()
 
 
+class _ProactorBridge:
+    """专用后台线程 + ProactorEventLoop：承载所有 Playwright 子进程操作。
+
+    Windows 下 uvicorn --reload 宿主 loop 是 Selector（无子进程能力），
+    Proactor 只能在此专用线程创建。首次使用惰性启动；协程经
+    run_coroutine_threadsafe 投递，宿主侧 await 结果。
+    """
+
+    def __init__(self):
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: Optional[threading.Thread] = None
+        self._lock = threading.Lock()
+
+    def _ensure_loop(self):
+        with self._lock:
+            if self._loop is not None and self._loop.is_running():
+                return
+            ready = threading.Event()
+            self._loop = None
+
+            def _run():
+                loop = asyncio.ProactorEventLoop() if hasattr(
+                    asyncio, "ProactorEventLoop") else asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                self._loop = loop
+                ready.set()
+                loop.run_forever()
+
+            self._thread = threading.Thread(target=_run, daemon=True, name="pw-bridge")
+            self._thread.start()
+            ready.wait(timeout=10)
+            if self._loop is None:
+                raise RuntimeError("Failed to start Playwright bridge loop")
+
+    async def run(self, coro: Coroutine) -> Any:
+        """把协程投递到桥接 loop 并等待结果（宿主协程内 await）。"""
+        self._ensure_loop()
+        fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        # 宿主侧异步等待（不阻塞宿主 loop）
+        return await asyncio.wrap_future(fut)
+
+    def run_sync(self, fn, *args, **kwargs) -> Any:
+        """把同步函数投递到桥接 loop 执行（包一层协程），供 Mock/同步 API 使用。"""
+        return self.run(_async_call(fn, *args, **kwargs))
+
+    def shutdown(self):
+        with self._lock:
+            if self._loop is not None and self._loop.is_running():
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            if self._thread is not None:
+                self._thread.join(timeout=5)
+            self._loop = None
+            self._thread = None
+
+
+async def _async_call(fn, *args, **kwargs):
+    result = fn(*args, **kwargs)
+    # fn 可能返回协程（async 方法 mock）或普通值（同步方法）
+    if asyncio.iscoroutine(result):
+        return await result
+    return result
+
+
+def _call(fn, *args, **kwargs):
+    """包装同步/异步调用为协程，供 _bridge.run 投递。"""
+    async def _inner():
+        result = fn(*args, **kwargs)
+        if asyncio.iscoroutine(result):
+            return await result
+        return result
+    return _inner()
+
+
+_bridge = _ProactorBridge()
+
+
 class BrowserSessionManager:
-    """单例池（挂 app.state）；每 project 同时最多 1 个会话"""
+    """单例池（挂 app.state）；每 project 同时最多 1 个会话。
+
+    所有 Playwright 调用经 _bridge.run() 投递到专用 Proactor loop，
+    宿主 loop（Selector/Proactor 均可）零子进程依赖。
+    """
 
     def __init__(self):
         self.sessions: Dict[str, BrowserSession] = {}
@@ -54,16 +146,16 @@ class BrowserSessionManager:
         if sess.browser is None or sess.page is None or sess.browser.browser is None:
             if sess.browser is not None:
                 try:
-                    await sess.browser.close()
+                    await _bridge.run(sess.browser.close())
                 except Exception:
                     pass
             sess.browser = PlaywrightService()
-            await sess.browser.start(headless=headless)
-            ctx = await sess.browser.browser.new_context()
-            sess.page = await ctx.new_page()
-            sess.page.set_default_timeout(30000)
+            await _bridge.run(sess.browser.start(headless=headless))
+            ctx = await _bridge.run(sess.browser.browser.new_context())
+            sess.page = await _bridge.run(ctx.new_page())
+            await _bridge.run(_call(sess.page.set_default_timeout, 30000))
 
-        await sess.page.goto(url, wait_until="networkidle", timeout=60000)
+        await _bridge.run(sess.page.goto(url, wait_until="networkidle", timeout=60000))
         sess.touch()
         return sid
 
@@ -80,7 +172,7 @@ class BrowserSessionManager:
             return False
         if sess.browser:
             try:
-                await sess.browser.close()
+                await _bridge.run(sess.browser.close())
             except Exception:
                 pass
             sess.browser = None
@@ -94,7 +186,7 @@ class BrowserSessionManager:
             return False
         if sess.browser:
             try:
-                await sess.browser.close()
+                await _bridge.run(sess.browser.close())
             except Exception:
                 pass
         return True
