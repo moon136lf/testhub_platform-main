@@ -203,7 +203,28 @@ class TestReorder:
         db.commit = AsyncMock()
 
         svc = ElementAssetService(db)
-        await svc.reorder_locator(str(uuid4()), 0, "up")  # 已在最上，静默
+        db.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_reorder_index_out_of_range_noop(self):
+        """index 越界（schema 只约束 ge=0），up/down 都静默不 commit"""
+        db = _db()
+        el = MagicMock()
+        el.locator_strategies = {"strategies": [
+            {"type": "id", "value": "#a", "score": 150, "unique": True, "verified": True},
+        ]}
+
+        async def _get(cls, eid):
+            return el
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        for direction in ("up", "down"):
+            el.locator_strategies = {"strategies": [
+                {"type": "id", "value": "#a", "score": 150, "unique": True, "verified": True},
+            ]}
+            await svc.reorder_locator(str(uuid4()), 5, direction)
         assert el.locator_strategies["strategies"][0]["value"] == "#a"
         db.commit.assert_not_awaited()
 

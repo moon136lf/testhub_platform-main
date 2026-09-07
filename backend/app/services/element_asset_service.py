@@ -5,7 +5,7 @@
 性能路标：数据量大时可改用 PG JSONB path 查询（jsonb_path_exists），当前量级无需。"""
 import logging
 import uuid as _uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 from uuid import UUID
 
@@ -82,6 +82,8 @@ class ElementAssetService:
         if not el:
             raise ValueError("元素不存在")
         sts = (el.locator_strategies or {}).get("strategies", [])
+        if index < 0 or index >= len(sts):
+            return  # 越界（含空列表），静默
         j = index - 1 if direction == "up" else index + 1
         if j < 0 or j >= len(sts):
             return  # 已到边界，静默
@@ -114,7 +116,7 @@ class ElementAssetService:
         if not el:
             raise ValueError("元素不存在")
         el.status = "deleted"
-        el.recycled_at = datetime.utcnow()
+        el.recycled_at = datetime.now(timezone.utc)
         await self.db.commit()
 
     async def restore_element(self, element_id: str) -> None:
