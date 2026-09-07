@@ -114,17 +114,24 @@
           定位器（按置信度排序）
           <el-button size="small" text type="primary" :icon="Plus" @click="locatorDialogVisible = true">自定义定位器</el-button>
         </div>
-        <div v-for="(loc, idx) in sortedLocators" :key="idx" class="locator-row">
-          <span class="star" v-if="idx === 0">★</span>
+        <div class="section-title">
+          定位器（数组原序，↑↓ 调序后后端重算 score）
+          <el-button size="small" text type="primary" :icon="Plus" @click="locatorDialogVisible = true">自定义定位器</el-button>
+        </div>
+        <div v-if="primaryIndex >= 0" class="detail-text">
+          首选定位：<code class="locator-code">{{ drawerLocators[primaryIndex].type }}: {{ drawerLocators[primaryIndex].value }}</code>
+        </div>
+        <div v-for="(loc, idx) in drawerLocators" :key="idx" class="locator-row">
+          <span class="star" v-if="idx === primaryIndex">★</span>
           <code class="locator-code">{{ loc.type }}: {{ loc.value }}</code>
           <el-tag size="small" type="success">{{ loc.score }}</el-tag>
           <el-tag v-if="loc.source" size="small" type="info">{{ loc.source }}</el-tag>
           <span class="locator-ops">
             <el-button size="small" text :disabled="idx === 0" @click="reorder(idx, 'up')">↑</el-button>
-            <el-button size="small" text :disabled="idx === sortedLocators.length - 1" @click="reorder(idx, 'down')">↓</el-button>
+            <el-button size="small" text :disabled="idx === drawerLocators.length - 1" @click="reorder(idx, 'down')">↓</el-button>
           </span>
         </div>
-        <div v-if="!sortedLocators.length" class="tree-empty">暂无定位器</div>
+        <div v-if="!drawerLocators.length" class="tree-empty">暂无定位器</div>
 
         <div class="section-title">
           校验
@@ -295,9 +302,18 @@ const primaryLocator = (row) => {
   return locs[0] || null
 }
 
-const sortedLocators = computed(() =>
-  extractLocators(detailRow.value).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-)
+const drawerLocators = computed(() => extractLocators(detailRow.value))
+
+// 首选 = score 最高那条（按数组原序展示行，★ 可能不在第一行，用户调序后归位）
+const primaryIndex = computed(() => {
+  const locs = drawerLocators.value
+  if (!locs.length) return -1
+  let best = 0
+  locs.forEach((l, i) => {
+    if ((l.score ?? 0) > (locs[best].score ?? 0)) best = i
+  })
+  return best
+})
 
 const statusTag = (status) => {
   if (status === 'active' || status === 'verified') return 'success'
@@ -551,7 +567,7 @@ const submitLocator = async () => {
 
 const verifyPrimary = async () => {
   const el = detailRow.value
-  const loc = sortedLocators.value[0]
+  const loc = primaryLocator(el)
   if (!loc) {
     ElMessage.warning('该元素暂无定位器')
     return
