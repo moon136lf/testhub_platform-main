@@ -788,6 +788,7 @@ from app.schemas.element_schema import (
     ElementUpdateRequest,
     LocatorReorderRequest,
     LocatorAddRequest,
+    ElementAssetImportRequest,
 )
 
 
@@ -999,3 +1000,20 @@ async def verify_element_locator(element_id: str, request: LocatorVerifyRequest,
                 pass
         await pw.close()
     return {"code": 0, "data": result}
+
+
+@router.get("/elements-export")
+async def export_elements(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """导出项目全部 active 元素为 JSON（前端下载为文件）。"""
+    data = await ElementAssetService(db).export_elements(project_id)
+    return {"code": 0, "data": data}
+
+
+@router.post("/elements-import")
+async def import_elements_asset(request: ElementAssetImportRequest, db: AsyncSession = Depends(get_db)):
+    """导入元素 JSON（跨项目/环境复用）。返回成功导入数。"""
+    try:
+        n = await ElementAssetService(db).import_elements(request.project_id, request.payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": {"imported": n}}

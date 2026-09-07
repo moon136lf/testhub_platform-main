@@ -301,6 +301,42 @@ class ElementAssetService:
         )
         return result.scalars().all()
 
+    # ---------------- 导入导出（可移植 JSON，跨项目/环境复用） ----------------
+
+    async def export_elements(self, project_id: str) -> Dict:
+        """导出项目全部 active 元素为可移植 JSON（跨项目/环境复用）。"""
+        from app.models.element import ElementRepository
+        result = await self.db.execute(
+            select(ElementRepository).where(
+                ElementRepository.project_id == (_to_uuid(project_id) or project_id),
+                ElementRepository.status == "active")
+        )
+        els = result.scalars().all()
+        return {"version": 1, "exported_at": datetime.now(timezone.utc).isoformat(),
+                "elements": [e.to_dict() for e in els]}
+
+    async def import_elements(self, project_id: str, payload: Optional[Dict]) -> int:
+        """导入元素 JSON。逐条走 create_element（复用 scope/page 校验），坏行跳过计数。"""
+        n = 0
+        for item in ((payload or {}).get("elements") or []):
+            if not isinstance(item, dict) or not item.get("element_name"):
+                continue
+            try:
+                ls = item.get("locator_strategies") or {}
+                await self.create_element(
+                    project_id=project_id,
+                    name=item["element_name"],
+                    etype=item.get("element_type", "other"),
+                    text=item.get("element_text") or "",
+                    scope=item.get("scope", "page"),
+                    page_id=item.get("page_id"),
+                    locators=ls.get("strategies", []) if isinstance(ls, dict) else ls,
+                )
+                n += 1
+            except Exception as e:
+                logger.warning(f"import element skipped: {e}")
+        return n
+
 
 async def verify_locator_on_page(page, locator: Dict) -> Dict:
     """单条定位器在已登录页面上验证。返回 {hit_count, score, error}。

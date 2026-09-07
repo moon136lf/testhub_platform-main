@@ -588,6 +588,70 @@ class TestGlobalElements:
             await svc.list_elements("p1", page_id="not-a-uuid")
 
 
+class TestImportExport:
+    @pytest.mark.asyncio
+    async def test_export_shape(self):
+        db = _db()
+        el = MagicMock()
+        el.to_dict.return_value = {
+            "element_name": "登录按钮", "element_type": "button", "scope": "page",
+            "element_text": "登录", "locator_strategies": {"strategies": [
+                {"type": "id", "value": "#login", "score": 100}]},
+        }
+        db.execute = _exec_return([el])
+
+        svc = ElementAssetService(db)
+        data = await svc.export_elements("p1")
+        assert data["version"] == 1
+        assert "exported_at" in data
+        assert data["elements"][0]["element_name"] == "登录按钮"
+        assert "locator_strategies" in data["elements"][0]
+
+    @pytest.mark.asyncio
+    async def test_export_empty_project(self):
+        db = _db()
+        db.execute = _exec_return([])
+        svc = ElementAssetService(db)
+        data = await svc.export_elements("p1")
+        assert data["elements"] == []
+
+    @pytest.mark.asyncio
+    async def test_import_creates_elements(self):
+        db = _db()
+        svc = ElementAssetService(db)
+        svc.create_element = AsyncMock(return_value=MagicMock())
+        payload = {"version": 1, "elements": [
+            {"element_name": "x", "element_type": "button", "scope": "page",
+             "page_id": "11111111-1111-1111-1111-111111111111", "element_text": "",
+             "locator_strategies": {"strategies": []}}]}
+        n = await svc.import_elements("p1", payload)
+        assert n == 1
+        svc.create_element.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_import_skips_bad_rows(self):
+        """无名字的行跳过；单行异常不中断整体"""
+        db = _db()
+        svc = ElementAssetService(db)
+        svc.create_element = AsyncMock(side_effect=[MagicMock(), ValueError("页面级元素必须指定页面")])
+        payload = {"version": 1, "elements": [
+            {"element_type": "button"},  # 无名字 → 跳过（不调 create_element）
+            {"element_name": "ok", "element_type": "button", "scope": "page",
+             "page_id": "11111111-1111-1111-1111-111111111111"},
+            {"element_name": "bad", "element_type": "button", "scope": "page", "page_id": None},  # create 抛错 → 跳过
+        ]}
+        n = await svc.import_elements("p1", payload)
+        assert n == 1
+        assert svc.create_element.await_count == 2  # 无名字那行未调用
+
+    @pytest.mark.asyncio
+    async def test_import_empty_payload(self):
+        db = _db()
+        svc = ElementAssetService(db)
+        assert await svc.import_elements("p1", {}) == 0
+        assert await svc.import_elements("p1", None) == 0
+
+
 class TestGlobalLookup:
     @pytest.mark.asyncio
     async def test_find_by_name_finds_global(self):

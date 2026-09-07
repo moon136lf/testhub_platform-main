@@ -356,3 +356,10 @@ class LocatorVerifyRequest(BaseModel):
     locator_type: str = Field(..., max_length=30)
     locator_value: str = Field(..., min_length=1, max_length=500)
     score: Optional[int] = Field(None, ge=0, le=150)
+
+
+class ElementAssetImportRequest(BaseModel):
+    """元素资产导入请求（可移植 JSON）"""
+
+    project_id: str
+    payload: dict
