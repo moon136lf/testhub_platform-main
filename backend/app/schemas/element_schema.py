@@ -135,6 +135,8 @@ class PageResponse(BaseModel):
     page_name: str
     page_url: str
     screenshot_url: Optional[str] = None
+    parent_id: Optional[StrField] = None
+    children: Optional[List[Dict[str, Any]]] = None
     element_count: int
     last_fetch_at: Optional[StrField] = None
     created_at: StrField
