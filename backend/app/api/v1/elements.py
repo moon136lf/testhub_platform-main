@@ -51,7 +51,7 @@ from app.schemas.element_schema import (
     CaptureImportResponse,
 )
 from app.services.capture_session_service import CaptureSessionService
-from app.services.browser_session_manager import BrowserSessionManager
+from app.services.browser_session_manager import BrowserSessionManager, _bridge
 from app.tasks.element_tasks import fetch_elements_task
 from app.services.element_service import ElementService
 from app.services.change_detection_service import ChangeDetectionService
@@ -660,9 +660,9 @@ async def browser_session_status(sid: str):
         if not any(h in (url or "").lower() for h in _LOGIN_URL_HINTS):
             state = "ready"
             sess.state = "ready"
-    title = await sess.page.title()
     import base64
-    screenshot_b64 = base64.b64encode(await sess.page.screenshot()).decode()
+    title = await _bridge.run(sess.page.title())
+    screenshot_b64 = base64.b64encode(await _bridge.run(sess.page.screenshot())).decode()
     return {"code": 0, "data": {"state": state, "url": url,
                                 "title": title, "screenshot_b64": screenshot_b64}}
 
@@ -714,13 +714,14 @@ async def capture_browser_page(sid: str):
     if page is None:
         raise HTTPException(status_code=404, detail="Browser released — open session first")
 
-    raw_elements = await scan_interactive_elements(page, include_text=True)
-    elements = await _verify_elements(page, raw_elements)
+    # Playwright 对象绑定在 bridge loop（Proactor），所有调用须投递过去
+    raw_elements = await _bridge.run(scan_interactive_elements(page, include_text=True))
+    elements = await _bridge.run(_verify_elements(page, raw_elements))
 
     # 截图上传 MinIO → 批次截图 URL
     screenshot_url = ""
     try:
-        png = await page.screenshot()
+        png = await _bridge.run(page.screenshot())
         key = f"screenshots/{sess.project_id}/{uuid.uuid4().hex}.png"
         from app.core.storage import storage_client
         screenshot_url = await storage_client.upload_bytes(png, key)
@@ -759,7 +760,7 @@ async def pick_browser_element(sid: str, request: BrowserPickRequest):
     if page is None:
         raise HTTPException(status_code=404, detail="Browser released — open session first")
 
-    element = await _pick_element_via_dom(page, request.x, request.y)
+    element = await _bridge.run(_pick_element_via_dom(page, request.x, request.y))
     if element is None:
         raise HTTPException(status_code=404, detail="No element at the given point")
     return {"code": 0, "data": {"element": element}}
