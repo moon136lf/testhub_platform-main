@@ -23,6 +23,7 @@ class PageRepository(Base):
     screenshot_url = Column(Text, comment="页面截图URL (MinIO)")
     parent_id = Column(UUID(as_uuid=True), ForeignKey("page_repository.id", ondelete="SET NULL"), nullable=True, index=True, comment="父页面 ID（页面树层级，NULL=顶级）")
     element_count = Column(Integer, default=0, comment="该页面下元素数量")
+    sort_order = Column(Integer, default=0, comment="同级排序号，上移下移改此值")
     last_fetch_at = Column(DateTime(timezone=True), comment="最后一次抓取时间")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -40,6 +41,7 @@ class PageRepository(Base):
             "page_url": self.page_url,
             "screenshot_url": self.screenshot_url,
             "parent_id": str(self.parent_id) if self.parent_id else None,
+            "sort_order": self.sort_order or 0,
             "element_count": self.element_count,
             "last_fetch_at": self.last_fetch_at.isoformat() if self.last_fetch_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -82,6 +84,8 @@ class ElementRepository(Base):
 
     # Status management
     status = Column(String(20), default="active", comment="active/deprecated/deleted")
+    scope = Column(String(20), default="page", comment="page=页面级 global=全局共享")
+    recycled_at = Column(DateTime(timezone=True), comment="软删时间，30天可恢复")
     confidence = Column(Integer, default=0, comment="置信度 0-10")
     source = Column(String(20), default="manual", comment="manual/auto/healed/ai_fixed")
 
@@ -111,6 +115,8 @@ class ElementRepository(Base):
             "height": self.height,
             "attributes": self.attributes,
             "status": self.status,
+            "scope": self.scope or "page",
+            "recycled_at": self.recycled_at.isoformat() if self.recycled_at else None,
             "confidence": self.confidence,
             "source": self.source,
             "created_at": self.created_at.isoformat() if self.created_at else None,
