@@ -117,39 +117,14 @@
         <el-empty v-if="elements.length === 0 && liveMessages.length === 0" description="请先抓取页面元素" />
       </div>
 
-      <!-- 会话式抓取 tab 内容 -->
+      <!-- 会话式抓取 tab 内容：工作台自持状态机（idle→登录→抓取→入库） -->
       <div v-show="activeTab === 'session'">
-        <div class="fetch-entry" style="margin-bottom: 12px">
-          <el-button type="primary" :icon="Search" :loading="fetching" @click="handleSessionFetchClick">
-            {{ captureSessionId ? '抓取下一页（加入当前会话）' : '开始会话式抓取' }}
-          </el-button>
-          <span v-if="captureSessionId" class="session-hint">
-            会话进行中，每抓取一页元素都会累积到下方工作台，最后统一勾选入库
-          </span>
-        </div>
-
-        <!-- 会话式抓取直播 -->
-        <div v-if="liveMessages.length > 0 && fetching" class="live-feed">
-          <el-alert title="抓取进度直播" type="info" :closable="false" style="margin-bottom: 10px">
-            <div v-for="(msg, index) in liveMessages" :key="index" class="live-message" :class="{ 'is-error': msg.type === 'error' }">
-              <span class="live-time">{{ msg.timestamp }}</span>
-              <el-tag :type="msgTypeTag(msg.type)" size="small" effect="plain">{{ msg.type }}</el-tag>
-              <span class="live-text">{{ msg.content }}</span>
-            </div>
-          </el-alert>
-          <el-progress :percentage="Math.round(progress * 100)" />
-        </div>
-
-        <!-- P3 会话式抓取工作台 -->
         <CaptureWorkbench
-          v-if="captureSessionId"
-          ref="workbenchRef"
-          :session-id="captureSessionId"
           :projects="projects"
+          :default-project-id="fetchForm.project_id"
           @imported="handleCaptureImported"
-          @discarded="handleCaptureDiscarded"
+          @closed="handleCaptureClosed"
         />
-        <el-empty v-else description="尚未开始会话，点击上方按钮开始（可连续抓取多页后统一入库）" />
       </div>
 
       <el-divider style="display: none" />
@@ -355,17 +330,10 @@ const fetchForm = ref({
   include_text: false
 })
 
-// ---- P3 会话式抓取 ----
+// ---- P3 会话式抓取（工作台内部自持状态机，本页只做事件响应） ----
 const activeTab = ref('oneshot')
-const captureSessionId = ref('')
-const workbenchRef = ref(null)
 
 const openOneShotDialog = () => {
-  fetchDialogVisible.value = true
-}
-
-// 会话式：点按钮 -> 用当前项目创建/复用会话 -> 弹 URL 输入（复用 FetchDialog 但走会话分支）
-const handleSessionFetchClick = () => {
   fetchDialogVisible.value = true
 }
 
@@ -374,82 +342,20 @@ const handleFetchStart = async (params) => {
   fetchDialogVisible.value = false
 
   if (activeTab.value === 'session') {
-    // 会话式：创建/复用会话 -> 抓取 -> 结果进会话（不直接入库往返）
-    try {
-      if (!captureSessionId.value) {
-        const s = await elementAPI.createCaptureSession(fetchForm.value.project_id)
-        captureSessionId.value = s.session_id
-      }
-      await runCaptureIntoSession()
-    } catch (err) {
-      ElMessage.error('创建抓取会话失败: ' + (err.response?.data?.detail || err.message))
-    }
+    ElMessage.info('请在会话式工作台内输入 URL 开始抓取')
     return
   }
   // 一次性抓取（旧路径）
   handleFetch()
 }
 
-// 会话式抓取：走同样的 SSE 抓取流程，完成后把元素推进会话
-const runCaptureIntoSession = async () => {
-  fetching.value = true
-  liveMessages.value = []
-  progress.value = 0
-  try {
-    const response = await elementAPI.fetchElements(fetchForm.value)
-    const { session_id, sse_url } = response.data || response
-    sseConnection = elementAPI.createSSEConnection(session_id)
-    let lastScreenshot = ''
-    sseConnection.onmessage = async (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        liveMessages.value.push({
-          timestamp: new Date(data.timestamp).toLocaleTimeString('zh-CN'),
-          content: data.content,
-          type: data.type
-        })
-        progress.value = data.progress || 0
-        if (data.type === 'success' && data.progress >= 1.0 && data.data?.elements) {
-          lastScreenshot = data.data.screenshot_url || ''
-          sseConnection?.close()
-          // 推入会话（批次累积）
-          const r = await elementAPI.addCaptureBatch(captureSessionId.value, {
-            url: fetchForm.value.url,
-            screenshot_url: lastScreenshot,
-            elements: data.data.elements
-          })
-          ElMessage.success(
-            `批次 ${r.batch_idx + 1} 已加入会话：+${r.added} 元素，累计 ${r.total_elements} 个`
-          )
-          fetching.value = false
-          workbenchRef.value?.refresh()
-        }
-        if (data.type === 'error') {
-          ElMessage.error(data.content || '抓取失败')
-          fetching.value = false
-          sseConnection?.close()
-        }
-      } catch (err) {
-        console.error('SSE parse error:', err)
-      }
-    }
-    sseConnection.onerror = () => {
-      sseConnection?.close()
-      fetching.value = false
-    }
-  } catch (error) {
-    ElMessage.error('抓取失败: ' + (error.response?.data?.detail || error.message))
-    fetching.value = false
-  }
-}
-
 const handleCaptureImported = (result) => {
-  captureSessionId.value = ''
+  // 已有页面/元素列表刷新留待 T4 页面树接入；当前仅提示
   ElMessage.success(`已入库 ${result.imported_count} 个元素`)
 }
 
-const handleCaptureDiscarded = () => {
-  captureSessionId.value = ''
+const handleCaptureClosed = () => {
+  // 工作台已自行清空
 }
 
 const importForm = ref({

@@ -56,6 +56,57 @@ export const elementAPI = {
     return this.listPages(projectId)
   },
 
+  // ---------------- P3 会话式抓取（浏览器会话主循环） ----------------
+
+  /**
+   * 打开（或复用）会话浏览器并导航到 url
+   * @param {Object} data - { project_id, url, need_login }
+   * @returns {Promise<Object>} { session_id, state }  state: awaiting_login | ready
+   */
+  async openBrowserSession(data) {
+    const response = await axios.post('/elements/capture/browser/open', data)
+    return response.data.data
+  },
+
+  /**
+   * 浏览器会话状态 + 实时截图
+   * @returns {Promise<Object>} { state, url, title, screenshot_b64 }
+   */
+  async getBrowserStatus(sessionId) {
+    const response = await axios.get(`/elements/capture/browser/${sessionId}/status`)
+    return response.data.data
+  },
+
+  /**
+   * 抓当前页元素 → staging 批次
+   * @returns {Promise<Object>} { elements, total_count, batch_idx, batch_count, staging_session_id }
+   */
+  async captureBrowserPage(sessionId) {
+    const response = await axios.post(`/elements/capture/browser/${sessionId}/capture`)
+    return response.data.data
+  },
+
+  /**
+   * 点选补抓：按坐标命中元素 → 定位卡片数据
+   * @returns {Promise<Object>} element 字典（temp_id/element_type/element_text/locator_strategies...）
+   */
+  async pickBrowserElement(sessionId, x, y) {
+    const response = await axios.post(`/elements/capture/browser/${sessionId}/pick-element`, { x, y })
+    return response.data.data.element
+  },
+
+  /** 释放页面：关浏览器保留会话数据 */
+  async releaseBrowser(sessionId) {
+    const response = await axios.post(`/elements/capture/browser/${sessionId}/release`)
+    return response.data.data
+  },
+
+  /** 关闭并删除整个浏览器会话 */
+  async closeBrowserSession(sessionId) {
+    const response = await axios.post(`/elements/capture/browser/${sessionId}/close`)
+    return response.data.data
+  },
+
   // ---------------- P3 会话式抓取工作台 ----------------
 
   /**
