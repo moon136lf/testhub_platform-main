@@ -325,6 +325,18 @@ class TestPageTree:
         db.commit.assert_awaited()
 
     @pytest.mark.asyncio
+    async def test_create_sub_page_placeholder_url(self):
+        """不传 page_url 时兜底为占位标记 URL（Task 7 快速校验识别用）"""
+        db = _db()
+        added = []
+        db.add = lambda o: added.append(o)
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.create_sub_page("p1", None, "登录页")
+        assert added[0].page_url.startswith("/__placeholder__/")
+
+    @pytest.mark.asyncio
     async def test_rename_page(self):
         db = _db()
         page = MagicMock()
@@ -446,6 +458,37 @@ class TestPageTree:
         assert db.execute.await_count >= 2
         db.delete.assert_awaited_once()
         db.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_delete_page_move_to_missing_target_rejected(self):
+        """迁移目标页面不存在 → 拒绝（children 空、元素数 3、目标计数 0）"""
+        db = _db()
+        page = MagicMock(id=uuid4())
+        target_id = uuid4()
+
+        async def _get(cls, pid):
+            return page
+        # 用调用序区分：第1次 children([])，第2次 count(3)，第3次目标存在性(0)
+        calls = {"i": 0}
+        async def _exec_seq(q):
+            calls["i"] += 1
+            r = MagicMock()
+            if calls["i"] == 1:
+                r.scalars.return_value.all.return_value = []
+            elif calls["i"] == 2:
+                r.scalar.return_value = 3
+            else:
+                r.scalar.return_value = 0
+            return r
+        db.get = _get
+        db.execute = AsyncMock(side_effect=_exec_seq)
+        db.delete = AsyncMock()
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError, match="迁移目标页面不存在"):
+            await svc.delete_page(str(page.id), move_to_page_id=str(target_id), force=False)
+        db.delete.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_delete_page_force_recycles_elements(self):

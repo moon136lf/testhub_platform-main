@@ -153,7 +153,7 @@ class ElementAssetService:
             project_id=_to_uuid(project_id) or project_id,
             parent_id=_uuid.UUID(parent_id) if parent_id else None,
             page_name=page_name.strip()[:100],
-            page_url=page_url or f"/#{page_name.strip()}",
+            page_url=page_url or f"/__placeholder__/{page_name.strip()}",
         )
         self.db.add(page)
         await self.db.commit()
@@ -212,6 +212,12 @@ class ElementAssetService:
             raise ValueError(f"页面下有 {n} 个元素，请指定迁移目标页面或选择一并删除")
         if n > 0 and move_to_page_id:
             target = _uuid.UUID(move_to_page_id)
+            from sqlalchemy import func as _func
+            t = await self.db.execute(
+                select(_func.count(PageRepository.id)).where(PageRepository.id == target)
+            )
+            if not (t.scalar() or 0):
+                raise ValueError("迁移目标页面不存在")
             await self.db.execute(
                 ElementRepository.__table__.update()
                 .where(ElementRepository.page_id == page.id)
