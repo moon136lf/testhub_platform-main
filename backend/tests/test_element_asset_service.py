@@ -510,3 +510,100 @@ class TestPageTree:
         svc = ElementAssetService(db)
         await svc.delete_page(str(page.id), force=True)
         db.delete.assert_awaited_once()
+
+
+class TestGlobalElements:
+    @pytest.mark.asyncio
+    async def test_create_global_element_no_page(self):
+        """全局元素不挂页面：page_id 为空 + scope=global"""
+        db = _db()
+        added = []
+        db.add = lambda o: added.append(o)
+        db.commit = AsyncMock()
+        db.flush = AsyncMock()
+
+        svc = ElementAssetService(db)
+        el = await svc.create_element(
+            project_id="p1", name="左侧菜单-设备管理", etype="link",
+            text="设备管理", scope="global", page_id=None,
+            locators=[{"type": "text", "value": "设备管理", "score": 80, "unique": True, "verified": True}],
+        )
+        assert added[0].scope == "global"
+        assert added[0].page_id is None
+        assert added[0].element_name == "左侧菜单-设备管理"
+        assert added[0].source == "manual"
+        db.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_page_element_requires_page(self):
+        db = _db()
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError, match="页面"):
+            await svc.create_element("p1", "x", "button", "", scope="page", page_id=None)
+
+    @pytest.mark.asyncio
+    async def test_global_element_rejects_page(self):
+        db = _db()
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError, match="全局"):
+            await svc.create_element("p1", "x", "button", "", scope="global", page_id="some-id")
+
+    @pytest.mark.asyncio
+    async def test_list_elements_scope_filter(self):
+        db = _db()
+        els = [MagicMock(scope="global"), MagicMock(scope="page")]
+        db.execute = _exec_return(els)
+
+        svc = ElementAssetService(db)
+        out = await svc.list_elements("p1", scope="global")
+        # mock db 不做 SQL 过滤，此处验证 scope 条件构造不报错且透传结果
+        assert out == els
+
+    @pytest.mark.asyncio
+    async def test_list_elements_by_page_includes_global(self):
+        """选中某页面：该页面元素 + 全局元素（mock 层验证传入的 or_ 条件构造不报错）"""
+        db = _db()
+        els = [MagicMock(), MagicMock()]
+        db.execute = _exec_return(els)
+
+        svc = ElementAssetService(db)
+        out = await svc.list_elements("p1", page_id="11111111-1111-1111-1111-111111111111")
+        assert len(out) == 2
+
+    @pytest.mark.asyncio
+    async def test_list_elements_keyword(self):
+        db = _db()
+        els = [MagicMock()]
+        db.execute = _exec_return(els)
+
+        svc = ElementAssetService(db)
+        out = await svc.list_elements("p1", keyword="菜单")
+        assert out == els
+
+    @pytest.mark.asyncio
+    async def test_list_elements_invalid_page_id_raises(self):
+        db = _db()
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError):
+            await svc.list_elements("p1", page_id="not-a-uuid")
+
+
+class TestGlobalLookup:
+    @pytest.mark.asyncio
+    async def test_find_by_name_finds_global(self):
+        """全局元素（page_id=None）同项目下可被 find_by_name 命中——现有逻辑天然支持，回归锁定"""
+        from app.services.element_service import ElementService
+        db = _db()
+        el = MagicMock()
+        el.element_name = "左侧菜单"
+        el.element_text = "设备管理"
+
+        async def _execute(q):
+            r = MagicMock()
+            r.scalar_one_or_none.return_value = el
+            return r
+        db.execute = _execute
+
+        svc = ElementService(db)
+        found = await svc.find_by_name("11111111-1111-1111-1111-111111111111", "设备管理")
+        assert found is el

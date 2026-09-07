@@ -338,3 +338,15 @@ class LocatorAddRequest(BaseModel):
     type: str = Field(..., max_length=30, description="id/css/data-testid/text/xpath/自定义")
     value: str = Field(..., min_length=1, max_length=500)
     score: int = Field(50, ge=0, le=150)
+
+
+class ElementCreateRequest(BaseModel):
+    """新建元素（手工录入，支持全局作用域）"""
+
+    project_id: str
+    name: str = Field(..., min_length=1, max_length=100)
+    element_type: str = Field("other", max_length=50)
+    element_text: Optional[str] = Field(None, max_length=200)
+    scope: str = Field("page", pattern="^(page|global)$")
+    page_id: Optional[str] = None
+    locators: Optional[List[dict]] = None

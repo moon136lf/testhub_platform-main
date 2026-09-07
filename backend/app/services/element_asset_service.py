@@ -245,3 +245,58 @@ class ElementAssetService:
             )
         )
         return r.scalar() or 0
+
+    # ---------------- 全局共享元素 + 元素列表 + 手工创建 ----------------
+
+    async def create_element(self, project_id: str, name: str, etype: str, text: str,
+                             scope: str = "page", page_id: Optional[str] = None,
+                             locators: Optional[List[Dict]] = None) -> "ElementRepository":
+        """新建元素（手工）。scope=global 不挂页面；page 级必须挂页面。"""
+        from app.models.element import ElementRepository
+        scope = scope or "page"
+        if scope == "global" and page_id:
+            raise ValueError("全局元素不挂页面")
+        if scope == "page" and not page_id:
+            raise ValueError("页面级元素必须指定页面")
+        el = ElementRepository(
+            project_id=_to_uuid(project_id) or project_id,
+            page_id=_uuid.UUID(page_id) if page_id else None,
+            scope=scope,
+            element_id=f"manual-{_uuid.uuid4().hex[:12]}",
+            element_name=name[:100] if name else "未命名元素",
+            element_type=etype or "other",
+            element_text=(text or "")[:200] or None,
+            locator_strategies={"strategies": locators or []},
+            source="manual",
+            status="active",
+        )
+        self.db.add(el)
+        await self.db.commit()
+        return el
+
+    async def list_elements(self, project_id: str, scope: Optional[str] = None,
+                            page_id: Optional[str] = None, status: str = "active",
+                            keyword: Optional[str] = None) -> List:
+        """元素列表：scope/page/keyword 过滤。
+
+        page_id='all' 表示全部（含全局）；page_id=具体页面时自动附带全局元素
+        （全局可被任何页面的脚本引用）。"""
+        from app.models.element import ElementRepository
+        from sqlalchemy import or_
+        conds = [ElementRepository.project_id == (_to_uuid(project_id) or project_id),
+                 ElementRepository.status == status]
+        if scope:
+            conds.append(ElementRepository.scope == scope)
+        if page_id and page_id != "all":
+            uid = _to_uuid(page_id)
+            if uid is None:
+                raise ValueError("无效的页面ID")
+            conds.append(or_(ElementRepository.page_id == uid,
+                             ElementRepository.scope == "global"))
+        if keyword:
+            conds.append(or_(ElementRepository.element_name.ilike(f"%{keyword}%"),
+                             ElementRepository.element_text.ilike(f"%{keyword}%")))
+        result = await self.db.execute(
+            select(ElementRepository).where(*conds).order_by(ElementRepository.updated_at.desc())
+        )
+        return result.scalars().all()

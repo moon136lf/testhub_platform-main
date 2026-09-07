@@ -878,6 +878,7 @@ from app.schemas.element_schema import (
     SubPageCreateRequest,
     PageRenameRequest,
     PageMoveRequest,
+    ElementCreateRequest,
 )
 
 
@@ -921,3 +922,31 @@ async def delete_page_node(page_id: str, move_to_page_id: Optional[str] = Query(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "message": "deleted"}
+
+
+@router.get("/elements-asset")
+async def list_elements_asset(project_id: str = Query(...),
+                              scope: Optional[str] = Query(None, pattern="^(page|global)$"),
+                              page_id: Optional[str] = Query(None, description="页面ID或all"),
+                              keyword: Optional[str] = Query(None, max_length=100),
+                              db: AsyncSession = Depends(get_db)):
+    """元素列表（管理页数据源）：scope/page/keyword 过滤。"""
+    try:
+        els = await ElementAssetService(db).list_elements(project_id, scope, page_id, keyword=keyword)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": [e.to_dict() for e in els]}
+
+
+@router.post("/elements-asset")
+async def create_element_asset(request: ElementCreateRequest, db: AsyncSession = Depends(get_db)):
+    """新建元素（手工录入，支持全局作用域）。"""
+    try:
+        el = await ElementAssetService(db).create_element(
+            request.project_id, request.name, request.element_type, request.element_text or "",
+            scope=request.scope, page_id=request.page_id,
+            locators=request.locators,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": el.to_dict()}
