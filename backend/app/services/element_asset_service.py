@@ -1,7 +1,8 @@
 """元素资产业务服务（阶段1）：引用计数 / 元素CRUD / 调序 / 回收站 / 页面树。
 
 数据源约定：ScriptAsset.step_mapping 每项含 element_name（转脚本时写入），
-引用计数 = element_name 精确匹配计数（文本别名匹配由消费端 find_by_name 处理）。"""
+引用计数 = element_name 精确匹配计数（文本别名匹配由消费端 find_by_name 处理）。
+性能路标：数据量大时可改用 PG JSONB path 查询（jsonb_path_exists），当前量级无需。"""
 import logging
 from typing import Dict, List
 from uuid import UUID
@@ -41,6 +42,8 @@ class ElementAssetService:
 
     async def list_referring_scripts(self, project_id: str, element_name: str) -> List[Dict]:
         """引用该元素的脚本清单（详情抽屉用）。"""
+        if not element_name:
+            return []
         refs = []
         for s in await self._load_scripts(project_id):
             for m in (s.step_mapping or []):

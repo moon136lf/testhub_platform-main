@@ -89,6 +89,14 @@ class TestListReferringScripts:
         assert str(s1.id) == refs[0]["id"]
 
     @pytest.mark.asyncio
+    async def test_list_empty_name_returns_empty(self):
+        db = _db()
+        db.execute = _exec_return([])
+        svc = ElementAssetService(db)
+        assert await svc.list_referring_scripts("p1", "") == []
+        assert await svc.list_referring_scripts("p1", None) == []
+
+    @pytest.mark.asyncio
     async def test_empty_when_none_reference(self):
         db = _db()
         db.execute = _exec_return([])
