@@ -49,12 +49,22 @@ class TestCaseService:
         return "变更字段: " + ", ".join(changed) if changed else "无字段变更"
 
     def _to_detail(self, case: TestCase) -> CaseDetailResponse:
+        # steps 归一化：AI 生成的步骤可能缺 step 序号字段（{action,target,data,expected}），
+        # StepSchema 要求 step>=1，缺失时按顺序重编号，避免详情接口 400
+        steps = []
+        for i, s in enumerate(case.steps or [], 1):
+            if not isinstance(s, dict):
+                continue
+            s = dict(s)
+            if not isinstance(s.get("step"), int) or s["step"] < 1:
+                s["step"] = i
+            steps.append(s)
         return CaseDetailResponse(
             id=str(case.id), project_id=str(case.project_id),
             point_id=str(case.point_id) if case.point_id else None,
             name=case.name, priority=case.priority, case_type=case.case_type,
             automation_status=case.automation_status, precondition=case.precondition,
-            steps=case.steps or [], expected_result=case.expected_result,
+            steps=steps, expected_result=case.expected_result,
             is_finalized=case.is_finalized, version=case.version,
             hallucination_status=case.hallucination_status, created_by=case.created_by,
             created_at=case.created_at.isoformat() if case.created_at else "",
@@ -487,6 +497,11 @@ class TestCaseService:
             if "steps" in refined:
                 case.steps = refined["steps"]
                 case.version += 1
+            # 规则层建议自动落地（如"缺前置条件"→ 填充 refined 的 precondition；
+            # 软断言转硬断言 → LLM 生成硬断言文案）。此处只做结构性建议：
+            # refined_case 里有比 case 更完整的字段时同步过来
+            if refined.get("precondition") and not case.precondition:
+                case.precondition = refined["precondition"]
             # mark suggestions applied (all pending, or only the specified ids)
             for s in report.get("suggestions", []):
                 if suggestion_ids is None or s.get("id") in suggestion_ids:

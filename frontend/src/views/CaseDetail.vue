@@ -320,9 +320,17 @@
             <el-table-column prop="step" label="步骤" width="80" align="center" />
             <el-table-column prop="action" label="操作" min-width="250" show-overflow-tooltip />
             <el-table-column prop="target" label="目标" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="data" label="测试数据" min-width="180" show-overflow-tooltip>
+            <el-table-column prop="data" label="测试数据" min-width="180">
               <template #default="{ row }">
-                {{ row.data || '-' }}
+                <!-- 长文本折叠：默认显示前 80 字，点击展开全文（边界测试类 data 可达 2000 字符） -->
+                <template v-if="(row.data || '').length > 80">
+                  <span v-if="expandedData[row.id + '_' + row.step]">{{ row.data }}</span>
+                  <span v-else>{{ row.data.slice(0, 80) }}…</span>
+                  <el-button type="primary" link size="small" @click="toggleDataExpand(row)">
+                    {{ expandedData[row.id + '_' + row.step] ? '收起' : '展开' }}
+                  </el-button>
+                </template>
+                <template v-else>{{ row.data || '-' }}</template>
               </template>
             </el-table-column>
             <el-table-column prop="expected" label="预期结果" min-width="250" show-overflow-tooltip />
@@ -395,6 +403,14 @@ const cases = ref([])
 const selectedCases = ref([])
 const finalizing = ref(false)
 const converting = ref(false)
+
+// 测试数据长文本展开状态（key: 用例id_step）
+const expandedData = ref({})
+
+const toggleDataExpand = (row) => {
+  const key = row.id + '_' + row.step
+  expandedData.value[key] = !expandedData.value[key]
+}
 
 const loadBatchCases = async () => {
   loading.value = true

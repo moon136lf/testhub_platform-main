@@ -170,6 +170,35 @@
       </div>
     </el-card>
 
+    <!-- 转换结果弹窗：列出本次转换生成的脚本，可查看代码/入库状态 -->
+    <el-dialog v-model="resultVisible" title="转换结果（脚本库）" width="820px">
+      <el-table :data="resultScripts" border size="small">
+        <el-table-column prop="name" label="脚本名" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'generated' ? 'success' : 'info'" size="small">{{ row.status }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="last_status" label="上次结果" width="100" />
+        <el-table-column label="操作" width="100">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="viewResultCode(row)">看代码</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="resultVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 脚本代码弹窗 -->
+    <el-dialog v-model="codeVisible" :title="resultName" width="820px">
+      <pre class="code-box">{{ resultContent }}</pre>
+      <template #footer>
+        <el-button @click="codeVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="diagVisible" title="调试修复" width="700px">
       <el-form label-width="100px">
         <el-form-item label="错误类型">
@@ -319,7 +348,14 @@ const handleConvert = async () => {
   converting.value = true
   try {
     const resp = await scriptAPI.convert(form.projectId, form.caseIds, form.aiOptimize)
-    startSSE(resp.data.session_id, { onDone: () => { converting.value = false } })
+    startSSE(resp.data.session_id, {
+      onDone: () => {
+        converting.value = false
+        ElMessage.success('转换完成，脚本已入脚本库')
+        openResultDialog()
+      },
+      onError: () => { converting.value = false; ElMessage.warning('直播连接中断，结果请到「脚本库执行」Tab 查看') }
+    })
   } catch (e) { ElMessage.error('转换失败'); converting.value = false }
 }
 
@@ -369,6 +405,33 @@ const handleQuickRun = async () => {
     startSSE(resp.data.session_id, { onDone: () => { quickRunning.value = false } })
   } catch (e) { ElMessage.error('快速运行失败'); quickRunning.value = false }
 }
+
+// 转换结果查看弹窗（转换完成后可看每个脚本代码）
+const resultVisible = ref(false)
+const resultScripts = ref([])
+
+const openResultDialog = async () => {
+  await loadScripts()
+  // 展示本次转换产生的脚本（按来源批次/最新排序取前 N——转换后脚本名带时间戳，取最新 created）
+  const sorted = [...scripts.value].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+  resultScripts.value = sorted.slice(0, Math.max(form.caseIds.length, 1) + 5)
+  resultVisible.value = true
+}
+
+const resultContent = ref('')
+const resultName = ref('')
+const viewResultCode = async (row) => {
+  try {
+    const resp = await axios.get(`/scripts/${row.id}`)
+    const d = resp.data?.data || resp.data || {}
+    resultName.value = d.name || row.name
+    resultContent.value = d.content || ''
+  } catch { ElMessage.error('脚本内容加载失败'); return }
+  resultVisible.value = false
+  codeVisible.value = true
+}
+
+const codeVisible = ref(false)
 
 const viewScript = (row) => { window.open(`/api/v1/scripts/${row.id}`, '_blank') }
 const confirmScript = async (row) => {
@@ -477,6 +540,7 @@ onMounted(async () => {
 .lib-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .run-cfg-label { color: #909399; font-size: 13px; margin-left: 8px; }
 .log-box { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; }
+.code-box { max-height: 480px; overflow: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; white-space: pre; }
 .log-line { margin-bottom: 4px; }
 .diag-card { margin-top: 12px; padding: 12px; background: #f5f7fa; border-radius: 4px; }
 .fail-list { margin-top: 12px; padding: 8px 12px; background: #fef0f0; border-radius: 4px; }

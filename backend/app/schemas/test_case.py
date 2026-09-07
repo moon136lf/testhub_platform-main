@@ -21,10 +21,10 @@ def _pattern(values: tuple) -> str:
 class StepSchema(BaseModel):
     """Schema for test step validation"""
     step: int = Field(..., ge=1, description="Step sequence number, must be >= 1")
-    action: str = Field(..., min_length=1, max_length=200, description="Test action description")
-    target: Optional[str] = Field(None, max_length=200, description="Target element or object")
-    data: Optional[str] = Field(None, max_length=200, description="Test data or input")
-    expected: str = Field(..., min_length=1, max_length=200, description="Expected result for this step")
+    action: str = Field(..., min_length=1, max_length=2000, description="Test action description")
+    target: Optional[str] = Field(None, max_length=2000, description="Target element or object")
+    data: Optional[str] = Field(None, max_length=2000, description="Test data or input")
+    expected: str = Field(..., min_length=1, max_length=2000, description="Expected result for this step")
 
     model_config = ConfigDict(from_attributes=True)
 

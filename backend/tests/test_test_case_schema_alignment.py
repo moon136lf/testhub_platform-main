@@ -29,13 +29,13 @@ class TestStepSchema:
         with pytest.raises(ValidationError):
             StepSchema(seq=1, action="x", expected="y")  # seq no longer valid
 
-    def test_action_max_length_200(self):
+    def test_action_max_length_2000(self):
         with pytest.raises(ValidationError):
-            StepSchema(step=1, action="x" * 201, expected="y")
+            StepSchema(step=1, action="x" * 2001, expected="y")
 
-    def test_expected_max_length_200(self):
+    def test_expected_max_length_2000(self):
         with pytest.raises(ValidationError):
-            StepSchema(step=1, action="x", expected="y" * 201)
+            StepSchema(step=1, action="x", expected="y" * 2001)
 
 
 class TestCaseCreateEnumRejection:

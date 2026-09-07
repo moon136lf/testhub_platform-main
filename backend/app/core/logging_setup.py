@@ -47,9 +47,13 @@ class UnifiedFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         line = super().format(record)
-        # 染色仅在控制台 handler 生效（_moontest_color 标记）；ERROR 红色
-        if getattr(self, "_moontest_color", False) and record.levelno >= logging.ERROR:
-            return f"[91m{line}[0m"
+        # 染色仅在控制台 handler 生效（_moontest_color 标记）：
+        # ERROR/CRITICAL 整行红，WARNING 整行黄
+        if getattr(self, "_moontest_color", False):
+            if record.levelno >= logging.ERROR:
+                return f"[91m{line}[0m"
+            if record.levelno >= logging.WARNING:
+                return f"[33m{line}[0m"
         return line
 
 

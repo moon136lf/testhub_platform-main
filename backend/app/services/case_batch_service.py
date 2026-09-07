@@ -2,9 +2,10 @@
 import logging
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.models.case_batch import CaseBatch
+from app.models.test_case import TestCase
 from app.services.batch_naming import build_batch_name
 
 logger = logging.getLogger(__name__)
@@ -37,8 +38,16 @@ class CaseBatchService:
         return r.scalar_one_or_none() is not None
 
     async def update_case_count(self, batch_id, delta: int):
-        """生成完成后回填批次用例数。"""
+        """生成完成后回填批次用例数。
+
+        以批内实际未删用例数为准（实时 COUNT），而非累加 delta——
+        任务中断/重跑时累加会漂移，实时统计永远与列表一致。
+        """
         batch = await self.db.get(CaseBatch, batch_id)
         if batch:
-            batch.case_count = (batch.case_count or 0) + delta
+            r = await self.db.execute(
+                select(func.count(TestCase.id)).where(
+                    TestCase.batch_id == batch_id,
+                    TestCase.is_deleted.is_(False)))
+            batch.case_count = r.scalar() or 0
             await self.db.flush()

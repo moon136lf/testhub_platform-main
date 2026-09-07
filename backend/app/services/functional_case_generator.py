@@ -164,7 +164,7 @@ class FunctionalCaseGenerator:
                 continue
             if not isinstance(expected, str) or not expected.strip():
                 continue
-            valid.append({"step": 0, "action": action[:200], "expected": expected[:200]})
+            valid.append({"step": 0, "action": action[:2000], "expected": expected[:2000]})
         for i, s in enumerate(valid, 1):
             s["step"] = i
         return valid

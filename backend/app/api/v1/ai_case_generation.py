@@ -834,7 +834,9 @@ async def list_sessions(
         tokens_result = await db.execute(
             select(func.coalesce(func.sum(AICallLog.tokens_used), 0)).where(
                 and_(AICallLog.project_id == s.project_id,
-                     AICallLog.created_at >= s.created_at)
+                     # 会话 created_at 可能为 NULL（历史数据直插），NULL 参与 >= 会炸
+                     # ArgumentError(bool compare)——无 created_at 时不做时间过滤
+                     *( [AICallLog.created_at >= s.created_at] if s.created_at else [] ))
             )
         )
         project_name = None

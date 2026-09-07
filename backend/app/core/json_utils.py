@@ -19,5 +19,35 @@ def strip_json_fences(content: str) -> str:
 
 
 def parse_llm_json(content: str):
-    """剥围栏后 json.loads；失败抛 JSONDecodeError"""
-    return json.loads(strip_json_fences(content))
+    """剥围栏后 json.loads；失败再尝试取首个平衡的 {...} 块（模型偶尔在
+    JSON 后附带说明文字 → 'Extra data' 错误），仍失败抛 JSONDecodeError"""
+    text = strip_json_fences(content)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # 取第一个 '{' 到与其配对的 '}'（ respecting 字符串/转义）
+        start = text.find("{")
+        if start == -1:
+            raise
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return json.loads(text[start:i + 1])
+        raise

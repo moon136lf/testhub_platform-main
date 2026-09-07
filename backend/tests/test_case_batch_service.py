@@ -61,14 +61,23 @@ class TestCreateBatch:
 
 
 class TestUpdateCaseCount:
-    def test_increment(self):
+    def test_recounts_from_db(self):
+        """update_case_count 以批内实际用例数为准（实时 COUNT 覆盖），非累加 delta。"""
         db = _db()
         batch = MagicMock()
         batch.case_count = 5
 
         async def _get(cls, bid):
             return batch
+
+        async def _execute(q):
+            class _R:
+                def scalar(self):
+                    return 8
+            return _R()
+
         db.get = _get
+        db.execute = _execute
         svc = CaseBatchService(db)
         asyncio.run(svc.update_case_count("b1", 3))
         assert batch.case_count == 8

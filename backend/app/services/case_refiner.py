@@ -82,6 +82,10 @@ class CaseRefiner:
         # apply feasibility fields to refined case representation
         refined["_feasibility_level"] = feas["feasibility_level"]
         refined["_cannot_automate_reason"] = feas["cannot_automate_reason"]
+        # 结构性建议自动落地：缺前置条件 → 生成默认前置（规则层免费补全，
+        # 应用建议后用户能看到实际变化，而非只改了建议状态）
+        if not refined.get("precondition"):
+            refined["precondition"] = "已登录系统并进入相关页面，基础数据已就绪"
 
         return {
             "score": score,

@@ -64,15 +64,20 @@ const router = createRouter({
           meta: { title: '用例详情' }
         },
         {
-          path: 'scripts',
+          path: 'ai/convert',
           name: 'ScriptConvert',
           component: () => import('@/views/ScriptConvert.vue'),
-          meta: { title: '用例转脚本' }
+          meta: { title: '用例转自动化脚本' }
+        },
+        {
+          path: 'scripts',
+          name: 'ScriptConvertAlias',
+          redirect: '/ai/convert'
         },
         {
           path: 'auto/ui',
           name: 'AutoUI',
-          redirect: '/scripts',
+          redirect: '/ai/convert',
         },
         {
           path: 'auto/regression',

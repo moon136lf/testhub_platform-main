@@ -72,8 +72,14 @@ class SSEStream:
 
         try:
             # 推送到 Redis List（先确保连接绑定当前事件循环，见 _ensure_redis）
-            await _ensure_redis()
-            await redis_client.redis.lpush(self.redis_key, json.dumps(message))
+            try:
+                await _ensure_redis()
+                await redis_client.redis.lpush(self.redis_key, json.dumps(message))
+            except RuntimeError:
+                # 跨事件循环复用连接池首击必败（redis-py 池自动重建，第二次成功）——
+                # 重试一次即可，避免刷 'Event loop is closed' 噪音
+                await redis_client.connect()
+                await redis_client.redis.lpush(self.redis_key, json.dumps(message))
             # 设置过期时间
             await redis_client.redis.expire(self.redis_key, self.ttl)
             logger.debug(f"SSE message sent: {self.session_id} - {content}")

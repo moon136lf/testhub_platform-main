@@ -607,7 +607,7 @@ async def import_from_capture_session(
 
     return CaptureImportResponse(
         page_id=str(page_id),
-        page_name=imported[0].element_name if imported else (request.page_name or ""),
+        page_name=(page.page_name or (request.page_name or "")),
         imported_count=len(imported),
         failed_count=0,
         session_total=0,
