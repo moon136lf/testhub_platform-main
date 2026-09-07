@@ -48,8 +48,19 @@ const router = createRouter({
         {
           path: 'elements',
           name: 'Elements',
+          redirect: '/elements/capture',
+        },
+        {
+          path: 'elements/capture',
+          name: 'ElementCapture',
           component: () => import('@/views/ElementLibrary.vue'),
-          meta: { title: '元素库' }
+          meta: { title: '元素抓取' }
+        },
+        {
+          path: 'elements/list',
+          name: 'ElementList',
+          component: () => import('@/views/ElementList.vue'),
+          meta: { title: '元素管理' }
         },
         {
           path: 'cases',

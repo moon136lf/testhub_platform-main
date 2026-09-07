@@ -68,6 +68,79 @@ export const elementAPI = {
     return response.data
   },
 
+  // ---- 元素管理（阶段1） ----
+  async listElementsAsset(projectId, { scope, pageId, keyword } = {}) {
+    const response = await axios.get('/elements-asset', { params: {
+      project_id: projectId,
+      scope: scope || undefined,
+      page_id: pageId || undefined,
+      keyword: keyword || undefined,
+    }})
+    return response.data
+  },
+  async createElementAsset(data) {
+    const response = await axios.post('/elements-asset', data)
+    return response.data
+  },
+  async updateElement(elementId, fields) {
+    const response = await axios.put(`/elements/${elementId}`, fields)
+    return response.data
+  },
+  async addLocator(elementId, type, value, score = 50) {
+    const response = await axios.post(`/elements/${elementId}/locators`, { type, value, score })
+    return response.data
+  },
+  async reorderLocator(elementId, index, direction) {
+    const response = await axios.post(`/elements/${elementId}/locators/reorder`, { index, direction })
+    return response.data
+  },
+  async verifyLocator(elementId, locatorType, locatorValue) {
+    const response = await axios.post(`/elements/${elementId}/locators/verify`,
+      { locator_type: locatorType, locator_value: locatorValue })
+    return response.data
+  },
+  async elementReferences(elementId, projectId) {
+    const response = await axios.get(`/elements/${elementId}/references`, { params: { project_id: projectId } })
+    return response.data
+  },
+  async recycleElement(elementId) {
+    const response = await axios.post(`/elements/${elementId}/recycle`)
+    return response.data
+  },
+  async restoreElement(elementId) {
+    const response = await axios.post(`/elements/${elementId}/restore`)
+    return response.data
+  },
+  async recycleBin(projectId) {
+    const response = await axios.get('/recycle-bin', { params: { project_id: projectId } })
+    return response.data
+  },
+  async createSubPage(data) {
+    const response = await axios.post('/pages-tree', data)
+    return response.data
+  },
+  async renamePage(pageId, pageName) {
+    const response = await axios.put(`/pages-tree/${pageId}`, { page_name: pageName })
+    return response.data
+  },
+  async movePage(pageId, direction) {
+    const response = await axios.post(`/pages-tree/${pageId}/move`, { direction })
+    return response.data
+  },
+  async deletePageNode(pageId, moveToPageId, force) {
+    const response = await axios.delete(`/pages-tree/${pageId}`, { params: {
+      move_to_page_id: moveToPageId || undefined, force: force || undefined } })
+    return response.data
+  },
+  async exportElements(projectId) {
+    const response = await axios.get('/elements-export', { params: { project_id: projectId } })
+    return response.data
+  },
+  async importElementsAsset(projectId, payload) {
+    const response = await axios.post('/elements-import', { project_id: projectId, payload })
+    return response.data
+  },
+
   // ---------------- P3 会话式抓取（浏览器会话主循环） ----------------
 
   /**
