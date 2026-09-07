@@ -197,6 +197,17 @@ const browserReleased = ref(false)
 // idle 表单
 const url = ref('')
 const needLogin = ref(false)
+
+// 选定项目后预填项目管理里配置的系统地址（用户可改）
+watch(
+  () => props.defaultProjectId,
+  (pid) => {
+    if (!pid || url.value) return
+    const p = props.projects.find((x) => x.id === pid)
+    if (p?.target_url) url.value = p.target_url
+  },
+  { immediate: true }
+)
 const starting = ref(false)
 const projectId = computed(() => props.defaultProjectId)
 

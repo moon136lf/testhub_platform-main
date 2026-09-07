@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 import uuid
+import logging
 
 from app.core.database import get_db
 from app.schemas.element_schema import (
@@ -51,7 +52,7 @@ from app.schemas.element_schema import (
     CaptureImportResponse,
 )
 from app.services.capture_session_service import CaptureSessionService
-from app.services.browser_session_manager import BrowserSessionManager, _bridge
+from app.services.browser_session_manager import BrowserSessionManager, _bridge, _call
 from app.tasks.element_tasks import fetch_elements_task
 from app.services.element_service import ElementService
 from app.services.change_detection_service import ChangeDetectionService
@@ -70,6 +71,7 @@ from app.services.playwright_locator_core import (
 from app.tasks.element_tasks import MIN_LOCATOR_SCORE
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # P3.5 会话浏览器管理器（模块级单例；lifespan 挂 app.state 复用同一实例）
 browser_mgr = BrowserSessionManager()
@@ -762,6 +764,12 @@ async def pick_browser_element(sid: str, request: BrowserPickRequest):
 
     element = await _bridge.run(_pick_element_via_dom(page, request.x, request.y))
     if element is None:
+        # 诊断信息帮助定位坐标偏差（视口/滚动/缩放）
+        vp = await _bridge.run(_call(page.evaluate, "() => ({w: window.innerWidth, h: window.innerHeight, sy: window.scrollY, sx: window.scrollX})"))
+        logger.warning(
+            f"pick-element miss | sid={sid} x={request.x} y={request.y} "
+            f"viewport={vp.get('w')}x{vp.get('h')} scroll=({vp.get('sx')},{vp.get('sy')})"
+        )
         raise HTTPException(status_code=404, detail="No element at the given point")
     return {"code": 0, "data": {"element": element}}
 

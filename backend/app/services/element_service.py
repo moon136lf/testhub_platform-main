@@ -206,6 +206,7 @@ class ElementService:
                     "type": elem_data.get("type"),
                     "text": element_text,
                     "placeholder": elem_data.get("placeholder"),
+                    "context": {},  # Schema 字段；详细上下文仅抓取流水线产出
                     "coords": {
                         "x": position_x or 0,
                         "y": position_y or 0,

@@ -60,7 +60,9 @@ class SemanticInfo(BaseModel):
     aria_label: Optional[str] = Field(None, description="aria-label 属性")
     aria_role: Optional[str] = Field(None, description="role 属性")
     coords: Dict[str, int] = Field(..., description="坐标 {x, y, width, height}")
-    context: Dict[str, Any] = Field(..., description="上下文信息")
+    context: Optional[Dict[str, Any]] = Field(
+        None, description="上下文信息（自愈兜底；历史/简化产物可能缺省）"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
