@@ -23,6 +23,8 @@ class BrowserSession:
     project_id: str
     page: Any = None                    # Playwright Page（浏览器存活时非 None）
     browser: Optional[PlaywrightService] = None
+    state: str = "ready"                # ready / awaiting_login / released
+    staging_id: Optional[str] = None    # 关联的 P3 CaptureSession（redis staging）
     captured_elements: List[dict] = field(default_factory=list)  # 已抓未入库
     last_active: float = field(default_factory=time.time)
 

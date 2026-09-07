@@ -596,6 +596,9 @@ async def open_browser_session(request: BrowserOpenRequest):
         need_login=request.need_login,
     )
     state = "awaiting_login" if request.need_login else "ready"
+    sess = browser_mgr.get_session(sid)
+    if sess is not None:
+        sess.state = state
     return {"code": 0, "data": {"session_id": sid, "state": state}}
 
 
@@ -613,7 +616,7 @@ async def browser_session_status(sid: str):
     if sess.page is None:
         return {"code": 0, "data": {"state": "released", "url": None,
                                     "title": None, "screenshot_b64": None}}
-    state = getattr(sess, "state", None) or "ready"
+    state = sess.state or "ready"
     url = sess.page.url
     if state == "awaiting_login":
         # 轻校验：URL 不含登录关键字视为登录完成

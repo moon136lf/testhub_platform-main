@@ -244,3 +244,33 @@ def test_session_not_found(client, mgr):
                        json={"x": 1, "y": 2}).status_code == 404
     assert client.post(f"/api/v1/elements/capture/browser/{SID}/release").status_code == 404
     assert client.post(f"/api/v1/elements/capture/browser/{SID}/close").status_code == 404
+
+
+# ---------------- 集成：真实 BrowserSession 状态机（不预 mock state） ----------------
+
+def test_awaiting_login_state_machine(client, mgr):
+    """open(need_login=True) 在真实 BrowserSession 上持久化 state；
+    status 按 URL 轻校验推进 awaiting_login → ready。"""
+    # browser_mgr 为 mock，但让 open() 创建真实 BrowserSession 对象
+    from app.services.browser_session_manager import BrowserSession
+    real_sess = BrowserSession(session_id=SID, project_id=PID)
+    mgr.open = AsyncMock(side_effect=lambda *a, **k: SID)
+    mgr.get_session = MagicMock(return_value=real_sess)
+    real_sess.page = _fake_page(url="http://x/login")
+
+    r = client.post("/api/v1/elements/capture/browser/open", json={
+        "project_id": PID, "url": "http://x/login", "need_login": True,
+    })
+    assert r.status_code == 200
+    assert real_sess.state == "awaiting_login"
+
+    r = client.get(f"/api/v1/elements/capture/browser/{SID}/status")
+    assert r.status_code == 200
+    assert r.json()["data"]["state"] == "awaiting_login"  # 仍在 login URL
+
+    # 模拟登录完成：URL 离开登录页
+    real_sess.page.url = "http://x/dashboard"
+    r = client.get(f"/api/v1/elements/capture/browser/{SID}/status")
+    assert r.status_code == 200
+    assert r.json()["data"]["state"] == "ready"
+    assert real_sess.state == "ready"
