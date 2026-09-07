@@ -262,6 +262,7 @@ class CaptureStateResponse(BaseModel):
 class CaptureImportRequest(BaseModel):
     """会话式入库请求（按会话内勾选状态入库）"""
 
+    project_id: str = Field(..., description="项目 ID")
     session_id: str = Field(..., description="会话 ID")
     page_id: Optional[str] = Field(None, description="已有页面 ID（与 page_name 二选一）")
     page_name: Optional[str] = Field(None, description="新建页面名称")

@@ -48,7 +48,15 @@ class BrowserSessionManager:
             self.sessions[sid] = BrowserSession(session_id=sid, project_id=project_id)
         sess = self.sessions[sid]
 
-        if sess.browser is None:
+        # 浏览器不可用（未启动 / 启动失败残留）则（重）启；
+        # 之前只判 sess.browser is None，start() 失败后残留 service 对象会导致
+        # 复用路径跳过 start，page=None 直接 goto 报错。
+        if sess.browser is None or sess.page is None or sess.browser.browser is None:
+            if sess.browser is not None:
+                try:
+                    await sess.browser.close()
+                except Exception:
+                    pass
             sess.browser = PlaywrightService()
             await sess.browser.start(headless=headless)
             ctx = await sess.browser.browser.new_context()

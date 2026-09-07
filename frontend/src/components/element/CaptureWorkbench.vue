@@ -456,6 +456,7 @@ const addPickedToStaging = async () => {
 // ---- ready：入库 ----
 const importSelected = async () => {
   const data = {
+    project_id: projectId.value,
     session_id: stagingSessionId.value,
     page_name: pageName.value || undefined,
     page_url: pageUrl.value || (statusUrl.value || undefined),

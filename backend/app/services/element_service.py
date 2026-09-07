@@ -155,10 +155,19 @@ class ElementService:
             element_objects: List[ElementRepository] = []
             # 别名中文默认序号：按类型计序（按钮1/按钮2/输入框1...）
             type_counters: Dict[str, int] = {}
+            # 页内去重：同一批次可能含重复 element_id（如重复抓取同页、相同文本派生），
+            # 唯一约束 uq_element_repository_page_element 会整体回滚，这里保留首个
+            seen_element_ids: set = set()
 
             for elem_data in elements:
                 # 生成元素唯一标识（element_id）
                 element_id = ElementService._generate_element_id(elem_data)
+                if element_id in seen_element_ids:
+                    logger.warning(
+                        f"Skip duplicate element_id '{element_id}' in batch import to page {page_id}"
+                    )
+                    continue
+                seen_element_ids.add(element_id)
 
                 # 归一化文本
                 text = (elem_data.get("text") or "").strip()
