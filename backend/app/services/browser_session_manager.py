@@ -151,10 +151,11 @@ class BrowserSessionManager:
                     pass
             sess.browser = PlaywrightService()
             await _bridge.run(sess.browser.start(headless=headless))
-            # 固定视口 1920x1080: 无视口时 headed 窗口大小跟随系统默认且每页可能不同,
-            # 导致"页面一会大一会小"; 固定后截图/点选坐标换算 (VIEWPORT_WIDTH=1920) 也一致
-            ctx = await _bridge.run(sess.browser.browser.new_context(
-                viewport={"width": 1920, "height": 1080}))
+            # headless: 固定视口 1920x1080（与点选坐标换算 VIEWPORT_WIDTH 一致）；
+            # headed: no_viewport 让页面跟随真实窗口大小（用户可最大化/调整窗口），
+            # 点选坐标换算用 status 接口返回的实际 innerWidth（前端动态取）
+            ctx_kwargs = {} if headless else {"no_viewport": True}
+            ctx = await _bridge.run(sess.browser.browser.new_context(**ctx_kwargs))
             sess.page = await _bridge.run(ctx.new_page())
             await _bridge.run(_call(sess.page.set_default_timeout, 30000))
 

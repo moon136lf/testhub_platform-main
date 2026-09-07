@@ -236,7 +236,9 @@ const pickCard = ref(null)
 const pickCardVisible = ref(false)
 const addingPicked = ref(false)
 
-const VIEWPORT_WIDTH = 1920  // playwright_service.set_viewport_size(1920x1080)
+// 实际视口尺寸：由 status 接口返回（headed 模式跟随窗口大小，动态变化）
+const viewportW = ref(1920)
+const viewportH = ref(1080)
 
 const bestStrategy = computed(() => {
   const list = pickCard.value?.locator_strategies?.strategies || []
@@ -341,6 +343,8 @@ const refreshScreenshot = async () => {
       if (s.state === 'released') browserReleased.value = true
     } else {
       screenshotSrc.value = `data:image/png;base64,${s.screenshot_b64}`
+      if (s.viewport_width) viewportW.value = s.viewport_width
+      if (s.viewport_height) viewportH.value = s.viewport_height
     }
   } catch (err) {
     // 404 = 会话消失
@@ -423,8 +427,8 @@ const onShotClick = async (event) => {
   const img = event.currentTarget.querySelector('.shot-img')
   if (!img) return
   const rect = img.getBoundingClientRect()
-  const x = Math.round(((event.clientX - rect.left) / rect.width) * VIEWPORT_WIDTH)
-  const y = Math.round(((event.clientY - rect.top) / rect.height) * (VIEWPORT_WIDTH * 1080 / 1920))
+  const x = Math.round(((event.clientX - rect.left) / rect.width) * viewportW.value)
+  const y = Math.round(((event.clientY - rect.top) / rect.height) * viewportH.value)
   try {
     pickCard.value = await elementAPI.pickBrowserElement(browserSessionId.value, x, y)
     pickCardVisible.value = true

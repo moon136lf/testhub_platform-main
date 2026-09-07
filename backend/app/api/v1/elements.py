@@ -665,8 +665,13 @@ async def browser_session_status(sid: str):
     import base64
     title = await _bridge.run(sess.page.title())
     screenshot_b64 = base64.b64encode(await _bridge.run(sess.page.screenshot())).decode()
+    # 实际视口尺寸（headed 模式跟随窗口，前端点选坐标换算需要）
+    viewport = await _bridge.run(_call(
+        sess.page.evaluate, "() => ({w: window.innerWidth, h: window.innerHeight})"))
     return {"code": 0, "data": {"state": state, "url": url,
-                                "title": title, "screenshot_b64": screenshot_b64}}
+                                "title": title, "screenshot_b64": screenshot_b64,
+                                "viewport_width": viewport.get("w"),
+                                "viewport_height": viewport.get("h")}}
 
 
 async def _verify_elements(page, raw_elements) -> list:
