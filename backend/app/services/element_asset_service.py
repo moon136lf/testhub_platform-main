@@ -304,38 +304,78 @@ class ElementAssetService:
     # ---------------- 导入导出（可移植 JSON，跨项目/环境复用） ----------------
 
     async def export_elements(self, project_id: str) -> Dict:
-        """导出项目全部 active 元素为可移植 JSON（跨项目/环境复用）。"""
-        from app.models.element import ElementRepository
+        """导出项目全部 active 元素为可移植 JSON（跨项目/环境复用）。
+
+        每个元素附带 page_name（跨项目导入时按名称匹配页面，page_id 不可跨项目复用）。"""
+        from app.models.element import ElementRepository, PageRepository
+        pid = _to_uuid(project_id) or project_id
+        pages = await self.db.execute(
+            select(PageRepository).where(PageRepository.project_id == pid)
+        )
+        page_names = {p.id: (p.page_name or "") for p in pages.scalars().all()}
         result = await self.db.execute(
             select(ElementRepository).where(
-                ElementRepository.project_id == (_to_uuid(project_id) or project_id),
+                ElementRepository.project_id == pid,
                 ElementRepository.status == "active")
         )
         els = result.scalars().all()
+        out = []
+        for e in els:
+            d = e.to_dict()
+            d["page_name"] = page_names.get(e.page_id)
+            out.append(d)
         return {"version": 1, "exported_at": datetime.now(timezone.utc).isoformat(),
-                "elements": [e.to_dict() for e in els]}
+                "elements": out}
 
-    async def import_elements(self, project_id: str, payload: Optional[Dict]) -> int:
-        """导入元素 JSON。逐条走 create_element（复用 scope/page 校验），坏行跳过计数。"""
-        n = 0
-        for item in ((payload or {}).get("elements") or []):
+    async def import_elements(self, project_id: str, payload: Optional[Dict]) -> Dict:
+        """导入元素 JSON。逐条走 create_element（复用 scope/page 校验），坏行跳过计数。
+
+        跨项目 page_id 映射规则：导出数据里的 page_id 是源项目内部 ID，不可跨项目复用；
+        page 级元素若带 page_name，则按名称匹配目标项目页面（找不到即跳过并记入 errors）；
+        仅当元素未带 page_name 时才回退用原 page_id（同项目重导入场景）。
+        仅消费 name/etype/text/scope/page_id/locators，其余字段（semantic_info/坐标等）不迁移。
+        返回 {"imported": n, "skipped": m, "errors": [前5条原因]}。"""
+        n = skipped = 0
+        errors: List[str] = []
+        rows = (payload or {}).get("elements") or []
+        # 懒加载目标项目页面名映射（仅当存在带 page_name 的 page 级行）
+        page_map: Dict = {}
+        if any(isinstance(r, dict) and (r.get("scope") or "page") == "page"
+               and r.get("page_name") for r in rows):
+            from app.models.element import PageRepository
+            result = await self.db.execute(
+                select(PageRepository).where(
+                    PageRepository.project_id == (_to_uuid(project_id) or project_id))
+            )
+            page_map = {p.page_name: p.id for p in result.scalars().all()}
+        for item in rows:
             if not isinstance(item, dict) or not item.get("element_name"):
+                skipped += 1
                 continue
             try:
                 ls = item.get("locator_strategies") or {}
+                page_id = item.get("page_id")
+                if (item.get("scope") or "page") == "page" and item.get("page_name"):
+                    page_id = page_map.get(item["page_name"])
+                    if page_id is None:
+                        skipped += 1
+                        errors.append(f"{item['element_name']}: 目标项目无同名页面「{item['page_name']}」")
+                        continue
                 await self.create_element(
                     project_id=project_id,
                     name=item["element_name"],
                     etype=item.get("element_type", "other"),
                     text=item.get("element_text") or "",
                     scope=item.get("scope", "page"),
-                    page_id=item.get("page_id"),
+                    page_id=page_id,
                     locators=ls.get("strategies", []) if isinstance(ls, dict) else ls,
                 )
                 n += 1
             except Exception as e:
+                skipped += 1
+                errors.append(f"{item.get('element_name')}: {e}")
                 logger.warning(f"import element skipped: {e}")
-        return n
+        return {"imported": n, "skipped": skipped, "errors": errors[:5]}
 
 
 async def verify_locator_on_page(page, locator: Dict) -> Dict:

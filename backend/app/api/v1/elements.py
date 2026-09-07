@@ -1011,9 +1011,9 @@ async def export_elements(project_id: str = Query(...), db: AsyncSession = Depen
 
 @router.post("/elements-import")
 async def import_elements_asset(request: ElementAssetImportRequest, db: AsyncSession = Depends(get_db)):
-    """导入元素 JSON（跨项目/环境复用）。返回成功导入数。"""
+    """导入元素 JSON（跨项目/环境复用）。返回 imported/skipped/errors 摘要。"""
     try:
-        n = await ElementAssetService(db).import_elements(request.project_id, request.payload)
+        result = await ElementAssetService(db).import_elements(request.project_id, request.payload)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {"code": 0, "data": {"imported": n}}
+    return {"code": 0, "data": result}
