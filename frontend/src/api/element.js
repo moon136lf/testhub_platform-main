@@ -56,6 +56,18 @@ export const elementAPI = {
     return this.listPages(projectId)
   },
 
+  /**
+   * 获取项目的页面树（按 parent_id 组装）
+   * @param {string} projectId
+   * @returns {Promise<Object>} { code, data: [嵌套页面节点] }
+   */
+  async getPageTree(projectId) {
+    const response = await axios.get('/elements/pages/tree', {
+      params: { project_id: projectId }
+    })
+    return response.data
+  },
+
   // ---------------- P3 会话式抓取（浏览器会话主循环） ----------------
 
   /**

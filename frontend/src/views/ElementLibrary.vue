@@ -278,6 +278,62 @@
         <el-button type="primary" :loading="importing" @click="confirmImport">确认入库</el-button>
       </template>
     </el-dialog>
+
+    <!-- 已入库元素（P3 工作台 T4c：页面树 + 元素列表） -->
+    <el-card shadow="never" class="stored-card">
+      <template #header>
+        <div class="stored-header">
+          <span>已入库元素</span>
+          <div class="stored-toolbar">
+            <el-select v-model="storedRange" style="width: 110px" @change="filterStoredElements">
+              <el-option label="近 7 日" value="7d" />
+              <el-option label="近 30 日" value="30d" />
+              <el-option label="全部" value="all" />
+            </el-select>
+            <el-button @click="loadPageTree">刷新</el-button>
+          </div>
+        </div>
+      </template>
+
+      <div class="stored-layout">
+        <div class="stored-tree">
+          <el-tree
+            :data="pageTree"
+            node-key="id"
+            :props="{ label: 'page_name', children: 'children' }"
+            highlight-current
+            @node-click="handleTreeNodeClick"
+          >
+            <template #default="{ data }">
+              <span class="tree-node">
+                {{ data.page_name }}
+                <el-badge :value="data.element_count" type="info" class="tree-badge" />
+              </span>
+            </template>
+          </el-tree>
+        </div>
+
+        <div class="stored-table">
+          <el-table :data="filteredStoredElements" border max-height="480" v-loading="storedLoading">
+            <el-table-column prop="element_name" label="别名" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="element_type" label="类型" width="90" />
+            <el-table-column label="定位策略数" width="100">
+              <template #default="{ row }">{{ strategyCount(row.locator_strategies) }}</template>
+            </el-table-column>
+            <el-table-column prop="confidence" label="置信度" width="80" />
+            <el-table-column label="入库时间" width="170">
+              <template #default="{ row }">{{ (row.created_at || '').replace('T', ' ').slice(0, 19) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="80">
+              <template #default="{ row }">
+                <el-button type="danger" link size="small" @click="handleDeleteStored(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="!selectedPageId" class="stored-empty">请在左侧选择页面</div>
+        </div>
+      </div>
+    </el-card>
   </div>
 </template>
 
@@ -349,9 +405,9 @@ const handleFetchStart = async (params) => {
   handleFetch()
 }
 
-const handleCaptureImported = (result) => {
-  // 已有页面/元素列表刷新留待 T4 页面树接入；当前仅提示
+const handleCaptureImported = async (result) => {
   ElMessage.success(`已入库 ${result.imported_count} 个元素`)
+  await loadPageTree()
 }
 
 const handleCaptureClosed = () => {
@@ -550,6 +606,7 @@ const confirmImport = async () => {
 
     const result = await elementAPI.importElements(requestData)
     ElMessage.success(`成功入库 ${result.imported_count} 个元素到 ${result.page_name || '页面'}`)
+    await loadPageTree()
 
     importDialogVisible.value = false
     elements.value = []
@@ -569,6 +626,7 @@ onMounted(async () => {
     projects.value = projectList.items || projectList || []
     if (projects.value.length > 0) {
       fetchForm.value.project_id = projects.value[0].id
+      await loadPageTree()
     }
   } catch (error) {
     console.error('Failed to load projects:', error)
@@ -577,6 +635,72 @@ onMounted(async () => {
 
 onUnmounted(() => {
   sseConnection?.close()
+})
+
+// ---- P3 工作台 T4c：已入库元素列表区（页面树 + 表格 + 近 N 日筛选） ----
+const pageTree = ref([])
+const selectedPageId = ref('')
+const storedElements = ref([])
+const storedRange = ref('7d')
+const storedLoading = ref(false)
+
+const loadPageTree = async () => {
+  const projectId = fetchForm.value.project_id
+  if (!projectId) return
+  try {
+    const res = await elementAPI.getPageTree(projectId)
+    pageTree.value = res.data || res || []
+  } catch (err) {
+    console.error('Failed to load page tree:', err)
+    pageTree.value = []
+  }
+}
+
+const handleTreeNodeClick = async (node) => {
+  selectedPageId.value = node.id
+  storedLoading.value = true
+  try {
+    const res = await elementAPI.getPageElements(node.id)
+    storedElements.value = res.data || res || []
+  } catch (err) {
+    console.error('Failed to load page elements:', err)
+    storedElements.value = []
+  } finally {
+    storedLoading.value = false
+  }
+}
+
+const filteredStoredElements = computed(() => {
+  if (storedRange.value === 'all') return storedElements.value
+  const days = storedRange.value === '7d' ? 7 : 30
+  const cutoff = Date.now() - days * 24 * 3600 * 1000
+  return storedElements.value.filter(
+    (e) => e.created_at && new Date(e.created_at).getTime() >= cutoff
+  )
+})
+
+const filterStoredElements = () => {
+  // 前端过滤为 computed，此处仅触发响应式更新（保留 hook 便于后续改后端参数）
+}
+
+const handleDeleteStored = async (row) => {
+  try {
+    await elementAPI.deleteElement(row.id)
+    ElMessage.success('已删除')
+    await handleTreeNodeClick({ id: selectedPageId.value })
+    await loadPageTree()
+  } catch (err) {
+    ElMessage.error('删除失败: ' + (err.response?.data?.detail || err.message))
+  }
+}
+
+// 工作台入库成功后刷新树
+const refreshAfterImport = async () => {
+  await loadPageTree()
+}
+
+onMounted(() => {
+  // onMounted 既有逻辑之后追加加载页面树
 })
 </script>
 
@@ -678,5 +802,50 @@ onUnmounted(() => {
 
 .element-text {
   flex: 1;
+}
+
+/* 已入库元素列表区 */
+.stored-card {
+  margin-top: 20px;
+}
+
+.stored-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stored-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.stored-layout {
+  display: flex;
+  gap: 16px;
+}
+
+.stored-tree {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid #ebeef5;
+  padding-right: 12px;
+}
+
+.tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stored-table {
+  flex: 1;
+  min-width: 0;
+}
+
+.stored-empty {
+  text-align: center;
+  color: #909399;
+  padding: 20px 0;
 }
 </style>
