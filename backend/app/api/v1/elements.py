@@ -783,6 +783,7 @@ async def close_browser_session(sid: str):
 
 # ---- 元素资产管理（阶段1） ----
 from app.services.element_asset_service import ElementAssetService
+from app.schemas.element_schema import LocatorVerifyRequest
 from app.schemas.element_schema import (
     ElementUpdateRequest,
     LocatorReorderRequest,
@@ -950,3 +951,51 @@ async def create_element_asset(request: ElementCreateRequest, db: AsyncSession =
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "data": el.to_dict()}
+
+
+@router.post("/elements/{element_id}/locators/verify")
+async def verify_element_locator(element_id: str, request: LocatorVerifyRequest,
+                                 db: AsyncSession = Depends(get_db)):
+    """快速校验：用激活环境的 URL 开页面跑一次定位。
+    复用 playwright_service 登录态链路。占位页面（/__placeholder__/）不可校验。"""
+    uid = _element_uuid_or_400(element_id)
+    el = await db.get(ElementRepository, uid)
+    if not el:
+        raise HTTPException(status_code=404, detail="元素不存在")
+    if not el.page_id:
+        raise HTTPException(status_code=400, detail="全局元素无页面URL，无法校验")
+    page_row = await db.get(PageRepository, el.page_id)
+    if not page_row:
+        raise HTTPException(status_code=404, detail="所属页面不存在")
+    if (page_row.page_url or "").startswith("/__placeholder__/"):
+        raise HTTPException(status_code=400, detail="该页面为占位页面（无真实URL），请先在页面树中补全页面URL再校验")
+
+    from app.models.system import TestEnv
+    env = (await db.execute(
+        select(TestEnv).where(TestEnv.status == "active").limit(1)
+    )).scalar_one_or_none()
+    if not env:
+        raise HTTPException(status_code=400, detail="无激活测试环境，请先在「环境管理」激活")
+
+    from app.services.playwright_service import PlaywrightService
+    from app.services.element_asset_service import verify_locator_on_page
+    pw = PlaywrightService()
+    page = None
+    try:
+        await pw.start(headless=True)
+        target_url = env.url.rstrip("/") + (page_row.page_url or "")
+        page = await pw.browser.new_page()
+        await page.goto(target_url, timeout=30000, wait_until="networkidle")
+        result = await verify_locator_on_page(
+            page, {"type": request.locator_type, "value": request.locator_value,
+                   "score": request.score or 0})
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"页面打开失败: {str(e)[:200]}")
+    finally:
+        if page:
+            try:
+                await page.close()
+            except Exception:
+                pass
+        await pw.close()
+    return {"code": 0, "data": result}

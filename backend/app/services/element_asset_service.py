@@ -300,3 +300,20 @@ class ElementAssetService:
             select(ElementRepository).where(*conds).order_by(ElementRepository.updated_at.desc())
         )
         return result.scalars().all()
+
+
+async def verify_locator_on_page(page, locator: Dict) -> Dict:
+    """单条定位器在已登录页面上验证。返回 {hit_count, score, error}。
+    评分规则与抓取端 verify_and_score_locator 对齐：唯一+20 / 非唯一-20。"""
+    value = locator.get("value", "")
+    score = locator.get("score", 0) or 0
+    try:
+        if locator.get("type") == "xpath":
+            found = await page.locator(f"xpath={value}").all()
+        else:
+            found = await page.locator(value).all()
+        n = len(found)
+        final = score + 20 if n == 1 else (score - 20 if n > 1 else 0)
+        return {"hit_count": n, "score": max(final, 0), "error": None}
+    except Exception as e:
+        return {"hit_count": 0, "score": 0, "error": str(e)[:200]}

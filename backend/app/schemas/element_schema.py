@@ -350,3 +350,9 @@ class ElementCreateRequest(BaseModel):
     scope: str = Field("page", pattern="^(page|global)$")
     page_id: Optional[str] = None
     locators: Optional[List[dict]] = None
+
+
+class LocatorVerifyRequest(BaseModel):
+    locator_type: str = Field(..., max_length=30)
+    locator_value: str = Field(..., min_length=1, max_length=500)
+    score: Optional[int] = Field(None, ge=0, le=150)
