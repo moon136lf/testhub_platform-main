@@ -871,3 +871,53 @@ async def recycle_bin(project_id: str = Query(...), db: AsyncSession = Depends(g
     """回收站列表。"""
     els = await ElementAssetService(db).list_recycled(project_id)
     return {"code": 0, "data": [e.to_dict() for e in els]}
+
+
+# ---------------- 页面树（层级 + 编辑 + 上下移 + 守护删除） ----------------
+from app.schemas.element_schema import (
+    SubPageCreateRequest,
+    PageRenameRequest,
+    PageMoveRequest,
+)
+
+
+@router.post("/pages-tree")
+async def create_sub_page(request: SubPageCreateRequest, db: AsyncSession = Depends(get_db)):
+    """创建子页面（parent_id=None 即根级）。"""
+    try:
+        page = await ElementAssetService(db).create_sub_page(
+            request.project_id, request.parent_id, request.page_name, request.page_url or "")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": page.to_dict()}
+
+
+@router.put("/pages-tree/{page_id}")
+async def rename_page_node(page_id: str, request: PageRenameRequest, db: AsyncSession = Depends(get_db)):
+    """重命名页面。"""
+    try:
+        await ElementAssetService(db).rename_page(page_id, request.page_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "renamed"}
+
+
+@router.post("/pages-tree/{page_id}/move")
+async def move_page_node(page_id: str, request: PageMoveRequest, db: AsyncSession = Depends(get_db)):
+    """同级上移/下移。"""
+    try:
+        await ElementAssetService(db).move_page(page_id, request.direction)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "moved"}
+
+
+@router.delete("/pages-tree/{page_id}")
+async def delete_page_node(page_id: str, move_to_page_id: Optional[str] = Query(None),
+                           force: bool = Query(False), db: AsyncSession = Depends(get_db)):
+    """删页面（有子页面拒绝；有元素须给 move_to_page_id 或 force）。"""
+    try:
+        await ElementAssetService(db).delete_page(page_id, move_to_page_id, force)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "deleted"}

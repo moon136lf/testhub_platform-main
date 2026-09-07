@@ -32,6 +32,24 @@ def _coerce_to_str(value: Any) -> Any:
 StrField = Annotated[str, BeforeValidator(_coerce_to_str)]
 
 
+class SubPageCreateRequest(BaseModel):
+    """创建子页面请求（parent_id=None 即根级）"""
+    project_id: str
+    parent_id: Optional[str] = None
+    page_name: str = Field(..., min_length=1, max_length=100)
+    page_url: Optional[str] = None
+
+
+class PageRenameRequest(BaseModel):
+    """页面重命名请求"""
+    page_name: str = Field(..., min_length=1, max_length=100)
+
+
+class PageMoveRequest(BaseModel):
+    """页面上移/下移请求"""
+    direction: str = Field(..., pattern="^(up|down)$")
+
+
 class LocatorStrategy(BaseModel):
     """单个定位器策略"""
 

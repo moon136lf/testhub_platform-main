@@ -300,3 +300,170 @@ class TestRecycleBin:
         svc = ElementAssetService(db)
         out = await svc.list_recycled("p1")
         assert out == els
+
+
+class TestPageTree:
+    @pytest.mark.asyncio
+    async def test_create_sub_page_validates_name(self):
+        db = _db()
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError, match="名称"):
+            await svc.create_sub_page("p1", None, "   ")  # 空白名
+
+    @pytest.mark.asyncio
+    async def test_create_sub_page_with_parent(self):
+        db = _db()
+        added = []
+        db.add = lambda o: added.append(o)
+        db.commit = AsyncMock()
+        db.flush = AsyncMock()
+        # PageRepository 构造是 ORM，直接让它进 added
+        svc = ElementAssetService(db)
+        page = await svc.create_sub_page("p1", "11111111-1111-1111-1111-111111111111", "登录页")
+        assert added[0].parent_id is not None
+        assert added[0].page_name == "登录页"
+        db.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_rename_page(self):
+        db = _db()
+        page = MagicMock()
+        page.page_name = "旧名"
+
+        async def _get(cls, pid):
+            return page
+        db.get = _get
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.rename_page(str(uuid4()), "新名")
+        assert page.page_name == "新名"
+
+    @pytest.mark.asyncio
+    async def test_move_page_swaps_sort_order(self):
+        db = _db()
+        p1, p2 = MagicMock(), MagicMock()
+        p1.id, p2.id = uuid4(), uuid4()
+        p1.sort_order, p2.sort_order = 1, 2
+
+        async def _get(cls, pid):
+            return p1
+        async def _execute(q):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = [p1, p2]
+            return r
+        db.get = _get
+        db.execute = _execute
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.move_page(str(p1.id), "down")
+        assert p1.sort_order == 2 and p2.sort_order == 1
+
+    @pytest.mark.asyncio
+    async def test_move_page_at_boundary_noop(self):
+        db = _db()
+        p1 = MagicMock()
+        p1.id = uuid4()
+        p1.sort_order = 1
+
+        async def _get(cls, pid):
+            return p1
+        async def _execute(q):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = [p1]
+            return r
+        db.get = _get
+        db.execute = _execute
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.move_page(str(p1.id), "up")  # 已在最上
+        db.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_delete_page_with_children_blocked(self):
+        db = _db()
+        page = MagicMock(id=uuid4())
+        child = MagicMock(parent_id=page.id)
+
+        async def _get(cls, pid):
+            return page
+        async def _execute(q):
+            # 第一次调用查 children 返回 [child]
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = [child]
+            return r
+        db.get = _get
+        db.execute = _execute
+
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError, match="子页面"):
+            await svc.delete_page(str(page.id))
+
+    @pytest.mark.asyncio
+    async def test_delete_page_with_elements_requires_target_or_force(self):
+        """页面下有元素时：不给迁移目标且不 force → 拒绝"""
+        db = _db()
+        page = MagicMock(id=uuid4())
+
+        async def _get(cls, pid):
+            return page
+        async def _execute(q):
+            r = MagicMock()
+            # 查 children（空）→ 查元素数用 scalar
+            r.scalars.return_value.all.return_value = []
+            r.scalar.return_value = 3  # 有 3 个元素
+            return r
+        db.get = _get
+        db.execute = _execute
+
+        svc = ElementAssetService(db)
+        with pytest.raises(ValueError, match="迁移"):
+            await svc.delete_page(str(page.id), move_to_page_id=None, force=False)
+
+    @pytest.mark.asyncio
+    async def test_delete_page_move_elements_to_target(self):
+        db = _db()
+        page = MagicMock(id=uuid4())
+        target_id = uuid4()
+
+        async def _get(cls, pid):
+            return page
+        async def _exec(q):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = []
+            r.scalar.return_value = 3
+            return r
+        db.get = _get
+        db.execute = AsyncMock(side_effect=_exec)
+        db.delete = AsyncMock()
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.delete_page(str(page.id), move_to_page_id=str(target_id), force=False)
+        # 验证 update 语句执行了两次（迁移元素 + 删除页面前的所有 execute）
+        assert db.execute.await_count >= 2
+        db.delete.assert_awaited_once()
+        db.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_delete_page_force_recycles_elements(self):
+        db = _db()
+        page = MagicMock(id=uuid4())
+
+        async def _get(cls, pid):
+            return page
+        async def _exec(q):
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = []
+            r.scalar.return_value = 2
+            return r
+        db.get = _get
+        db.execute = AsyncMock(side_effect=_exec)
+        db.delete = AsyncMock()
+        db.commit = AsyncMock()
+
+        svc = ElementAssetService(db)
+        await svc.delete_page(str(page.id), force=True)
+        db.delete.assert_awaited_once()

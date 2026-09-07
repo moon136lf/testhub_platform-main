@@ -6,7 +6,7 @@
 import logging
 import uuid as _uuid
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -140,3 +140,102 @@ class ElementAssetService:
             )
         )
         return result.scalars().all()
+
+    # ---------------- 页面树（层级 + 编辑 + 上下移 + 守护删除） ----------------
+
+    async def create_sub_page(self, project_id: str, parent_id: Optional[str],
+                              page_name: str, page_url: str = "") -> "PageRepository":
+        """创建子页面（parent_id=None 即根级）。"""
+        if not page_name or not page_name.strip():
+            raise ValueError("页面名称不能为空")
+        from app.models.element import PageRepository
+        page = PageRepository(
+            project_id=_to_uuid(project_id) or project_id,
+            parent_id=_uuid.UUID(parent_id) if parent_id else None,
+            page_name=page_name.strip()[:100],
+            page_url=page_url or f"/#{page_name.strip()}",
+        )
+        self.db.add(page)
+        await self.db.commit()
+        return page
+
+    async def rename_page(self, page_id: str, page_name: str) -> None:
+        """重命名页面。"""
+        if not page_name or not page_name.strip():
+            raise ValueError("页面名称不能为空")
+        from app.models.element import PageRepository
+        page = await self.db.get(PageRepository, _uuid.UUID(page_id))
+        if not page:
+            raise ValueError("页面不存在")
+        page.page_name = page_name.strip()[:100]
+        await self.db.commit()
+
+    async def move_page(self, page_id: str, direction: str) -> None:
+        """同级上移/下移：与相邻页面交换 sort_order。"""
+        from app.models.element import PageRepository
+        page = await self.db.get(PageRepository, _uuid.UUID(page_id))
+        if not page:
+            raise ValueError("页面不存在")
+        result = await self.db.execute(
+            select(PageRepository).where(
+                PageRepository.project_id == page.project_id,
+                PageRepository.parent_id == page.parent_id,
+            ).order_by(PageRepository.sort_order, PageRepository.created_at)
+        )
+        siblings = list(result.scalars().all())
+        idx = next((i for i, p in enumerate(siblings) if p.id == page.id), None)
+        if idx is None:
+            return
+        j = idx - 1 if direction == "up" else idx + 1
+        if j < 0 or j >= len(siblings):
+            return  # 已到边界，静默
+        siblings[idx].sort_order, siblings[j].sort_order = siblings[j].sort_order, siblings[idx].sort_order
+        await self.db.commit()
+
+    async def delete_page(self, page_id: str, move_to_page_id: Optional[str] = None,
+                          force: bool = False) -> None:
+        """删页面：有子页面拒绝；有元素时须给迁移目标或 force（元素一起进回收站）。
+
+        move_to_page_id: 页面下元素迁移到此页面
+        force: 页面下元素直接进回收站（status=deleted + recycled_at）"""
+        from app.models.element import PageRepository, ElementRepository
+        page = await self.db.get(PageRepository, _uuid.UUID(page_id))
+        if not page:
+            raise ValueError("页面不存在")
+        children = await self.db.execute(
+            select(PageRepository).where(PageRepository.parent_id == page.id)
+        )
+        if children.scalars().all():
+            raise ValueError("存在子页面，请先删除/迁移子页面")
+        n = await self._count_page_elements(str(page.id))
+        if n > 0 and not force and not move_to_page_id:
+            raise ValueError(f"页面下有 {n} 个元素，请指定迁移目标页面或选择一并删除")
+        if n > 0 and move_to_page_id:
+            target = _uuid.UUID(move_to_page_id)
+            await self.db.execute(
+                ElementRepository.__table__.update()
+                .where(ElementRepository.page_id == page.id)
+                .values(page_id=target)
+            )
+        elif n > 0 and force:
+            await self.db.execute(
+                ElementRepository.__table__.update()
+                .where(ElementRepository.page_id == page.id)
+                .values(status="deleted", recycled_at=datetime.now(timezone.utc))
+            )
+        await self.db.delete(page)
+        await self.db.commit()
+
+    async def _count_page_elements(self, page_id: str) -> int:
+        from app.models.element import ElementRepository
+        from sqlalchemy import func
+        uid = _to_uuid(page_id)
+        if uid is None:
+            return 0
+        r = await self.db.execute(
+            select(func.count(ElementRepository.id)).where(
+                ElementRepository.page_id == uid,
+                ElementRepository.status == "active",
+            )
+        )
+        return r.scalar() or 0
