@@ -12,6 +12,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 别名默认生成的类型中文映射（P3 工作台：别名默认中文）
+TYPE_CN = {
+    "button": "按钮", "input": "输入框", "select": "下拉框", "link": "链接",
+    "textarea": "文本域", "span": "文本", "p": "文本", "h1": "标题", "h2": "标题",
+    "h3": "标题", "label": "标签", "td": "单元格", "th": "表头", "other": "元素",
+}
+
+
+def _default_cn_alias(elem_type: str, counter: int) -> str:
+    """{类型中文}{序号}，如 按钮1 / 输入框2."""
+    cn = TYPE_CN.get(elem_type or "other", TYPE_CN["other"])
+    return f"{cn}{counter}"
+
 
 class ElementService:
     """元素管理服务"""
@@ -140,6 +153,8 @@ class ElementService:
             project_id = page.project_id
 
             element_objects: List[ElementRepository] = []
+            # 别名中文默认序号：按类型计序（按钮1/按钮2/输入框1...）
+            type_counters: Dict[str, int] = {}
 
             for elem_data in elements:
                 # 生成元素唯一标识（element_id）
@@ -190,12 +205,23 @@ class ElementService:
                     },
                 }
 
+                # 别名：用户指定 > element_text > {类型中文}{序号}
+                elem_type = elem_data.get("type", "other") or "other"
+                user_name = (elem_data.get("element_name") or "").strip()
+                if user_name:
+                    element_name = user_name[:100]
+                elif element_text:
+                    element_name = element_text
+                else:
+                    type_counters[elem_type] = type_counters.get(elem_type, 0) + 1
+                    element_name = _default_cn_alias(elem_type, type_counters[elem_type])
+
                 element = ElementRepository(
                     page_id=page_id,
                     project_id=project_id,
                     element_id=element_id,
-                    element_name=element_text or element_id,
-                    element_type=elem_data.get("type", "other"),
+                    element_name=element_name,
+                    element_type=elem_type,
                     element_text=element_text,
                     locator_strategies=locator_strategies,
                     semantic_info=semantic_info,

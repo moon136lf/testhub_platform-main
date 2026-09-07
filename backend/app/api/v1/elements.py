@@ -202,6 +202,7 @@ async def import_elements(
             "placeholder": attrs.get("placeholder"),
             "value": attrs.get("value"),
             "href": attrs.get("href"),
+            "element_name": sem.get("aria_label"),
         })
 
     if not selected_elements:
@@ -239,6 +240,41 @@ async def list_pages(
     pages = result.scalars().all()
 
     return [PageResponse(**page.to_dict()) for page in pages]
+
+
+@router.get("/pages/tree")
+async def get_page_tree(
+    project_id: str = Query(..., description="项目 ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """页面树（按 parent_id 组装，根=parent_id IS NULL，按 last_fetch_at 倒序）"""
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    result = await db.execute(
+        select(PageRepository)
+        .where(PageRepository.project_id == project_uuid)
+        .order_by(PageRepository.last_fetch_at.desc().nullslast())
+    )
+    pages = result.scalars().all()
+
+    nodes = {}
+    for p in pages:
+        d = p.to_dict()
+        d["children"] = []
+        nodes[p.id] = d
+
+    roots = []
+    for p in pages:
+        d = nodes[p.id]
+        parent = nodes.get(p.parent_id) if p.parent_id else None
+        if parent is not None and parent is not d:
+            parent["children"].append(d)
+        else:
+            roots.append(d)
+    return {"code": 0, "message": "ok", "data": roots}
 
 
 @router.get("/pages/{page_id}/elements", response_model=List[ElementResponse])
@@ -561,6 +597,7 @@ async def import_from_capture_session(
             "placeholder": attrs.get("placeholder"),
             "value": attrs.get("value"),
             "href": attrs.get("href"),
+            "element_name": sem.get("aria_label"),
         })
 
     imported = await ElementService.batch_import_elements(db, page_id, selected_elements)
