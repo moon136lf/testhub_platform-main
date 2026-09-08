@@ -111,6 +111,7 @@ class ElementData(BaseModel):
     temp_id: str = Field(..., description="临时 ID")
     element_type: str = Field(..., description="元素类型")
     element_text: Optional[str] = Field(None, description="元素文本")
+    element_name: Optional[str] = Field(None, description="元素别名（用户可编辑，入库优先使用）")
     locator_strategies: Dict[str, List[LocatorStrategy]] = Field(
         ..., description="定位策略列表，结构为 {'strategies': [LocatorStrategy, ...]}"
     )

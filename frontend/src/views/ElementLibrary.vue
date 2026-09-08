@@ -732,6 +732,9 @@ onMounted(() => {
   background: #fff;
   padding: 8px 0;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .element-list {
