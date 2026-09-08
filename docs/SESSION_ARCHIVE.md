@@ -121,6 +121,31 @@
 
 ---
 
+## 快照 #57 — 2026-09-08 18:10（manual，本会话）
+
+**当前分支**：master（主仓），本地=远程（be7aa11）
+
+### 本会话完成（2026-09-08）
+- bd80eab fix(elements): 会话浏览器 TargetClosedError 自愈（窗口被手动关后 open 不再 500，重启浏览器重试）
+- 806bf5e fix(logging): pytest 日志隔离时序漏洞——conftest 设 MOONTEST_LOG_DISABLE_FILE，setup_logging 跳过文件 handler；测试噪音不再灌入 app.log（704 测试验证 0 条混入）
+- fd348b4 fix(frontend): 删 axios 全局 Content-Type 默认——覆盖 multipart boundary 致用例导入 422
+- f8b8778 feat(case-import): 导入失败原因中文化（pydantic 错误翻译）+ 前端逐行失败弹窗
+- 266ef9d feat(case-import): 智能导入大版本——自由文本 Excel 自动解析（表头识别/步骤拆分/断言提取/target-data 提取/待补标记）+ 预览确认弹框（可编辑/待补橙色/展开步骤）+ 可选 AI 标准化（import_ai_optimizer，失败兜底规则版）+ 模板下载（/import-template /import/preview /import/confirm 三端点，重名自动后缀，批次挂靠 manual）
+- be7aa11 fix(import-dialog): 预览弹框空白——响应解包错层 + resetDialog 误清 cases
+
+### 关键决策
+- 用户自由文本 Excel（DM-回归测试.xlsx 9列含执行列）不改表，平台侧智能转换；AI优化本次落地（勾选才执行）
+- 浏览器 F12 联动方案评估后否决（CDP 无法驱动 DevTools inspect），替代方案：平台内路径面包屑+悬停高亮（未开工）
+
+### 测试 / 状态
+730 passed 全绿；真实 DM-回归测试.xlsx 三条用例转换验证正确。后端改动需重启 backend 生效。
+
+### 遗留
+- 元素库增强 P1（388df76 设计 spec）未开工；点选抓取路径面包屑增强未开工
+- 用户自测智能导入全流程（含 AI 优化勾选）待反馈
+
+---
+
 ## 快照 #56 — 2026-09-04 17:50（下班交接）
 
 **当前分支**：master（主仓）
