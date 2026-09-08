@@ -33,13 +33,13 @@ const router = createRouter({
           component: () => import('@/views/ai/KnowledgeManagement.vue'),
           meta: { title: '知识库管理' }
         },
-        {
+        { // 菜单已隐藏，直链可访问
           path: 'ai/rules',
           name: 'RuleManagement',
           component: () => import('@/views/ai/RuleManagement.vue'),
           meta: { title: '测试规则管理' }
         },
-        {
+        { // 菜单已隐藏，直链可访问
           path: 'ai/history',
           name: 'GenerationHistory',
           component: () => import('@/views/ai/GenerationHistory.vue'),
@@ -121,7 +121,7 @@ const router = createRouter({
           component: () => import('@/views/system/TokenDashboard.vue'),
           meta: { title: 'Token成本管理' }
         },
-        {
+        { // 菜单已隐藏，直链可访问
           path: 'reports',
           name: 'ExecutionList',
           component: () => import('@/views/reports/ExecutionList.vue'),
