@@ -146,6 +146,7 @@
             <el-button type="warning" :disabled="!selected.length" :loading="batching" @click="handleBatchRun">
               批量运行 ({{ selected.length }})
             </el-button>
+            <el-button type="success" @click="quickVisible = true">⚡ 快速运行</el-button>
             <span class="run-cfg-label">运行配置：</span>
             <el-checkbox v-model="runConfig.headless">headless</el-checkbox>
             <el-input-number v-model="runConfig.timeout" :min="10" :max="600" controls-position="right" style="width: 110px" />s
@@ -187,6 +188,8 @@
                 <el-button type="primary" link @click="openStepEditor(row)">编辑脚本</el-button>
                 <el-button type="success" link :disabled="row.status === 'confirmed'" @click="confirmScript(row)">确认入库</el-button>
                 <el-button type="warning" link @click="openDiagnose(row)">调试修复</el-button>
+                <el-button v-if="row.last_status === 'failed'" type="danger" link
+                  :loading="diagLoadingId === row.id" @click="handleAiDiagnose(row)">诊断</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -235,6 +238,29 @@
       <pre class="code-box">{{ resultContent }}</pre>
       <template #footer>
         <el-button @click="codeVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 快速运行弹窗 -->
+    <el-dialog v-model="quickVisible" title="⚡ 快速运行" width="760px">
+      <el-form label-width="100px">
+        <el-form-item label="被测URL">
+          <el-input v-model="quickForm.targetUrl" placeholder="http://localhost:8080/login" style="width: 420px" />
+        </el-form-item>
+        <el-form-item label="运行模式">
+          <el-radio-group v-model="quickForm.headless">
+            <el-radio :value="true">无头</el-radio>
+            <el-radio :value="false">有头</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="脚本内容">
+          <el-input v-model="quickForm.scriptContent" type="textarea" :rows="12"
+            placeholder="粘贴 Playwright 脚本内容..." style="font-family: monospace" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="quickVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="quickRunning" @click="handleQuickRun">运行</el-button>
       </template>
     </el-dialog>
 
@@ -343,8 +369,12 @@ const loadReport = async (setId) => {
     const resp = await testSetAPI.getReport(setId)
     // data 为 null 表示从未执行
     report.value = resp.data || null
-  } catch { report.value = null }
-  reportLoaded.value = true
+    reportLoaded.value = true
+  } catch (e) {
+    report.value = null
+    reportLoaded.value = false
+    ElMessage.error(e?.response?.data?.detail || '报告加载失败')
+  }
 }
 
 const loadSetCases = async (setId) => {
@@ -406,8 +436,7 @@ const handleRunSet = async () => {
       running.value = false
       ElMessage.warning('直播连接中断，请稍后刷新查看报告')
       loadSets()
-    })
-  } catch (e) {
+    })  } catch (e) {
     ElMessage.error(e?.response?.data?.detail || '执行启动失败')
     running.value = false
   }
@@ -469,6 +498,8 @@ const startLibSSE = (sessionId, { onDone }) => {
       onDone?.()
     }
   }, () => {
+    runningId.value = null
+    batching.value = false
     ElMessage.warning('直播连接中断，结果请刷新列表查看')
   })
 }
@@ -541,6 +572,56 @@ const aiDiagLoading = ref(false)
 const aiApplying = ref(false)
 const aiDiagCard = ref(null)
 const aiDiagRow = ref(null)
+
+// ---- 快速运行（从 ScriptConvert 迁移）----
+const quickVisible = ref(false)
+const quickRunning = ref(false)
+const quickForm = reactive({ scriptContent: '', targetUrl: '', headless: true })
+
+const handleQuickRun = async () => {
+  if (!quickForm.scriptContent || !quickForm.targetUrl) {
+    ElMessage.warning('请填写脚本内容和被测URL'); return
+  }
+  quickRunning.value = true
+  try {
+    const resp = await scriptAPI.quickRun(quickForm.scriptContent, quickForm.targetUrl, quickForm.headless)
+    startLibSSE(resp.data.session_id, { onDone: () => { quickRunning.value = false } })
+  } catch (e) { ElMessage.error('快速运行失败'); quickRunning.value = false }
+}
+
+// ---- AI 诊断入口（#5c）：last_status=failed 的行可诊断 ----
+// 链路：GET /regression/latest-execution?script_id= 反查最近一次执行（exec_id + 失败步骤）→ diagnosticsAPI.analyze
+const diagLoadingId = ref(null)
+
+const handleAiDiagnose = async (row) => {
+  diagLoadingId.value = row.id
+  try {
+    const resp = await axios.get('/regression/latest-execution', { params: { script_id: row.id } })
+    const data = resp.data?.data || {}
+    const record = data.record || {}
+    const detail = data.detail || {}
+    // latest-execution 只回 step=0 的汇总 detail，失败步骤号从 fail 明细列表第一条取
+    let step = detail.step || 0
+    let detailId = detail.id || null
+    if (record.exec_id) {
+      try {
+        const dresp = await axios.get(`/reports/records/${record.exec_id}/details?status=fail`)
+        const fails = dresp.data?.data || []
+        const matched = fails.find(f => f.script_id === row.id) || fails[0]
+        if (matched) { step = matched.step || step; detailId = matched.id || detailId }
+      } catch { /* 明细拉取失败则退回汇总 detail */ }
+    }
+    if (!record.exec_id) {
+      ElMessage.warning('暂无失败执行记录'); return
+    }
+    await openAiDiagnose({ execId: record.exec_id, step, id: detailId, script_id: row.id, element_name: row.name })
+  } catch (e) {
+    if (e?.response?.status === 404) ElMessage.warning('暂无失败执行记录')
+    else ElMessage.error(e?.response?.data?.detail || '获取最近执行记录失败')
+  } finally {
+    diagLoadingId.value = null
+  }
+}
 
 const openAiDiagnose = async (row) => {
   aiDiagRow.value = row
