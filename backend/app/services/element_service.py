@@ -274,23 +274,30 @@ class ElementService:
         """
         生成元素唯一标识 (element_id)
 
-        优先级: id > name > text > type+placeholder > type+uuid
+        优先级: id > name > text(+坐标) > text > type+placeholder(+坐标) > type+uuid
+        同属性重复元素（如表格每行的相同按钮、多个相同 placeholder 的输入框）
+        通过追加坐标后缀区分，避免被页内去重误杀。
         """
-        # 1. 使用 id
+        coords = elem_data.get("coords") or {}
+        coord_suffix = ""
+        if coords.get("x") is not None and coords.get("y") is not None:
+            coord_suffix = f"_{int(coords['x'])}_{int(coords['y'])}"
+
+        # 1. 使用 id + 坐标（同 id 属性的元素位置不同仍需区分）
         if elem_data.get("id"):
-            return str(elem_data["id"])[:100]
+            return f"{str(elem_data['id'])[:80]}{coord_suffix}"[:100]
 
-        # 2. 使用 name
+        # 2. 使用 name + 坐标
         if elem_data.get("name"):
-            return str(elem_data["name"])[:100]
+            return f"{str(elem_data['name'])[:80]}{coord_suffix}"[:100]
 
-        # 3. 使用 text
+        # 3. 使用 text + 坐标
         if elem_data.get("text") and len(str(elem_data["text"])) > 0:
-            return str(elem_data["text"])[:100]
+            return f"{str(elem_data['text'])[:80]}{coord_suffix}"[:100]
 
-        # 4. 使用 type + placeholder
+        # 4. 使用 type + placeholder + 坐标
         if elem_data.get("placeholder"):
-            return f"{elem_data.get('type', 'elem')}_{str(elem_data['placeholder'])[:80]}"
+            return f"{elem_data.get('type', 'elem')}_{str(elem_data['placeholder'])[:60]}{coord_suffix}"[:100]
 
         # 5. 兜底: type + uuid
         return f"{elem_data.get('type', 'elem')}_{uuid.uuid4().hex[:8]}"
