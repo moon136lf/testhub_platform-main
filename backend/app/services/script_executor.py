@@ -75,6 +75,7 @@ async def _run_assert_db_query(sql: str):
     from sqlalchemy import text as _text
     from app.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
+        await db.execute(_text("SET TRANSACTION READ ONLY"))
         result = await db.execute(_text(sql))
         row = result.scalar()
         return str(row) if row is not None else ""
@@ -297,7 +298,6 @@ class ScriptExecutor:
         overall_status = "pass"
         last_failure = None
         max_failures = getattr(config, "max_failures", 8) or 8
-        heal_logs = []  # #5b T5: 收集每步 SmartLocator 透传的 heal_log (聚合填 ExecutionDetail)
         heal_logs = []  # #5b T5: 收集每步 SmartLocator 透传的 heal_log (聚合填 ExecutionDetail)
         if is_editor_format:
             # 编辑器行式步骤: target 即定位符, 不经元素库 (阶段3 T0)
