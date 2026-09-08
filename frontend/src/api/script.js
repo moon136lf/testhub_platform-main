@@ -55,6 +55,11 @@ export const scriptAPI = {
     return response.data
   },
 
+  async saveScriptSteps(scriptId, title, steps) {
+    const response = await axios.put(`${API_BASE}/${scriptId}/content`, { title, steps })
+    return response.data
+  },
+
   async stats(projectId) {
     const response = await axios.get(`${API_BASE}/stats`, { params: { project_id: projectId } })
     return response.data

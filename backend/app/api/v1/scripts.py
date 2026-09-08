@@ -18,10 +18,11 @@ from app.core.database import get_db
 from app.models.project import Project
 from app.models.test_case import TestCase, ScriptAsset
 from app.schemas.script import (
-    ConvertRequest, DiagnoseRequest,
+    ConvertRequest, DiagnoseRequest, ScriptContentUpdateRequest,
     RunRequest, BatchRunRequest, QuickRunRequest,
 )
 from app.services.script_diagnose_service import ScriptDiagnoseService
+from app.services.script_edit_service import ScriptEditService
 from app.services.ai_gateway import AIGateway
 from app.tasks.script_tasks import convert_scripts_task, run_scripts_task
 
@@ -285,3 +286,18 @@ async def diagnose_script(script_id: str, request: DiagnoseRequest,
         asset.version = (asset.version or 1) + 1
         await db.commit()
     return {"code": 0, "data": {"diagnosis_card": card, "revised_script": revised_script}}
+
+
+@router.put("/{script_id}/content")
+async def update_script_content(script_id: str, request: ScriptContentUpdateRequest,
+                                db: AsyncSession = Depends(get_db)):
+    """保存步骤化编辑：行式步骤 → codegen 生成脚本。"""
+    try:
+        sid = uuid.UUID(script_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+    try:
+        asset = await ScriptEditService(db).save_steps(script_id, request.title or "", request.steps)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": asset.to_dict()}

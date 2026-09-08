@@ -105,3 +105,9 @@ class QuickRunRequest(BaseModel):
     script_content: str = Field(..., min_length=1, description="临时粘贴的 Playwright Python 脚本")
     target_url: str = Field(..., description="被测 URL")
     headless: bool = Field(True, description="运行模式")
+
+
+class ScriptContentUpdateRequest(BaseModel):
+    """步骤化编辑器保存请求 (阶段2)。"""
+    title: Optional[str] = Field(None, max_length=100)
+    steps: List[dict] = Field(..., min_length=1, description="行式步骤 [{seq,action,target,value,element_name,expected}]")
