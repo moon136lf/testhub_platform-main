@@ -100,8 +100,8 @@ const hotspotStyle = (el) => {
 
 @keyframes flash {
   50% {
-    border-color: #67c23a;
-    background: rgba(103, 194, 26, 0.3);
+    border-color: #e6a23c;
+    background: rgba(230, 162, 60, 0.45);
   }
 }
 

@@ -730,11 +730,14 @@ onMounted(() => {
   position: sticky;
   top: 0;
   background: #fff;
-  padding: 8px 0;
-  z-index: 1;
+  padding: 8px 12px;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 16px;
+  min-height: 40px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5);
 }
 
 .element-list {

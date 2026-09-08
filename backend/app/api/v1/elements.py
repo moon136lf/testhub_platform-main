@@ -25,7 +25,7 @@ Element API endpoints - 元素库管理接口 (Task 15 重构)
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List, Optional
 import uuid
 import logging
@@ -172,13 +172,35 @@ async def import_elements(
                 detail="page_name and page_url are required when page_id is not provided",
             )
 
-        page = await ElementService.create_page(
-            db,
-            project_id=project_uuid,
-            page_name=request.page_name,
-            page_url=request.page_url,
-            screenshot_url=request.screenshot_url,
-        )
+        # 规范化 URL 查重（尾斜杠差异视为同页），存在则复用，避免同页多行
+        normalized = (request.page_url or "").rstrip("/")
+        existing = None
+        if normalized:
+            all_pages = (await db.execute(
+                select(PageRepository).where(
+                    PageRepository.project_id == project_uuid)
+            )).scalars().all()
+            for p in all_pages:
+                if (p.page_url or "").rstrip("/") == normalized:
+                    existing = p
+                    break
+        if existing is not None:
+            page = existing
+            if request.page_name:
+                page.page_name = request.page_name
+            if request.screenshot_url:
+                page.screenshot_url = request.screenshot_url
+            page.last_fetch_at = func.now()
+            await db.commit()
+            await db.refresh(page)
+        else:
+            page = await ElementService.create_page(
+                db,
+                project_id=project_uuid,
+                page_name=request.page_name,
+                page_url=request.page_url,
+                screenshot_url=request.screenshot_url,
+            )
         page_id = page.id
 
     # 过滤用户勾选的元素（按 temp_id）
