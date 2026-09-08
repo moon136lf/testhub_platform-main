@@ -82,3 +82,36 @@ async def remove_test_set_case(set_id: str, case_id: str, db: AsyncSession = Dep
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "message": "removed"}
+
+
+class TestSetRunRequest(BaseModel):
+    headless: bool = True
+    fail_fast: bool = False
+    timeout: int = Field(60, ge=10, le=600)
+
+
+@router.post("/test-sets/{set_id}/run")
+async def run_test_set(set_id: str, request: TestSetRunRequest,
+                       db: AsyncSession = Depends(get_db)):
+    """执行测试集（无头/失败策略/超时可配）。"""
+    try:
+        result = await TestSetService(db).run_set(
+            set_id, headless=request.headless,
+            fail_fast=request.fail_fast, timeout=request.timeout)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": result}
+
+
+@router.get("/test-sets/{set_id}/report")
+async def test_set_report(set_id: str, db: AsyncSession = Depends(get_db)):
+    """测试集报告（含失败截图 URL）。"""
+    try:
+        report = await TestSetService(db).get_report(set_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if report is None:
+        return {"code": 0, "data": None}
+    # 顺带同步执行结果到测试集（幂等）
+    await TestSetService(db).sync_result_from_execution(set_id)
+    return {"code": 0, "data": report}
