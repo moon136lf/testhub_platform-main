@@ -321,6 +321,12 @@ class BrowserPickRequest(BaseModel):
     y: float = Field(..., description="页面坐标 y")
 
 
+class NodeHighlightRequest(BaseModel):
+    """按 CSS 路径定位节点（高亮/重跑定位器）"""
+
+    css_path: str = Field(..., min_length=1, description="CSS 选择器路径")
+
+
 # ---------------- 元素资产管理（阶段1） ----------------
 
 

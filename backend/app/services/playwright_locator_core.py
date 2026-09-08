@@ -335,6 +335,113 @@ _PICK_MARKER_JS = """
 PICK_HIT_SELECTOR = "[data-pick-hit='1']"
 
 
+# node-info 面包屑 JS：elementFromPoint → 清除旧 data-pick-hit 标记 → 打新标记 →
+# 沿 parentElement 上溯 8 层构建祖先链（每层含 tag/id/class/文本摘要/css_path/index_in_parent）
+_NODE_CHAIN_JS = """
+([x, y]) => {
+  const e = document.elementFromPoint(x, y);
+  if (!e) return null;
+  document.querySelectorAll('[data-pick-hit]').forEach(n => n.removeAttribute('data-pick-hit'));
+  e.setAttribute('data-pick-hit', '1');
+  const chain = [];
+  let cur = e;
+  let depth = 0;
+  while (cur && cur.tagName && depth < 8) {
+    const tag = cur.tagName.toLowerCase();
+    const parent = cur.parentElement;
+    let seg = tag;
+    if (parent) {
+      const same = Array.from(parent.children).filter(c => c.tagName === cur.tagName);
+      if (same.length > 1) seg += `:nth-of-type(${same.indexOf(cur) + 1})`;
+    }
+    let css = seg;
+    if (cur.id) css = tag + '#' + cur.id;
+    let p2 = parent;
+    while (p2) {
+      const ptag = p2.tagName.toLowerCase();
+      let pseg = ptag;
+      if (p2.id) { css = ptag + '#' + p2.id + ' > ' + css; break; }
+      const gp = p2.parentElement;
+      if (gp) {
+        const same2 = Array.from(gp.children).filter(c => c.tagName === p2.tagName);
+        if (same2.length > 1) pseg += `:nth-of-type(${same2.indexOf(p2) + 1})`;
+      }
+      css = pseg + ' > ' + css;
+      p2 = gp;
+      if (css.startsWith('html')) break;
+    }
+    chain.push({
+      tag: tag,
+      id: cur.id || null,
+      cls: (cur.className || '').toString().slice(0, 60) || null,
+      text: (cur.innerText || '').trim().slice(0, 50) || null,
+      css_path: css,
+      index_in_parent: parent ? Array.from(parent.children).indexOf(cur) : 0,
+    });
+    cur = parent;
+    depth++;
+  }
+  return chain;
+}
+"""
+
+
+async def _pipeline_for_locator(page, locator) -> Optional[Dict[str, Any]]:
+    """
+    定位器流水线共用 helper：generate → verify/score 过滤 → semantic 提取。
+
+    Returns:
+        同 element_tasks 阶段5 的 element dict 组装所需的三元组
+        (hit_tag_or_None 不在此处, verified_locators, semantic)；失败抛异常由调用方处理。
+    """
+    from app.tasks.element_tasks import MIN_LOCATOR_SCORE
+
+    candidates = await generate_locators_for_element(page, locator)
+    verified_locators = []
+    for candidate in candidates:
+        verified = await verify_and_score_locator(page, candidate, locator)
+        if verified and verified["score"] >= MIN_LOCATOR_SCORE:
+            verified_locators.append(verified)
+    semantic = await extract_semantic_info(page, locator)
+    verified_locators.sort(key=lambda c: c["score"], reverse=True)
+    return verified_locators, semantic
+
+
+async def _node_locators_via_css(page, css_path: str) -> Optional[Dict[str, Any]]:
+    """
+    按 CSS 路径对节点重跑定位器流水线（面包屑切层级/同级切换用）。
+
+    Returns:
+        与 _pick_element_via_dom 同构的元素 dict；节点不存在或流水线失败返回 None。
+    """
+    import uuid as _uuid
+
+    try:
+        locator = page.locator(css_path).first
+        if not await locator.count():
+            return None
+        verified_locators, semantic = await _pipeline_for_locator(page, locator)
+        if not verified_locators:
+            return None
+    except Exception as e:
+        logger.debug(f"node-locators pipeline failed for {css_path}: {e}")
+        return None
+
+    tag = await locator.evaluate("el => el.tagName.toLowerCase()")
+    return {
+        "temp_id": f"elem_pick_{_uuid.uuid4().hex[:8]}",
+        "element_type": semantic["type"],
+        "element_text": semantic["text"],
+        "locator_strategies": {"strategies": verified_locators},
+        "semantic_info": semantic,
+        "position_x": semantic["coords"]["x"],
+        "position_y": semantic["coords"]["y"],
+        "width": semantic["coords"]["width"],
+        "height": semantic["coords"]["height"],
+        "attributes": {"pick_tag": tag} or None,
+    }
+
+
 async def _pick_element_via_dom(page, x: float, y: float) -> Optional[Dict[str, Any]]:
     """
     点选补抓：按坐标 elementFromPoint 命中元素 → 生成并验证定位器 → 提取语义。
@@ -342,7 +449,7 @@ async def _pick_element_via_dom(page, x: float, y: float) -> Optional[Dict[str, 
     Returns:
         与 element_tasks 阶段5 产物同构的元素 dict；未命中返回 None。
     """
-    from app.tasks.element_tasks import MIN_LOCATOR_SCORE
+    from app.tasks.element_tasks import MIN_LOCATOR_SCORE  # noqa: F401 (pipeline helper 用)
     import uuid as _uuid
 
     hit = await page.evaluate(_PICK_MARKER_JS, [x, y])
@@ -352,13 +459,7 @@ async def _pick_element_via_dom(page, x: float, y: float) -> Optional[Dict[str, 
     try:
         locator = page.locator(PICK_HIT_SELECTOR).first
         try:
-            candidates = await generate_locators_for_element(page, locator)
-            verified_locators = []
-            for candidate in candidates:
-                verified = await verify_and_score_locator(page, candidate, locator)
-                if verified and verified["score"] >= MIN_LOCATOR_SCORE:
-                    verified_locators.append(verified)
-            semantic = await extract_semantic_info(page, locator)
+            verified_locators, semantic = await _pipeline_for_locator(page, locator)
         finally:
             # 无论成败都移除标记，避免污染后续扫描
             await page.evaluate(
@@ -369,7 +470,6 @@ async def _pick_element_via_dom(page, x: float, y: float) -> Optional[Dict[str, 
         logger.debug(f"pick-element pipeline failed at ({x}, {y}): {e}")
         return None
 
-    verified_locators.sort(key=lambda c: c["score"], reverse=True)
     return {
         "temp_id": f"elem_pick_{_uuid.uuid4().hex[:8]}",
         "element_type": semantic["type"],

@@ -67,7 +67,10 @@ from app.services.playwright_locator_core import (
     verify_and_score_locator,
     extract_semantic_info,
     _pick_element_via_dom,
+    _node_locators_via_css,
+    _NODE_CHAIN_JS,
 )
+from app.schemas.element_schema import NodeHighlightRequest
 from app.tasks.element_tasks import MIN_LOCATOR_SCORE
 
 router = APIRouter()
@@ -803,6 +806,99 @@ async def pick_browser_element(sid: str, request: BrowserPickRequest):
         )
         raise HTTPException(status_code=404, detail="No element at the given point")
     return {"code": 0, "data": {"element": element}}
+
+
+@router.post("/capture/browser/{sid}/node-info")
+async def node_info(sid: str, request: BrowserPickRequest):
+    """点选坐标 → 打标记 → 返回祖先链（面包屑数据）。标记保留至下次 node-info/会话关闭。"""
+    _browser_sess_or_404(sid)
+    page = browser_mgr.get_page(sid)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Browser released — open session first")
+
+    chain = await _bridge.run(_call(page.evaluate, _NODE_CHAIN_JS, [request.x, request.y]))
+    if chain is None:
+        raise HTTPException(status_code=404, detail="No element at the given point")
+    return {"code": 0, "data": {"chain": chain, "current_index": len(chain) - 1}}
+
+
+@router.post("/capture/browser/{sid}/node-highlight")
+async def node_highlight(sid: str, request: NodeHighlightRequest):
+    """按 css_path 查节点 → 滚动到视口中央 + 橙色闪烁 2 秒。"""
+    _browser_sess_or_404(sid)
+    page = browser_mgr.get_page(sid)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Browser released — open session first")
+
+    found = await _bridge.run(_call(page.evaluate, """
+(p) => {
+  const el = document.querySelector(p);
+  if (!el) return false;
+  el.scrollIntoView({block: 'center'});
+  el.style.outline = '3px solid #e6a23c';
+  el.style.background = 'rgba(230,162,60,0.45)';
+  setTimeout(() => { el.style.outline = ''; el.style.background = ''; }, 2000);
+  return true;
+}
+""", [request.css_path]))
+    return {"code": 0, "data": {"found": bool(found)}}
+
+
+@router.post("/capture/browser/{sid}/node-locators")
+async def node_locators(sid: str, request: NodeHighlightRequest):
+    """按 css_path 对节点重跑定位器流水线 → 定位卡片数据 + 同级兄弟列表。"""
+    _browser_sess_or_404(sid)
+    page = browser_mgr.get_page(sid)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Browser released — open session first")
+
+    element = await _bridge.run(_node_locators_via_css(page, request.css_path))
+    if element is None:
+        raise HTTPException(status_code=404, detail="Node not found (page may have changed)")
+
+    # 同级兄弟：在命中节点的 css_path 上取同父 children（排除自身）
+    siblings = await _bridge.run(_call(page.evaluate, """
+(p) => {
+  const el = document.querySelector(p);
+  if (!el || !el.parentElement) return [];
+  return Array.from(el.parentElement.children)
+    .filter(c => c !== el)
+    .map(c => {
+      const tag = c.tagName.toLowerCase();
+      const parent = c.parentElement;
+      let seg = tag;
+      if (parent) {
+        const same = Array.from(parent.children).filter(x => x.tagName === c.tagName);
+        if (same.length > 1) seg += `:nth-of-type(${same.indexOf(c) + 1})`;
+      }
+      return {
+        tag: tag,
+        text: (c.innerText || '').trim().slice(0, 50) || null,
+        css_path: p2css(c),
+      };
+    });
+
+  function p2css(node) {
+    let css = '';
+    let cur = node;
+    while (cur && cur.tagName) {
+      const tag = cur.tagName.toLowerCase();
+      let seg = tag;
+      if (cur.id) { css = tag + '#' + cur.id + (css ? ' > ' + css : ''); break; }
+      const parent = cur.parentElement;
+      if (parent) {
+        const same = Array.from(parent.children).filter(x => x.tagName === cur.tagName);
+        if (same.length > 1) seg += `:nth-of-type(${same.indexOf(cur) + 1})`;
+      }
+      css = css ? seg + ' > ' + css : seg;
+      cur = parent;
+      if (css.startsWith('html')) break;
+    }
+    return css;
+  }
+}
+""", [request.css_path]))
+    return {"code": 0, "data": {"element": element, "siblings": siblings or []}}
 
 
 @router.post("/capture/browser/{sid}/release")
