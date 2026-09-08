@@ -15,6 +15,44 @@ from app.schemas.test_case import CaseCreateRequest, StepSchema
 
 logger = logging.getLogger(__name__)
 
+# pydantic 校验错误 → 中文友好提示（导入失败原因展示用）
+_FIELD_LABELS_ZH = {
+    "name": "用例名称",
+    "priority": "优先级",
+    "case_type": "用例类型",
+    "steps": "测试步骤",
+    "expected_result": "预期结果",
+    "precondition": "前置条件",
+}
+
+
+def _friendly_validation_error(exc: Exception) -> str:
+    """把 pydantic ValidationError 翻译成中文字段级提示；其他异常原样返回。"""
+    try:
+        from pydantic import ValidationError
+        if not isinstance(exc, ValidationError):
+            return str(exc)
+        parts = []
+        for err in exc.errors():
+            loc = ".".join(str(x) for x in err.get("loc", []))
+            label = _FIELD_LABELS_ZH.get(loc.split(".")[0], loc or "字段")
+            etype = err.get("type", "")
+            input_val = err.get("input")
+            if etype == "string_pattern_mismatch":
+                allowed = "P0/P1/P2/P3" if "priority" in loc else "functional/interface_case"
+                parts.append(f"{label}「{input_val}」无效，应为 {allowed}")
+            elif etype == "string_too_short":
+                parts.append(f"{label}不能为空")
+            elif etype == "string_too_long":
+                parts.append(f"{label}过长（最多 {err.get('ctx', {}).get('max_length', '?')} 字）")
+            elif etype == "missing":
+                parts.append(f"{label}缺失")
+            else:
+                parts.append(f"{label}格式不正确")
+        return "；".join(parts) if parts else str(exc)
+    except Exception:
+        return str(exc)
+
 
 class ImportExportService:
     def __init__(self, db: AsyncSession):
@@ -137,7 +175,7 @@ class ImportExportService:
             except Exception as e:
                 await self.db.rollback()
                 failed += 1
-                errors.append({"row": idx, "reason": str(e)})
+                errors.append({"row": idx, "reason": _friendly_validation_error(e)})
         return {"imported": imported, "failed": failed, "errors": errors}
 
     def _parse(self, file_bytes: bytes, fmt: str) -> List[dict]:
