@@ -159,11 +159,13 @@ class ElementService:
             # 页内去重：同一批次可能含重复 element_id（如重复抓取同页、相同文本派生），
             # 唯一约束 uq_element_repository_page_element 会整体回滚，这里保留首个
             seen_element_ids: set = set()
+            skipped_duplicates = 0
 
             for elem_data in elements:
                 # 生成元素唯一标识（element_id）
                 element_id = ElementService._generate_element_id(elem_data)
                 if element_id in seen_element_ids:
+                    skipped_duplicates += 1
                     logger.warning(
                         f"Skip duplicate element_id '{element_id}' in batch import to page {page_id}"
                     )
@@ -256,8 +258,11 @@ class ElementService:
             page.last_fetch_at = func.now()
             await db.commit()
 
-            logger.info(f"Imported {len(element_objects)} elements to page {page_id}")
-            return element_objects
+            logger.info(
+                f"Imported {len(element_objects)} elements to page {page_id} "
+                f"(skipped {skipped_duplicates} duplicates)"
+            )
+            return element_objects, skipped_duplicates
 
         except Exception as e:
             await db.rollback()

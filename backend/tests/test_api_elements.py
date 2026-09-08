@@ -65,7 +65,7 @@ def test_import_endpoint_maps_element_data(client):
     fake_page = MagicMock()
     fake_page.id = "p1"
     with patch("app.services.element_service.ElementService.create_page", new=AsyncMock(return_value=fake_page)), \
-         patch("app.services.element_service.ElementService.batch_import_elements", new=AsyncMock(return_value=[MagicMock(element_name="刷新")])):
+         patch("app.services.element_service.ElementService.batch_import_elements", new=AsyncMock(return_value=([MagicMock(element_name="刷新")], 0))):
         r = client.post("/api/v1/elements/import", json=payload)
     assert r.status_code == 200, r.text
     assert r.json()["imported_count"] == 1

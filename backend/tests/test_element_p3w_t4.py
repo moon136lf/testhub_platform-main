@@ -55,6 +55,7 @@ def _db_returning_page(page):
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
+    db.rollback = AsyncMock()
     return db
 
 
@@ -64,7 +65,7 @@ def _db_returning_page(page):
 def _run_batch_import(page, elements):
     from app.services.element_service import ElementService
     db = _db_returning_page(page)
-    return ElementService.batch_import_elements.__wrapped__ if False else None, db
+    return ElementService.batch_import_elements(db, page.id, elements)
 
 
 @pytest.mark.asyncio
@@ -78,7 +79,7 @@ async def test_alias_default_chinese_counter_per_type():
         {"type": "button", "id": "btnB", "locator_chain": {"strategies": []}},
         {"type": "input", "id": "inA", "locator_chain": {"strategies": []}},
     ]
-    imported = await ElementService.batch_import_elements(db, page.id, elements)
+    imported, _skipped = await ElementService.batch_import_elements(db, page.id, elements)
     names = [e.element_name for e in imported]
     assert names == ["按钮1", "按钮2", "输入框1"]
 
@@ -93,7 +94,7 @@ async def test_alias_prefers_element_text():
         {"type": "button", "id": "btnX", "text": "提 交", "locator_chain": {"strategies": []}},
         {"type": "other", "id": "zz", "locator_chain": {"strategies": []}},
     ]
-    imported = await ElementService.batch_import_elements(db, page.id, elements)
+    imported, _skipped = await ElementService.batch_import_elements(db, page.id, elements)
     assert imported[0].element_name == "提 交"
     assert imported[1].element_name == "元素1"
 
@@ -107,7 +108,7 @@ async def test_alias_user_provided_wins():
     elements = [
         {"type": "button", "id": "b1", "element_name": "我的按钮", "locator_chain": {"strategies": []}},
     ]
-    imported = await ElementService.batch_import_elements(db, page.id, elements)
+    imported, _skipped = await ElementService.batch_import_elements(db, page.id, elements)
     assert imported[0].element_name == "我的按钮"
 
 

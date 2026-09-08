@@ -230,7 +230,7 @@ async def _fetch_elements_async(
         # 阶段 8: 完成 (100%) - 元素落库 + 写入页面缓存（三类 Redis 键之一）
         # 抓取结果持久化: page_repository(upsert) + element_repository + fetch_history
         try:
-            imported = await _persist_fetch_result(
+            imported, _skipped = await _persist_fetch_result(
                 project_id, url, screenshot_url, verified_elements, bool(username and password))
             await sse.send_message(
                 type="system", stage="complete",
@@ -367,7 +367,7 @@ async def _persist_fetch_result(
                 "name": attrs.get("name"),
                 "placeholder": attrs.get("placeholder"),
             })
-        imported_elems = await ElementService.batch_import_elements(db, page.id, import_items)
+        imported_elems, skipped_dup = await ElementService.batch_import_elements(db, page.id, import_items)
 
         # 3. 抓取历史
         db.add(FetchHistory(
@@ -384,4 +384,4 @@ async def _persist_fetch_result(
         imported = len(imported_elems)
 
     logger.info(f"Persisted fetch result | page_id={page.id} imported={imported}")
-    return imported
+    return imported, skipped_dup

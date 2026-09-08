@@ -214,7 +214,7 @@ async def import_elements(
         raise HTTPException(status_code=400, detail="No elements selected")
 
     # 批量导入
-    imported = await ElementService.batch_import_elements(
+    imported, skipped = await ElementService.batch_import_elements(
         db, page_id, selected_elements
     )
 
@@ -222,7 +222,7 @@ async def import_elements(
         page_id=str(page_id),
         page_name=imported[0].element_name if imported else "",
         imported_count=len(imported),
-        failed_count=0,
+        failed_count=skipped,
     )
 
 
@@ -605,7 +605,7 @@ async def import_from_capture_session(
             "element_name": sem.get("aria_label"),
         })
 
-    imported = await ElementService.batch_import_elements(db, page_id, selected_elements)
+    imported, skipped = await ElementService.batch_import_elements(db, page_id, selected_elements)
 
     # import done: close the session
     await CaptureSessionService.delete(session_id)
@@ -614,7 +614,7 @@ async def import_from_capture_session(
         page_id=str(page_id),
         page_name=(page.page_name or (request.page_name or "")),
         imported_count=len(imported),
-        failed_count=0,
+        failed_count=skipped,
         session_total=0,
     )
 
