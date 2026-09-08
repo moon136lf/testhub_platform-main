@@ -130,6 +130,7 @@ class FunctionalCaseGenerator:
                 expected_result=str(expected)[:EXPECTED_MAX_LEN],
                 is_finalized=False,
                 batch_id=batch_id,
+                source_type="whitescan",
             )
             self.db.add(tc)
             seen_titles.add(title)

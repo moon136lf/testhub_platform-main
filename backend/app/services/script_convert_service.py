@@ -82,6 +82,8 @@ class ScriptConvertService:
             step_mapping=gen.step_mapping,
             locator_source=gen.locator_source, last_status="never_run",
             batch_name=batch_name,
+            # 阶段3: 白盒生成的用例转脚本 → 自动纳入回归集
+            for_regression=(case.get("source_type") == "whitescan"),
         )
         await sse.send_message(type="system", stage="convert_script",
                                content="转换完成，脚本已生成", progress=1.0,
