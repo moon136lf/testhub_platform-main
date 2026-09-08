@@ -72,6 +72,33 @@
               <el-button type="primary" :loading="converting" @click="handleConvert">批量转脚本</el-button>
             </el-form-item>
           </el-form>
+
+          <!-- 页面树 + 用例勾选列表（阶段2：按页面分组勾选） -->
+          <div class="case-picker" v-if="form.projectId">
+            <div class="case-tree">
+              <div class="case-tree-title">页面 / 测试点</div>
+              <div class="tree-node" :class="{ active: treeGroup === '' }" @click="treeGroup = ''">
+                全部用例 ({{ allCases.length }})
+              </div>
+              <div v-for="g in caseGroups" :key="g.name" class="tree-node"
+                :class="{ active: treeGroup === g.name }" @click="treeGroup = g.name">
+                {{ g.name }} ({{ g.cases.length }})
+              </div>
+            </div>
+            <div class="case-list">
+              <el-checkbox-group v-model="form.caseIds">
+                <div v-for="c in filteredCases" :key="c.id" class="case-item">
+                  <el-checkbox :value="c.id">
+                    <span>{{ c.name }}</span>
+                    <el-tag v-if="c.feasibility_level === 'full'" type="success" size="small" style="margin-left: 6px">可自动化</el-tag>
+                    <el-tag v-else-if="c.feasibility_level === 'partial'" type="warning" size="small" style="margin-left: 6px">部分可自动化</el-tag>
+                    <el-tag v-else-if="c.feasibility_level === 'manual'" type="info" size="small" style="margin-left: 6px">仅手工</el-tag>
+                  </el-checkbox>
+                </div>
+                <el-empty v-if="!filteredCases.length" description="无用例" :image-size="60" />
+              </el-checkbox-group>
+            </div>
+          </div>
         </el-card>
       </el-tab-pane>
 
@@ -170,7 +197,7 @@
       </div>
     </el-card>
 
-    <!-- 转换结果弹窗：列出本次转换生成的脚本，可查看代码/入库状态 -->
+    <!-- 转换结果弹窗：列出本次转换生成的脚本，可查看代码/编辑/存测试集 -->
     <el-dialog v-model="resultVisible" title="转换结果（脚本库）" width="820px">
       <el-table :data="resultScripts" border size="small">
         <el-table-column prop="name" label="脚本名" min-width="220" show-overflow-tooltip />
@@ -180,15 +207,22 @@
           </template>
         </el-table-column>
         <el-table-column prop="last_status" label="上次结果" width="100" />
-        <el-table-column label="操作" width="100">
+        <el-table-column label="操作" width="180">
           <template #default="{ row }">
             <el-button type="primary" link @click="viewResultCode(row)">看代码</el-button>
+            <el-button type="primary" link @click="openStepEditor(row)">编辑脚本</el-button>
           </template>
         </el-table-column>
       </el-table>
       <template #footer>
+        <el-button type="success" @click="handleSaveAsTestSet">存为测试集</el-button>
         <el-button @click="resultVisible = false">关闭</el-button>
       </template>
+    </el-dialog>
+
+    <!-- 步骤化编辑弹窗（StepEditor，阶段2核心件） -->
+    <el-dialog v-model="stepEditorVisible" :title="`编辑脚本：${editingScript?.name || ''}`" width="900px">
+      <StepEditor :initial-steps="editingScript?.step_mapping || []" @save="handleSaveSteps" />
     </el-dialog>
 
     <!-- 脚本代码弹窗 -->
@@ -251,13 +285,16 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { scriptAPI } from '@/api/script'
+import { testSetAPI } from '@/api/testSet'
 import { projectAPI } from '@/api/project'
 import { testCaseAPI } from '@/api/testCase'
+import { aiCaseAPI } from '@/api/ai-case'
 import { diagnosticsAPI } from '@/api/diagnostics'
 import DiagnosisCard from '@/components/DiagnosisCard.vue'
+import StepEditor from '@/components/StepEditor.vue'
 import axios from '@/api/axios.js'
 
 const projects = ref([])
@@ -306,6 +343,43 @@ const onProjectChange = () => {
   loadCases()
   loadScripts()
   loadStats()
+  loadPointsAndCases()
+  treeGroup.value = ''
+}
+
+// ---- 页面树 + 用例勾选（阶段2）----
+const allCases = ref([])        // aiCaseAPI.getTestCases 全量（含 point_id/feasibility_level）
+const pointsById = ref({})      // point_id → page_name（分组用）
+const treeGroup = ref('')       // 当前选中的树节点（''=全部）
+
+const caseGroups = computed(() => {
+  const byName = new Map()
+  for (const c of allCases.value) {
+    const name = (c.point_id && pointsById.value[c.point_id]) || (c.name || '').split('-')[0].split('_')[0] || '未分组'
+    if (!byName.has(name)) byName.set(name, [])
+    byName.get(name).push(c)
+  }
+  return [...byName.entries()].map(([name, cases]) => ({ name, cases }))
+})
+
+const filteredCases = computed(() => {
+  if (!treeGroup.value) return allCases.value
+  return caseGroups.value.find(g => g.name === treeGroup.value)?.cases || []
+})
+
+const loadPointsAndCases = async () => {
+  if (!form.projectId) { allCases.value = []; return }
+  try {
+    const tcResp = await aiCaseAPI.getTestCases(form.projectId, 0, 1000)
+    allCases.value = tcResp.data || []
+  } catch { allCases.value = [] }
+  // 测试点 page_name 用于树分组（点可能已删，容错）
+  try {
+    const tpResp = await aiCaseAPI.getTestPoints(form.projectId, 0, 1000)
+    const map = {}
+    for (const p of (tpResp.data || [])) map[p.id] = p.page_name
+    pointsById.value = map
+  } catch { pointsById.value = {} }
 }
 
 const loadCases = async () => {
@@ -433,6 +507,43 @@ const viewResultCode = async (row) => {
 
 const codeVisible = ref(false)
 
+// ---- 步骤化编辑（阶段2 StepEditor）----
+const stepEditorVisible = ref(false)
+const editingScript = ref(null)
+
+const openStepEditor = (row) => {
+  editingScript.value = row
+  stepEditorVisible.value = true
+}
+
+const handleSaveSteps = async (steps) => {
+  try {
+    await scriptAPI.saveScriptSteps(editingScript.value.id, editingScript.value.name, steps)
+    ElMessage.success('脚本已保存（Playwright 代码已重新生成）')
+    stepEditorVisible.value = false
+    loadScripts()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '保存失败')
+  }
+}
+
+// ---- 存为测试集（阶段2）----
+const handleSaveAsTestSet = async () => {
+  if (!form.caseIds.length) {
+    ElMessage.warning('请先勾选用例（转换时选择的用例）'); return
+  }
+  try {
+    const { value } = await ElMessageBox.prompt('输入测试集名称', '存为测试集', {
+      confirmButtonText: '保存', cancelButtonText: '取消', inputPattern: /\S+/, inputErrorMessage: '名称不能为空',
+    })
+    await testSetAPI.createSet(form.projectId, value.trim(), form.caseIds, 'convert_page')
+    ElMessage.success('已存为测试集，可在 UI自动化测试页执行')
+  } catch (e) {
+    if (e === 'cancel' || e?.action === 'cancel') return
+    ElMessage.error(e?.response?.data?.detail || '保存测试集失败')
+  }
+}
+
 const viewScript = (row) => { window.open(`/api/v1/scripts/${row.id}`, '_blank') }
 const confirmScript = async (row) => {
   await scriptAPI.confirm(row.id)
@@ -543,6 +654,14 @@ onMounted(async () => {
 .code-box { max-height: 480px; overflow: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; white-space: pre; }
 .log-line { margin-bottom: 4px; }
 .diag-card { margin-top: 12px; padding: 12px; background: #f5f7fa; border-radius: 4px; }
+.case-picker { display: flex; gap: 12px; margin-top: 16px; }
+.case-tree { width: 220px; flex-shrink: 0; border: 1px solid #ebeef5; border-radius: 4px; padding: 8px; }
+.case-tree-title { font-size: 13px; color: #909399; margin-bottom: 8px; }
+.tree-node { padding: 5px 8px; border-radius: 4px; font-size: 13px; cursor: pointer; margin-bottom: 2px; }
+.tree-node:hover { background: #f5f7fa; }
+.tree-node.active { background: #ecf5ff; color: #409eff; }
+.case-list { flex: 1; border: 1px solid #ebeef5; border-radius: 4px; padding: 8px; max-height: 420px; overflow-y: auto; }
+.case-item { padding: 3px 4px; }
 .fail-list { margin-top: 12px; padding: 8px 12px; background: #fef0f0; border-radius: 4px; }
 .fail-title { font-size: 13px; color: #f56c6c; margin-bottom: 6px; }
 .fail-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 13px; }
