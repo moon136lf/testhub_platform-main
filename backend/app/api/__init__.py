@@ -12,6 +12,7 @@ api_router = APIRouter()
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
 api_router.include_router(elements.router, prefix="/elements", tags=["elements"])
+api_router.include_router(elements.asset_router, tags=["element-assets"])  # 阶段1: 无前缀（路径自带 elements-asset 等）
 api_router.include_router(ai_case_generation.router, prefix="/ai-case-generation", tags=["ai-case-generation"])
 api_router.include_router(test_cases.router, prefix="/test-cases", tags=["test-cases"])
 api_router.include_router(scripts.router, prefix="/scripts", tags=["scripts"])

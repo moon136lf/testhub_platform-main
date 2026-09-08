@@ -127,95 +127,10 @@
         />
       </div>
 
-      <el-divider style="display: none" />
-
-      <!-- 文字直播区 + 进度条 -->
-      <div v-if="liveMessages.length > 0" class="live-feed">
-        <el-alert title="抓取进度直播" type="info" :closable="false" style="margin-bottom: 10px">
-          <div v-for="(msg, index) in liveMessages" :key="index" class="live-message" :class="{ 'is-error': msg.type === 'error' }">
-            <span class="live-time">{{ msg.timestamp }}</span>
-            <el-tag :type="msgTypeTag(msg.type)" size="small" effect="plain">{{ msg.type }}</el-tag>
-            <span class="live-text">{{ msg.content }}</span>
-          </div>
-        </el-alert>
-        <el-progress
-          :percentage="Math.round(progress * 100)"
-          :status="progress >= 1 ? 'success' : undefined"
-        />
-      </div>
-
-      <!-- 抓取结果：截图 + 元素列表 -->
-      <div v-if="elements.length > 0" class="elements-result">
-        <el-alert title="抓取结果" type="success" :closable="false" style="margin-bottom: 20px">
-          共识别 {{ elements.length }} 个有效元素（{{ filterDescription }}），已勾选 {{ selectedElementIds.length }} 个
-        </el-alert>
-
-        <el-row :gutter="20">
-          <el-col :span="16">
-            <el-card>
-              <template #header><span>页面截图</span></template>
-              <div class="screenshot-container">
-                <ElementHighlight
-                  v-if="screenshotUrl"
-                  :screenshot-url="screenshotUrl"
-                  :elements="elements"
-                  :selected-ids="selectedElementIds"
-                  :hover-id="hoverId"
-                  @pick="togglePick"
-                  @card-hover="hoverId = $event || ''"
-                />
-                <div v-else class="no-screenshot">暂无截图</div>
-              </div>
-            </el-card>
-          </el-col>
-
-          <el-col :span="8">
-            <el-card>
-              <template #header>
-                <span>元素列表（含定位策略）</span>
-              </template>
-              <div class="element-list">
-                <div class="element-list-toolbar">
-                  <el-checkbox v-model="selectAll" @change="handleSelectAll">全选</el-checkbox>
-                </div>
-                <el-checkbox-group v-model="selectedElementIds">
-                  <div
-                    v-for="element in elements"
-                    :key="element.temp_id"
-                    class="element-item"
-                    :data-eid="element.temp_id"
-                    @mouseenter="hoverId = element.temp_id"
-                    @mouseleave="hoverId = ''"
-                  >
-                    <el-checkbox :label="element.temp_id">
-                      <div class="element-info">
-                        <el-tag :type="getElementTypeColor(element.element_type)" size="small">
-                          {{ element.element_type }}
-                        </el-tag>
-                        <span class="element-text">{{ element.element_text || element.temp_id }}</span>
-                        <el-tooltip :content="formatStrategies(element.locator_strategies)" placement="top">
-                          <el-tag size="small" type="info" effect="plain">
-                            {{ strategyCount(element.locator_strategies) }} 策略
-                          </el-tag>
-                        </el-tooltip>
-                      </div>
-                    </el-checkbox>
-                  </div>
-                </el-checkbox-group>
-                <el-button type="primary" style="width: 100%" @click="showImportDialog">
-                  一键入库 ({{ selectedElementIds.length }})
-                </el-button>
-              </div>
-            </el-card>
-          </el-col>
-        </el-row>
-      </div>
-
-      <el-empty v-else description="请先抓取页面元素" />
     </el-card>
 
     <!-- 入库弹窗：已有页面下拉 + 别名编辑 + 策略预览 -->
-    <el-dialog v-model="importDialogVisible" title="入库确认" width="700px">
+    <el-dialog v-model="importDialogVisible" title="入库确认" width="900px">
       <el-form :model="importForm" label-width="120px">
         <el-form-item label="页面归属">
           <el-select v-model="importForm.pageMode" placeholder="选择页面模式" style="width: 100%">
@@ -605,7 +520,8 @@ const confirmImport = async () => {
     }
 
     const result = await elementAPI.importElements(requestData)
-    ElMessage.success(`成功入库 ${result.imported_count} 个元素到 ${result.page_name || '页面'}`)
+    const dupNote = result.failed_count > 0 ? `，${result.failed_count} 条重复未入库` : ''
+    ElMessage.success(`成功入库 ${result.imported_count} 个元素到 ${result.page_name || '页面'}${dupNote}`)
     await loadPageTree()
 
     importDialogVisible.value = false

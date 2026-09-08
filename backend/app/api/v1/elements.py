@@ -71,6 +71,9 @@ from app.services.playwright_locator_core import (
 from app.tasks.element_tasks import MIN_LOCATOR_SCORE
 
 router = APIRouter()
+
+# 阶段1 元素资产管理端点：挂 asset_router（include 时无前缀，避免 /elements/elements-asset 双重前缀）
+asset_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # P3.5 会话浏览器管理器（模块级单例；lifespan 挂 app.state 复用同一实例）
@@ -825,7 +828,7 @@ async def update_element(element_id: str, request: ElementUpdateRequest,
     return {"code": 0, "data": el.to_dict()}
 
 
-@router.post("/elements/{element_id}/locators/reorder")
+@asset_router.post("/elements/{element_id}/locators/reorder")
 async def reorder_locator(element_id: str, request: LocatorReorderRequest,
                           db: AsyncSession = Depends(get_db)):
     """定位器调序（上移/下移，score 跟随位置）。"""
@@ -836,7 +839,7 @@ async def reorder_locator(element_id: str, request: LocatorReorderRequest,
     return {"code": 0, "message": "reordered"}
 
 
-@router.post("/elements/{element_id}/locators")
+@asset_router.post("/elements/{element_id}/locators")
 async def add_locator(element_id: str, request: LocatorAddRequest,
                       db: AsyncSession = Depends(get_db)):
     """新增自定义定位器（手工来源）。"""
@@ -847,7 +850,7 @@ async def add_locator(element_id: str, request: LocatorAddRequest,
     return {"code": 0, "message": "added"}
 
 
-@router.get("/elements/{element_id}/references")
+@asset_router.get("/elements/{element_id}/references")
 async def element_references(element_id: str, project_id: str = Query(...),
                              db: AsyncSession = Depends(get_db)):
     """元素引用计数 + 引用脚本清单（删除确认弹窗数据源）。"""
@@ -862,7 +865,7 @@ async def element_references(element_id: str, project_id: str = Query(...),
     }}
 
 
-@router.post("/elements/{element_id}/recycle")
+@asset_router.post("/elements/{element_id}/recycle")
 async def recycle_element(element_id: str, db: AsyncSession = Depends(get_db)):
     """软删进回收站（引用确认由前端先调 references 端点）。"""
     try:
@@ -872,7 +875,7 @@ async def recycle_element(element_id: str, db: AsyncSession = Depends(get_db)):
     return {"code": 0, "message": "recycled"}
 
 
-@router.post("/elements/{element_id}/restore")
+@asset_router.post("/elements/{element_id}/restore")
 async def restore_element(element_id: str, db: AsyncSession = Depends(get_db)):
     """从回收站恢复。"""
     try:
@@ -882,7 +885,7 @@ async def restore_element(element_id: str, db: AsyncSession = Depends(get_db)):
     return {"code": 0, "message": "restored"}
 
 
-@router.get("/recycle-bin")
+@asset_router.get("/recycle-bin")
 async def recycle_bin(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
     """回收站列表。"""
     els = await ElementAssetService(db).list_recycled(project_id)
@@ -898,7 +901,7 @@ from app.schemas.element_schema import (
 )
 
 
-@router.post("/pages-tree")
+@asset_router.post("/pages-tree")
 async def create_sub_page(request: SubPageCreateRequest, db: AsyncSession = Depends(get_db)):
     """创建子页面（parent_id=None 即根级）。"""
     try:
@@ -909,7 +912,7 @@ async def create_sub_page(request: SubPageCreateRequest, db: AsyncSession = Depe
     return {"code": 0, "data": page.to_dict()}
 
 
-@router.put("/pages-tree/{page_id}")
+@asset_router.put("/pages-tree/{page_id}")
 async def rename_page_node(page_id: str, request: PageRenameRequest, db: AsyncSession = Depends(get_db)):
     """重命名页面。"""
     try:
@@ -919,7 +922,7 @@ async def rename_page_node(page_id: str, request: PageRenameRequest, db: AsyncSe
     return {"code": 0, "message": "renamed"}
 
 
-@router.post("/pages-tree/{page_id}/move")
+@asset_router.post("/pages-tree/{page_id}/move")
 async def move_page_node(page_id: str, request: PageMoveRequest, db: AsyncSession = Depends(get_db)):
     """同级上移/下移。"""
     try:
@@ -929,7 +932,7 @@ async def move_page_node(page_id: str, request: PageMoveRequest, db: AsyncSessio
     return {"code": 0, "message": "moved"}
 
 
-@router.delete("/pages-tree/{page_id}")
+@asset_router.delete("/pages-tree/{page_id}")
 async def delete_page_node(page_id: str, move_to_page_id: Optional[str] = Query(None),
                            force: bool = Query(False), db: AsyncSession = Depends(get_db)):
     """删页面（有子页面拒绝；有元素须给 move_to_page_id 或 force）。"""
@@ -940,7 +943,7 @@ async def delete_page_node(page_id: str, move_to_page_id: Optional[str] = Query(
     return {"code": 0, "message": "deleted"}
 
 
-@router.get("/elements-asset")
+@asset_router.get("/elements-asset")
 async def list_elements_asset(project_id: str = Query(...),
                               scope: Optional[str] = Query(None, pattern="^(page|global)$"),
                               page_id: Optional[str] = Query(None, description="页面ID或all"),
@@ -954,7 +957,7 @@ async def list_elements_asset(project_id: str = Query(...),
     return {"code": 0, "data": [e.to_dict() for e in els]}
 
 
-@router.post("/elements-asset")
+@asset_router.post("/elements-asset")
 async def create_element_asset(request: ElementCreateRequest, db: AsyncSession = Depends(get_db)):
     """新建元素（手工录入，支持全局作用域）。"""
     try:
@@ -968,7 +971,7 @@ async def create_element_asset(request: ElementCreateRequest, db: AsyncSession =
     return {"code": 0, "data": el.to_dict()}
 
 
-@router.post("/elements/{element_id}/locators/verify")
+@asset_router.post("/elements/{element_id}/locators/verify")
 async def verify_element_locator(element_id: str, request: LocatorVerifyRequest,
                                  db: AsyncSession = Depends(get_db)):
     """快速校验：用激活环境的 URL 开页面跑一次定位。

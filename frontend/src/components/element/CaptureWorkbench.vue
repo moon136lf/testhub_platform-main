@@ -484,7 +484,8 @@ const importSelected = async () => {
   importing.value = true
   try {
     const result = await elementAPI.importFromCaptureSession(data)
-    ElMessage.success(`成功入库 ${result.imported_count} 个元素到「${result.page_name}」`)
+    const dupNote2 = result.failed_count > 0 ? `，${result.failed_count} 条重复未入库` : ''
+    ElMessage.success(`成功入库 ${result.imported_count} 个元素到「${result.page_name}」${dupNote2}`)
     stagingSessionId.value = ''
     stagingState.value = null
     pageName.value = ''
