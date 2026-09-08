@@ -239,3 +239,32 @@ class CaseStatsResponse(BaseModel):
     hallucination_count: int = Field(0, description="Number of cases marked as hallucination")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CandidateStep(BaseModel):
+    """Import candidate step（允许 expected="待补"，导入后手动补全）"""
+    step: int = Field(..., ge=1)
+    action: str = Field(..., min_length=1, max_length=2000)
+    target: Optional[str] = Field(None, max_length=2000)
+    data: Optional[str] = Field(None, max_length=2000)
+    expected: str = Field(..., min_length=1, max_length=2000, description='允许 "待补" 占位')
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CandidateCase(BaseModel):
+    """Import preview candidate case（预览确认前可编辑）"""
+    name: str = Field(..., min_length=1, max_length=100)
+    priority: str = Field("P1", pattern="^(P0|P1|P2|P3)$")
+    case_type: str = Field("functional", pattern=_pattern(CASE_TYPES))
+    precondition: Optional[str] = Field(None, max_length=2000)
+    steps: List[CandidateStep] = Field(..., min_length=1)
+    expected_result: str = Field(..., min_length=1, max_length=200)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ImportConfirmRequest(BaseModel):
+    """POST /test-cases/import/confirm body"""
+    cases: List[CandidateCase] = Field(..., min_length=1)
+    ai_optimize: bool = Field(False, description="勾选后每条用例经 LLM 标准化步骤")

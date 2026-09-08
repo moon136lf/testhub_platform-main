@@ -4,16 +4,18 @@ Test Case API endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
-from sqlalchemy import select, func, update
+from sqlalchemy import select, func, update, and_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from uuid import UUID
+import logging
 
 from app.core.database import get_db
 from app.models.case_batch import CaseBatch
 from app.models.test_case import TestCase, TestPoint
 from app.services.test_case_service import get_test_case_service, TestCaseService
-from app.services.import_export_service import ImportExportService
+from app.services.import_export_service import ImportExportService, _friendly_validation_error
 from app.schemas.test_case import (
     CaseCreateRequest,
     CaseUpdateRequest,
@@ -22,12 +24,15 @@ from app.schemas.test_case import (
     CaseDetailResponse,
     CaseListResponse,
     CaseStatsResponse,
+    ImportConfirmRequest,
     CASE_TYPES,
     AUTOMATION_STATUSES,
     HALLUCINATION_STATUSES,
     _pattern,
 )
 from app.schemas.refinement import ApplySuggestionsRequest
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -81,6 +86,130 @@ async def import_test_cases(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+# ---------------- 智能导入：模板下载 / 预览 / 确认入库 ----------------
+
+@router.get("/import-template")
+async def download_import_template():
+    """下载用例导入模板（9 列 + 示例行）。"""
+    from app.services.smart_import_service import SmartImportService
+    data = SmartImportService.generate_template()
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=case_import_template.xlsx"},
+    )
+
+
+@router.post("/import/preview")
+async def import_preview(
+    file: UploadFile = File(...),
+    format: str = Query("xlsx", pattern="^(xlsx|csv|md)$"),
+):
+    """解析上传文件为候选用例（不写库），返回预览列表。"""
+    from app.services.smart_import_service import SmartImportService
+    try:
+        file_bytes = await file.read()
+        result = SmartImportService.parse_preview(file_bytes, format)
+        return {"code": 0, "data": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post("/import/confirm")
+async def import_confirm(
+    request: ImportConfirmRequest,
+    project_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """确认导入候选用例（可选 AI 标准化），逐条入库。"""
+    from app.services.smart_import_service import SmartImportService
+    from app.services.import_ai_optimizer import optimize_case
+    from app.services.case_batch_service import CaseBatchService
+
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    # 整批挂记录层批次
+    batch_id = None
+    batch_svc = CaseBatchService(db)
+    try:
+        batch = await batch_svc.create_batch(project_id, "manual", requirement="Excel导入")
+        batch_id = batch.id
+        await db.commit()  # 批次行先落库，避免逐条 rollback 悬空 FK
+    except Exception as e:
+        logger.warning(f"create import batch failed, continue without batch: {e}")
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+    imported = 0
+    failed = 0
+    ai_ok_count = 0
+    errors = []
+    used_names = set()
+
+    for idx, candidate in enumerate(request.cases):
+        try:
+            case_data = candidate.model_dump()
+
+            # 可选 AI 标准化
+            if request.ai_optimize:
+                case_data, ai_ok = await optimize_case(case_data, project_id)
+                if ai_ok:
+                    ai_ok_count += 1
+
+            # 重名自动后缀（查重范围：项目已有 + 本批已用）
+            base_name = (case_data.get("name") or "未命名用例").strip()[:100]
+            n = 1
+            while True:
+                cand = base_name if n == 1 else f"{base_name} ({n})"[:100]
+                dup = await db.execute(
+                    select(func.count(TestCase.id)).where(
+                        and_(TestCase.project_id == project_uuid,
+                             TestCase.name == cand,
+                             TestCase.is_deleted.is_(False))))
+                if (dup.scalar() or 0) == 0 and cand not in used_names:
+                    break
+                n += 1
+            used_names.add(cand)
+
+            steps_json = [s if isinstance(s, dict) else s for s in case_data["steps"]]
+            test_case = TestCase(
+                project_id=project_uuid, name=cand,
+                priority=case_data["priority"], case_type=case_data.get("case_type", "functional"),
+                automation_status="pending", precondition=case_data.get("precondition"),
+                steps=steps_json, expected_result=case_data["expected_result"],
+                version=1, hallucination_status="normal", is_finalized=False,
+                batch_id=batch_id,
+            )
+            db.add(test_case)
+            await db.commit()
+            imported += 1
+        except IntegrityError:
+            await db.rollback()
+            failed += 1
+            errors.append({"index": idx, "name": candidate.name, "reason": "名称冲突"})
+        except Exception as e:
+            await db.rollback()
+            failed += 1
+            errors.append({"index": idx, "name": candidate.name,
+                           "reason": _friendly_validation_error(e)})
+
+    if batch_svc is not None and batch_id is not None:
+        try:
+            await batch_svc.update_case_count(batch_id, imported)
+        except Exception as e:
+            logger.warning(f"update import batch count failed: {e}")
+
+    return {"code": 0, "data": {"imported": imported, "failed": failed,
+                                "errors": errors, "ai_ok_count": ai_ok_count}}
 
 
 @router.get("/batches")

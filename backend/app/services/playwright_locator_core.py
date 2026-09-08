@@ -454,6 +454,7 @@ async def _pick_element_via_dom(page, x: float, y: float) -> Optional[Dict[str, 
 
     hit = await page.evaluate(_PICK_MARKER_JS, [x, y])
     if not hit:
+        logger.warning(f"pick-element: elementFromPoint miss at ({x}, {y})")
         return None
 
     try:
@@ -467,7 +468,16 @@ async def _pick_element_via_dom(page, x: float, y: float) -> Optional[Dict[str, 
                 locator,
             )
     except Exception as e:
-        logger.debug(f"pick-element pipeline failed at ({x}, {y}): {e}")
+        logger.warning(
+            f"pick-element pipeline failed at ({x}, {y}) tag={hit.get('tag')} "
+            f"text={hit.get('text', '')[:30]}: {type(e).__name__}: {e}"
+        )
+        return None
+    if not verified_locators:
+        logger.warning(
+            f"pick-element: no locator scored >= threshold for tag={hit.get('tag')} "
+            f"text={hit.get('text', '')[:30]} at ({x}, {y})"
+        )
         return None
 
     return {

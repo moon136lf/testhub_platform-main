@@ -96,6 +96,8 @@ class ElementFetchRequest(BaseModel):
     type_filter: Optional[str] = Field(None, description="类型过滤，逗号分隔白名单，如 button,input")
     debug_mode: bool = Field(False, description="调试模式：不过滤，返回全部元素")
     include_text: bool = Field(False, description="抓取文字/不可点击元素")
+    exclude_menu: bool = Field(False, description="排除左侧菜单栏元素（x < 视口宽 20%）")
+    max_list_rows: Optional[int] = Field(None, ge=1, le=50, description="表格/列表类元素只保留最上 N 行（0/None=全部）")
 
 
 class ElementFetchResponse(BaseModel):

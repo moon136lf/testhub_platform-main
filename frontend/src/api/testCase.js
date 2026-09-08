@@ -116,6 +116,28 @@ export const testCaseAPI = {
     return response.data
   },
 
+  // ---- 智能导入：模板 / 预览 / 确认 ----
+  async importTemplate() {
+    const response = await axios.get('/test-cases/import-template', { responseType: 'blob' })
+    return response
+  },
+
+  async importPreview(file, format = 'xlsx') {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await axios.post('/test-cases/import/preview', form, {
+      params: { format }
+    })
+    return response.data
+  },
+
+  async importConfirm(projectId, cases, aiOptimize) {
+    const response = await axios.post('/test-cases/import/confirm', {
+      cases, ai_optimize: aiOptimize
+    }, { params: { project_id: projectId }, timeout: 300000 })
+    return response.data
+  },
+
   // ---- W5 评审 / 精修 ----
   async refineCase(caseId) {
     const response = await axios.post(`/test-cases/${caseId}/refine`)

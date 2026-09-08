@@ -36,19 +36,43 @@ logger = logging.getLogger(__name__)
 MIN_LOCATOR_SCORE = 60
 
 
-def _apply_filters(elements: list, text_filter: str, type_filter: str, debug_mode: bool) -> list:
-    """扫描后过滤: debug_mode 直通; text_filter 任一词是 element_text 子串保留; type_filter 白名单."""
+def _apply_filters(elements: list, text_filter: str, type_filter: str, debug_mode: bool,
+                   exclude_menu: bool = False, max_list_rows: Optional[int] = None,
+                   viewport_width: int = 1920) -> list:
+    """扫描后过滤: debug_mode 直通; text_filter 子串保留; type_filter 白名单;
+    exclude_menu 排除左侧菜单区 (x < 视口宽 20% 且 y > 60 顶部导航以下);
+    max_list_rows 表格单元格 (td/th) 按 y 分组只保留最上 N 行."""
     if debug_mode:
         return elements
     out = elements
-    if text_filter:
-        words = [w.strip() for w in text_filter.split(",") if w.strip()]
-        if words:
-            out = [e for e in out if e.get("element_text") and any(w in e["element_text"] for w in words)]
+    if exclude_menu:
+        menu_x = viewport_width * 0.2
+        out = [e for e in out if not (
+            (e.get("position_x") is not None and e["position_x"] < menu_x)
+            and (e.get("position_y") or 0) > 60)]
     if type_filter:
         types = {t.strip() for t in type_filter.split(",") if t.strip()}
         if types:
             out = [e for e in out if e.get("element_type") in types]
+    if text_filter:
+        words = [w.strip() for w in text_filter.split(",") if w.strip()]
+        if words:
+            out = [e for e in out if e.get("element_text") and any(w in e["element_text"] for w in words)]
+    if max_list_rows:
+        list_types = {"td", "th"}
+        rows: Dict[int, list] = {}
+        keep, drop = [], []
+        for e in out:
+            if e.get("element_type") in list_types and e.get("position_y") is not None:
+                rows.setdefault(round(e["position_y"] / 10) * 10, []).append(e)
+            else:
+                keep.append(e)
+        keep_ys = set(sorted(rows.keys())[:max_list_rows])
+        for y, elems in rows.items():
+            (keep if y in keep_ys else drop).extend(elems)
+        if drop:
+            logger.info(f"max_list_rows={max_list_rows}: dropped {len(drop)} table cells beyond top rows")
+        out = keep
     return out
 
 
@@ -64,6 +88,8 @@ def fetch_elements_task(
     type_filter: Optional[str] = "",
     debug_mode: bool = False,
     include_text: bool = False,
+    exclude_menu: bool = False,
+    max_list_rows: Optional[int] = None,
 ):
     """
     异步抓取元素任务（带 SSE 直播）
@@ -80,7 +106,8 @@ def fetch_elements_task(
     """
     return asyncio.run(_fetch_elements_async(
         session_id, project_id, url, username, password,
-        text_filter, type_filter, debug_mode, include_text
+        text_filter, type_filter, debug_mode, include_text,
+        exclude_menu, max_list_rows
     ))
 
 
@@ -94,6 +121,8 @@ async def _fetch_elements_async(
     type_filter: Optional[str] = "",
     debug_mode: bool = False,
     include_text: bool = False,
+    exclude_menu: bool = False,
+    max_list_rows: Optional[int] = None,
 ):
     """实际的异步抓取逻辑"""
     sse = SSEStream(session_id)
@@ -139,7 +168,8 @@ async def _fetch_elements_async(
             progress=0.35,
         )
         raw_elements = await scan_interactive_elements(page, include_text=include_text)
-        raw_elements = _apply_filters(raw_elements, text_filter, type_filter, debug_mode)
+        raw_elements = _apply_filters(raw_elements, text_filter, type_filter, debug_mode,
+                                      exclude_menu=exclude_menu, max_list_rows=max_list_rows)
 
         await sse.send_message(
             type="system", stage="scan",

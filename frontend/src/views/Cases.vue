@@ -19,9 +19,11 @@
           </template>
         </el-dropdown>
         <el-button :icon="Upload" @click="triggerImport">导入</el-button>
-        <input ref="importInput" type="file" accept=".csv,.xlsx,.md" style="display:none" @change="handleImport" />
       </div>
     </div>
+
+    <ImportDialog ref="importDialogRef" :projects="projects"
+                  :default-project-id="filters.project_id || ''" @imported="fetchBatches" />
 
     <el-card shadow="never">
       <!-- 筛选区域 -->
@@ -106,6 +108,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, View, Upload } from '@element-plus/icons-vue'
 import CaseForm from '@/components/testCase/CaseForm.vue'
+import ImportDialog from '@/components/testCase/ImportDialog.vue'
 import { testCaseAPI } from '@/api/testCase.js'
 import { projectAPI } from '@/api/project.js'
 
@@ -119,7 +122,6 @@ const pageSize = ref(10)
 const total = ref(0)
 const filters = ref({ project_id: '', batch_type: '' })
 const keyword = ref('')
-const importInput = ref(null)
 
 const typeMap = {
   whitescan_api: { label: '白盒-接口回归', tag: 'warning' },
@@ -249,40 +251,10 @@ const handleExport = async (format) => {
   }
 }
 
-const triggerImport = () => {
-  importInput.value?.click()
-}
+const importDialogRef = ref(null)
 
-const handleImport = async (e) => {
-  const file = e.target.files[0]
-  if (!file) return
-  const projectId = filters.value.project_id || (projects.value[0] && projects.value[0].id)
-  if (!projectId) {
-    ElMessage.warning('请先选择项目')
-    e.target.value = ''
-    return
-  }
-  const format = file.name.split('.').pop().toLowerCase()
-  try {
-    const res = await testCaseAPI.importCases(projectId, file, format)
-    const data = res.data || res
-    if (data.failed > 0 && Array.isArray(data.errors) && data.errors.length > 0) {
-      // 有失败行：弹窗列出每行的中文原因（后端已翻译），可复制排查
-      const lines = data.errors.map(err => `第 ${err.row} 行：${err.reason}`)
-      ElMessageBox.alert(
-        `<div style="max-height:300px;overflow:auto;font-size:13px;line-height:1.8">${lines.map(l => `<div>${l}</div>`).join('')}</div>`,
-        `导入完成：成功 ${data.imported} 条，失败 ${data.failed} 条`,
-        { dangerouslyUseHTMLString: true, confirmButtonText: '知道了' }
-      ).catch(() => {})
-    } else {
-      ElMessage.success(`导入成功 ${data.imported} 条`)
-    }
-    fetchBatches()
-  } catch (error) {
-    ElMessage.error('导入失败: ' + (error.message || error))
-  } finally {
-    e.target.value = ''
-  }
+const triggerImport = () => {
+  importDialogRef.value?.open()
 }
 
 onMounted(async () => {

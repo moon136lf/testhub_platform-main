@@ -137,6 +137,8 @@ async def fetch_elements(
         type_filter=request.type_filter,
         debug_mode=request.debug_mode,
         include_text=request.include_text,
+        exclude_menu=request.exclude_menu,
+        max_list_rows=request.max_list_rows,
     )
 
     return ElementFetchResponse(
