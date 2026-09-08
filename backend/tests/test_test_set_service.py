@@ -282,3 +282,28 @@ class TestReport:
         db.get = _get
         svc = TestSetService(db)
         assert await svc.get_report(str(uuid4())) is None
+
+    @pytest.mark.asyncio
+    async def test_run_fail_fast_sets_max_failures(self):
+        """fail_fast=True → max_failures=1（执行器 `0 or 8` 回落为 8，故用 1）；False → 100"""
+        for fail_fast, expected in [(True, 1), (False, 100)]:
+            db = _db()
+            ts = MagicMock()
+            ts.case_ids = ["11111111-1111-1111-1111-111111111111"]
+            async def _get(cls, sid):
+                return ts
+            s1 = MagicMock(id=uuid4())
+            s1.case_id = ts.case_ids[0]
+            async def _execute(q):
+                r = MagicMock()
+                r.scalars.return_value.all.return_value = [s1]
+                return r
+            db.get = _get
+            db.execute = _execute
+
+            with patch("app.services.test_set_service.run_scripts_task") as mock_task:
+                mock_task.delay.return_value = MagicMock(id="t")
+                await TestSetService(db).run_set(str(uuid4()), fail_fast=fail_fast)
+                config = mock_task.delay.call_args.kwargs["config"]
+                assert config["max_failures"] == expected
+                assert config["fail_fast"] == fail_fast

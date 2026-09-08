@@ -125,7 +125,7 @@ class TestSetService:
 
         session_id = str(_uuid.uuid4())
         config = {"headless": headless, "timeout": timeout,
-                  "max_failures": 0 if fail_fast else 100, "fail_fast": fail_fast}
+                  "max_failures": 1 if fail_fast else 100, "fail_fast": fail_fast}
         task = run_scripts_task.delay(session_id=session_id, script_ids=script_ids,
                                       config=config, exec_type="ui_testset")
         ts.status = "running"
