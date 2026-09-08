@@ -55,7 +55,7 @@ class LoginStateService:
     async def inject_state(self, state: Dict, page) -> None:
         """把 storage_state 注入 page 所属 context（免登录）。
 
-        cookies 走 add_cookies；localStorage 走 add_init_script（需在导航前生效，
+        cookies 走 add_cookies；localStorage 走 add_init_script（需在导航前生效；JS 生成接线时改用 json.dumps，
         导航后调用则下次导航生效——对登录复用场景足够）。"""
         context = page.context
         if state.get("cookies"):
@@ -72,3 +72,8 @@ class LoginStateService:
     async def invalidate(self, env_id: str) -> None:
         """失效登录态（执行失败跳登录页时调用）。"""
         self._cache.pop(env_id, None)
+
+
+# 模块级共享单例（对齐 ai_gateway/redis_client 惯例）：
+# TTL 缓存/invalidate 跨执行生效，避免每次执行都重新登录
+login_state_service = LoginStateService()

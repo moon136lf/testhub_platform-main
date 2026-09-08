@@ -79,3 +79,15 @@ class TestLoginState:
         svc = LoginStateService()
         with pytest.raises(LoginError, match="login"):
             await svc.ensure_state("env1", {}, MagicMock(), base_url="https://x.com")
+
+    @pytest.mark.asyncio
+    async def test_shared_instance_cache(self):
+        """模块级单例：连续两次 ensure_state，第二次 TTL 内命中缓存不走登录"""
+        from app.services import login_state_service as mod
+        mod.login_state_service._cache.pop("env-shared", None)
+        page1 = _mock_page()
+        await mod.login_state_service.ensure_state("env-shared", {"login": LOGIN_CFG}, page1, base_url="https://x.com")
+        page2 = _mock_page()
+        state = await mod.login_state_service.ensure_state("env-shared", {"login": LOGIN_CFG}, page2, base_url="https://x.com")
+        page2.goto.assert_not_called()
+        assert state["cookies"] == [{"name": "sid"}]

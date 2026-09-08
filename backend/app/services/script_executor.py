@@ -299,9 +299,9 @@ class ScriptExecutor:
         #   外部注入 page 时不重复登录）
         env_credentials = getattr(config, "env_credentials", None)
         if isinstance(env_credentials, dict) and env_credentials.get("login") and launched:
-            from app.services.login_state_service import LoginStateService, LoginError
+            from app.services.login_state_service import login_state_service, LoginError
             try:
-                await LoginStateService().ensure_state(
+                await login_state_service.ensure_state(
                     getattr(config, "env_id", "default"), env_credentials, page,
                     base_url=str(target_url or ""))
             except LoginError as e:
@@ -330,8 +330,8 @@ class ScriptExecutor:
                     last_failure = await collect_failure(page, step, e, storage=self.storage)
                     # 阶段3 T4: 执行失败时若被踢回登录页 → 失效登录态（下次重登）
                     if page is not None and "login" in (getattr(page, "url", "") or ""):
-                        from app.services.login_state_service import LoginStateService
-                        await LoginStateService().invalidate(getattr(config, "env_id", "default"))
+                        from app.services.login_state_service import login_state_service
+                        await login_state_service.invalidate(getattr(config, "env_id", "default"))
                     failures += 1
                     overall_status = "fail"
                     await sse.send_message(type="error", stage="execute",
@@ -385,8 +385,8 @@ class ScriptExecutor:
                     last_failure = await collect_failure(page, step, e, storage=self.storage)
                     # 阶段3 T4: 执行失败时若被踢回登录页 → 失效登录态（下次重登）
                     if page is not None and "login" in (getattr(page, "url", "") or ""):
-                        from app.services.login_state_service import LoginStateService
-                        await LoginStateService().invalidate(getattr(config, "env_id", "default"))
+                        from app.services.login_state_service import login_state_service
+                        await login_state_service.invalidate(getattr(config, "env_id", "default"))
                     failures += 1
                     overall_status = "fail"
                     # #5b 审查 #3: 自愈失败也保留 heal_log (ElementNotFoundError 携带), 供 heal_status="failed" 判定

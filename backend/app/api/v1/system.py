@@ -234,13 +234,13 @@ async def test_login(env_id: str, db: AsyncSession = Depends(get_db)):
     env = await db.get(TestEnv, uuid_mod.UUID(env_id))
     if not env:
         raise HTTPException(status_code=404, detail="环境不存在")
-    from app.services.login_state_service import LoginStateService, LoginError
+    from app.services.login_state_service import login_state_service, LoginError
     from app.services.playwright_service import PlaywrightService
     pw = PlaywrightService()
     try:
         await pw.start(headless=True)
         page = await pw.browser.new_page()
-        await LoginStateService().ensure_state(str(env.id), env.credentials or {}, page,
+        await login_state_service.ensure_state(str(env.id), env.credentials or {}, page,
                                                base_url=env.url)
         return {"code": 0, "message": "登录成功，登录态已缓存"}
     except LoginError as e:
