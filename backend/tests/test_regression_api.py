@@ -23,8 +23,7 @@ class TestRegressionEndpoints:
 
         async def fake_list(self, project_id, category=None, keyword=None):
             return [{"script": {"id": SID, "name": "登录"}, "ai_suggested": True,
-                     "ai_reason": "P0核心用例", "actual_included": True,
-                     "include_source": "ai"}]
+                     "ai_reason": "P0核心用例", "included": True}]
 
         with patch.object(reg_mod.RegressionService, "list_view", fake_list):
             client = _client()
@@ -32,7 +31,7 @@ class TestRegressionEndpoints:
         assert resp.status_code == 200
         body = resp.json()
         assert body["code"] == 0
-        assert body["data"][0]["actual_included"] is True
+        assert body["data"][0]["included"] is True
 
     def test_members_add(self):
         from app.api.v1 import regression as reg_mod
@@ -72,9 +71,9 @@ class TestRegressionEndpoints:
 
         async def fake_list(self, project_id, category=None, keyword=None):
             return [{"script": {"id": SID, "name": "s1"}, "ai_suggested": True,
-                     "ai_reason": None, "actual_included": True, "include_source": "ai"},
+                     "ai_reason": None, "included": True},
                     {"script": {"id": str(uuid4()), "name": "s2"}, "ai_suggested": False,
-                     "ai_reason": None, "actual_included": False, "include_source": None}]
+                     "ai_reason": None, "included": False}]
 
         with patch.object(reg_mod.RegressionService, "list_view", fake_list), \
              patch.object(reg_mod.run_scripts_task, "delay") as delay:
@@ -87,7 +86,7 @@ class TestRegressionEndpoints:
         kwargs = delay.call_args.kwargs
         assert kwargs.get("exec_type") == "ui_regression"
         assert kwargs.get("config", {}).get("fail_fast") is True
-        # 只取 included=true 的脚本
+        # 阶段3: 只取 included (=for_regression) 的脚本
         assert kwargs.get("script_ids") == [SID]
 
     def test_run_empty_regression_400(self):
