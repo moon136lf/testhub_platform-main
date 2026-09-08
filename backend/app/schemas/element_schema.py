@@ -32,6 +32,24 @@ def _coerce_to_str(value: Any) -> Any:
 StrField = Annotated[str, BeforeValidator(_coerce_to_str)]
 
 
+class SubPageCreateRequest(BaseModel):
+    """创建子页面请求（parent_id=None 即根级）"""
+    project_id: str
+    parent_id: Optional[str] = None
+    page_name: str = Field(..., min_length=1, max_length=100)
+    page_url: Optional[str] = None
+
+
+class PageRenameRequest(BaseModel):
+    """页面重命名请求"""
+    page_name: str = Field(..., min_length=1, max_length=100)
+
+
+class PageMoveRequest(BaseModel):
+    """页面上移/下移请求"""
+    direction: str = Field(..., pattern="^(up|down)$")
+
+
 class LocatorStrategy(BaseModel):
     """单个定位器策略"""
 
@@ -300,3 +318,50 @@ class BrowserPickRequest(BaseModel):
 
     x: float = Field(..., description="页面坐标 x")
     y: float = Field(..., description="页面坐标 y")
+
+
+# ---------------- 元素资产管理（阶段1） ----------------
+
+
+class ElementUpdateRequest(BaseModel):
+    """元素编辑（白名单字段在 service 校验）"""
+
+    element_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    element_type: Optional[str] = Field(None, max_length=50)
+    element_text: Optional[str] = Field(None, max_length=200)
+
+
+class LocatorReorderRequest(BaseModel):
+    index: int = Field(..., ge=0, description="被移动的定位器下标")
+    direction: str = Field(..., pattern="^(up|down)$")
+
+
+class LocatorAddRequest(BaseModel):
+    type: str = Field(..., max_length=30, description="id/css/data-testid/text/xpath/自定义")
+    value: str = Field(..., min_length=1, max_length=500)
+    score: int = Field(50, ge=0, le=150)
+
+
+class ElementCreateRequest(BaseModel):
+    """新建元素（手工录入，支持全局作用域）"""
+
+    project_id: str
+    name: str = Field(..., min_length=1, max_length=100)
+    element_type: str = Field("other", max_length=50)
+    element_text: Optional[str] = Field(None, max_length=200)
+    scope: str = Field("page", pattern="^(page|global)$")
+    page_id: Optional[str] = None
+    locators: Optional[List[dict]] = None
+
+
+class LocatorVerifyRequest(BaseModel):
+    locator_type: str = Field(..., max_length=30)
+    locator_value: str = Field(..., min_length=1, max_length=500)
+    score: Optional[int] = Field(None, ge=0, le=150)
+
+
+class ElementAssetImportRequest(BaseModel):
+    """元素资产导入请求（可移植 JSON）"""
+
+    project_id: str
+    payload: dict

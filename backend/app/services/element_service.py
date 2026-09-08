@@ -8,6 +8,7 @@ from sqlalchemy import func
 from app.models.element import PageRepository, ElementRepository
 from typing import List, Dict, Optional
 import uuid
+import re
 import logging
 
 logger = logging.getLogger(__name__)
@@ -333,30 +334,73 @@ class ElementLocatorLookup:
         strategies = el.locator_strategies or []
         if isinstance(strategies, dict):
             strategies = strategies.get("strategies", [])
-        return _strategy_to_playwright(strategies)
-
-
-def _strategy_to_playwright(strategies: list) -> Optional[str]:
-    """定位策略优先级 -> Playwright 定位器 (skill 3.1)。"""
-    priority = {"role": 0, "text": 1, "label": 2, "placeholder": 3, "css": 4}
-    best = None
-    best_rank = 99
-    for s in strategies:
-        stype = s.get("type", "")
-        rank = priority.get(stype, 99)
-        if rank < best_rank:
-            best, best_rank = s, rank
-    if not best:
+        norm = normalize_strategies(strategies)
+        for s in norm:
+            loc = strategy_to_playwright(s)
+            if loc:
+                return loc
         return None
-    t, v = best.get("type"), best.get("value", "")
-    if t == "role":
-        return f'page.get_by_role("button", name="{v}")' if "button" in v.lower() else f'page.get_by_role("{v}")'
+
+
+# ---- 定位器选择（阶段1 统一置信度方案）----
+# 旧方案：硬编码类型优先级 role>text>label>placeholder>css —— 已废除。
+# 新方案：score 说话（抓取端已按 base_score+验证加减分排序），类型只作为缺 score 时的归一化基准。
+
+_TYPE_BASELINE = {
+    "id": 100, "data-testid": 95, "name": 90, "role-text": 85,
+    "text": 80, "class-type": 70, "css": 70, "xpath": 55,
+}
+
+
+def normalize_strategies(strategies: list) -> list:
+    """归一化定位策略列表：补齐缺失的 score/unique/verified，按 score 降序。
+
+    旧数据（score 缺失）按类型基准分补齐；调序端点直接改 score，排序以 score 为准。"""
+    out = []
+    for s in strategies or []:
+        if not isinstance(s, dict) or not s.get("value"):
+            continue
+        s = dict(s)
+        if not isinstance(s.get("score"), (int, float)):
+            s["score"] = _TYPE_BASELINE.get(s.get("type"), 30)
+        s.setdefault("unique", False)
+        s.setdefault("verified", False)
+        out.append(s)
+    return sorted(out, key=lambda x: x["score"], reverse=True)
+
+
+def select_primary_locator(strategies: list) -> Optional[str]:
+    """取 score 最高的定位值（消费端唯一决策：score 说话，不看类型）。"""
+    norm = normalize_strategies(strategies)
+    return norm[0]["value"] if norm else None
+
+
+def build_fallback_chain(strategies: list) -> list:
+    """首选之外的定位值列表（降序），供脚本生成 fallback。"""
+    norm = normalize_strategies(strategies)
+    return [s["value"] for s in norm[1:]]
+
+
+def strategy_to_playwright(s: dict) -> Optional[str]:
+    """单条策略 -> Playwright 定位器表达式。类型词表对齐生成端（playwright_locator_core）。"""
+    t, v = s.get("type", ""), s.get("value", "")
+    if not v:
+        return None
+    if t in ("id", "css", "class-type"):
+        return f'page.locator("{v}")'
+    if t == "data-testid":
+        return f"page.locator({v})"
+    if t == "name":
+        return f"page.locator({v})"
     if t == "text":
         return f'page.get_by_text("{v}")'
-    if t == "label":
-        return f'page.get_by_label("{v}")'
-    if t == "placeholder":
-        return f'page.get_by_placeholder("{v}")'
-    if t == "css":
-        return f'page.locator("{v}")'
+    if t == "role-text":
+        # value 形如 "button[role='button']:has-text('提交')" → get_by_role(role, name=text)
+        m = re.match(r"^(\w+)\[role='([\w-]+)'\]:has-text\('(.+)'\)$", v)
+        if m:
+            return f'page.get_by_role("{m.group(2)}", name="{m.group(3)}")'
+        return None
+    if t == "xpath":
+        return f'page.locator("xpath={v}")'
+    # label/placeholder 等无生成端产出的类型：无可靠映射，交给 fallback
     return None

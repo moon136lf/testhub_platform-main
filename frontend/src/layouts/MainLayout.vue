@@ -32,10 +32,14 @@
           <el-menu-item index="/cases">用例管理</el-menu-item>
         </el-sub-menu>
 
-        <el-menu-item index="/elements">
-          <el-icon><Grid /></el-icon>
-          <span>元素库</span>
-        </el-menu-item>
+        <el-sub-menu index="element-assets">
+          <template #title>
+            <el-icon><Grid /></el-icon>
+            <span>元素资产</span>
+          </template>
+          <el-menu-item index="/elements/capture">元素抓取</el-menu-item>
+          <el-menu-item index="/elements/list">元素管理</el-menu-item>
+        </el-sub-menu>
 
         <el-sub-menu index="api">
           <template #title>

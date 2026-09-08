@@ -793,3 +793,241 @@ async def close_browser_session(sid: str):
     _browser_sess_or_404(sid)
     await browser_mgr.close_session(sid)
     return {"code": 0, "data": {"closed": True}}
+
+
+# ---- 元素资产管理（阶段1） ----
+from app.services.element_asset_service import ElementAssetService
+from app.schemas.element_schema import LocatorVerifyRequest
+from app.schemas.element_schema import (
+    ElementUpdateRequest,
+    LocatorReorderRequest,
+    LocatorAddRequest,
+    ElementAssetImportRequest,
+)
+
+
+def _element_uuid_or_400(element_id: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(element_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid element ID format")
+
+
+@router.put("/elements/{element_id}")
+async def update_element(element_id: str, request: ElementUpdateRequest,
+                         db: AsyncSession = Depends(get_db)):
+    """编辑元素（白名单字段）。"""
+    try:
+        el = await ElementAssetService(db).update_element(
+            element_id, request.model_dump(exclude_unset=True))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": el.to_dict()}
+
+
+@router.post("/elements/{element_id}/locators/reorder")
+async def reorder_locator(element_id: str, request: LocatorReorderRequest,
+                          db: AsyncSession = Depends(get_db)):
+    """定位器调序（上移/下移，score 跟随位置）。"""
+    try:
+        await ElementAssetService(db).reorder_locator(element_id, request.index, request.direction)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "reordered"}
+
+
+@router.post("/elements/{element_id}/locators")
+async def add_locator(element_id: str, request: LocatorAddRequest,
+                      db: AsyncSession = Depends(get_db)):
+    """新增自定义定位器（手工来源）。"""
+    try:
+        await ElementAssetService(db).add_locator(element_id, request.type, request.value, request.score)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "added"}
+
+
+@router.get("/elements/{element_id}/references")
+async def element_references(element_id: str, project_id: str = Query(...),
+                             db: AsyncSession = Depends(get_db)):
+    """元素引用计数 + 引用脚本清单（删除确认弹窗数据源）。"""
+    el = await db.get(ElementRepository, _element_uuid_or_400(element_id))
+    if not el:
+        raise HTTPException(status_code=404, detail="元素不存在")
+    svc = ElementAssetService(db)
+    name = el.element_name or ""
+    return {"code": 0, "data": {
+        "count": await svc.count_references(project_id, name),
+        "scripts": await svc.list_referring_scripts(project_id, name),
+    }}
+
+
+@router.post("/elements/{element_id}/recycle")
+async def recycle_element(element_id: str, db: AsyncSession = Depends(get_db)):
+    """软删进回收站（引用确认由前端先调 references 端点）。"""
+    try:
+        await ElementAssetService(db).recycle_element(element_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "recycled"}
+
+
+@router.post("/elements/{element_id}/restore")
+async def restore_element(element_id: str, db: AsyncSession = Depends(get_db)):
+    """从回收站恢复。"""
+    try:
+        await ElementAssetService(db).restore_element(element_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "restored"}
+
+
+@router.get("/recycle-bin")
+async def recycle_bin(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """回收站列表。"""
+    els = await ElementAssetService(db).list_recycled(project_id)
+    return {"code": 0, "data": [e.to_dict() for e in els]}
+
+
+# ---------------- 页面树（层级 + 编辑 + 上下移 + 守护删除） ----------------
+from app.schemas.element_schema import (
+    SubPageCreateRequest,
+    PageRenameRequest,
+    PageMoveRequest,
+    ElementCreateRequest,
+)
+
+
+@router.post("/pages-tree")
+async def create_sub_page(request: SubPageCreateRequest, db: AsyncSession = Depends(get_db)):
+    """创建子页面（parent_id=None 即根级）。"""
+    try:
+        page = await ElementAssetService(db).create_sub_page(
+            request.project_id, request.parent_id, request.page_name, request.page_url or "")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": page.to_dict()}
+
+
+@router.put("/pages-tree/{page_id}")
+async def rename_page_node(page_id: str, request: PageRenameRequest, db: AsyncSession = Depends(get_db)):
+    """重命名页面。"""
+    try:
+        await ElementAssetService(db).rename_page(page_id, request.page_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "renamed"}
+
+
+@router.post("/pages-tree/{page_id}/move")
+async def move_page_node(page_id: str, request: PageMoveRequest, db: AsyncSession = Depends(get_db)):
+    """同级上移/下移。"""
+    try:
+        await ElementAssetService(db).move_page(page_id, request.direction)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "moved"}
+
+
+@router.delete("/pages-tree/{page_id}")
+async def delete_page_node(page_id: str, move_to_page_id: Optional[str] = Query(None),
+                           force: bool = Query(False), db: AsyncSession = Depends(get_db)):
+    """删页面（有子页面拒绝；有元素须给 move_to_page_id 或 force）。"""
+    try:
+        await ElementAssetService(db).delete_page(page_id, move_to_page_id, force)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "deleted"}
+
+
+@router.get("/elements-asset")
+async def list_elements_asset(project_id: str = Query(...),
+                              scope: Optional[str] = Query(None, pattern="^(page|global)$"),
+                              page_id: Optional[str] = Query(None, description="页面ID或all"),
+                              keyword: Optional[str] = Query(None, max_length=100),
+                              db: AsyncSession = Depends(get_db)):
+    """元素列表（管理页数据源）：scope/page/keyword 过滤。"""
+    try:
+        els = await ElementAssetService(db).list_elements(project_id, scope, page_id, keyword=keyword)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": [e.to_dict() for e in els]}
+
+
+@router.post("/elements-asset")
+async def create_element_asset(request: ElementCreateRequest, db: AsyncSession = Depends(get_db)):
+    """新建元素（手工录入，支持全局作用域）。"""
+    try:
+        el = await ElementAssetService(db).create_element(
+            request.project_id, request.name, request.element_type, request.element_text or "",
+            scope=request.scope, page_id=request.page_id,
+            locators=request.locators,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": el.to_dict()}
+
+
+@router.post("/elements/{element_id}/locators/verify")
+async def verify_element_locator(element_id: str, request: LocatorVerifyRequest,
+                                 db: AsyncSession = Depends(get_db)):
+    """快速校验：用激活环境的 URL 开页面跑一次定位。
+    复用 playwright_service 登录态链路。占位页面（/__placeholder__/）不可校验。"""
+    uid = _element_uuid_or_400(element_id)
+    el = await db.get(ElementRepository, uid)
+    if not el:
+        raise HTTPException(status_code=404, detail="元素不存在")
+    if not el.page_id:
+        raise HTTPException(status_code=400, detail="全局元素无页面URL，无法校验")
+    page_row = await db.get(PageRepository, el.page_id)
+    if not page_row:
+        raise HTTPException(status_code=404, detail="所属页面不存在")
+    if (page_row.page_url or "").startswith("/__placeholder__/"):
+        raise HTTPException(status_code=400, detail="该页面为占位页面（无真实URL），请先在页面树中补全页面URL再校验")
+
+    from app.models.system import TestEnv
+    env = (await db.execute(
+        select(TestEnv).where(TestEnv.status == "active").limit(1)
+    )).scalar_one_or_none()
+    if not env:
+        raise HTTPException(status_code=400, detail="无激活测试环境，请先在「环境管理」激活")
+
+    from app.services.playwright_service import PlaywrightService
+    from app.services.element_asset_service import verify_locator_on_page
+    pw = PlaywrightService()
+    page = None
+    try:
+        await pw.start(headless=True)
+        target_url = env.url.rstrip("/") + (page_row.page_url or "")
+        page = await pw.browser.new_page()
+        await page.goto(target_url, timeout=30000, wait_until="networkidle")
+        result = await verify_locator_on_page(
+            page, {"type": request.locator_type, "value": request.locator_value,
+                   "score": request.score or 0})
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"页面打开失败: {str(e)[:200]}")
+    finally:
+        if page:
+            try:
+                await page.close()
+            except Exception:
+                pass
+        await pw.close()
+    return {"code": 0, "data": result}
+
+
+@router.get("/elements-export")
+async def export_elements(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """导出项目全部 active 元素为 JSON（前端下载为文件）。"""
+    data = await ElementAssetService(db).export_elements(project_id)
+    return {"code": 0, "data": data}
+
+
+@router.post("/elements-import")
+async def import_elements_asset(request: ElementAssetImportRequest, db: AsyncSession = Depends(get_db)):
+    """导入元素 JSON（跨项目/环境复用）。返回 imported/skipped/errors 摘要。"""
+    try:
+        result = await ElementAssetService(db).import_elements(request.project_id, request.payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": result}
