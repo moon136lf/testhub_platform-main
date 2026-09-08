@@ -132,7 +132,11 @@ class BrowserSessionManager:
 
     async def open(self, project_id: str, url: str, headless: bool = True,
                    need_login: bool = False) -> str:
-        """打开（或复用）会话并导航到 url。need_login=True 时 headless=False 人工登录。"""
+        """打开（或复用）会话并导航到 url。need_login=True 时 headless=False 人工登录。
+
+        浏览器进程被手动关闭/崩溃（对象引用仍在但 TargetClosedError）时自愈：
+        清掉残留状态重启浏览器重试一次。
+        """
         # 同项目复用
         sid = self._find_by_project(project_id)
         if sid is None:
@@ -140,15 +144,33 @@ class BrowserSessionManager:
             self.sessions[sid] = BrowserSession(session_id=sid, project_id=project_id)
         sess = self.sessions[sid]
 
+        try:
+            return await self._open_inner(sess, url, headless)
+        except Exception as e:
+            from playwright._impl._errors import TargetClosedError
+            if not isinstance(e, TargetClosedError):
+                raise
+            # 浏览器进程已死（窗口被手动关/崩溃）：清残留自愈重启一次
+            logger.warning(f"browser session {sid} target closed, restarting browser (self-heal)")
+            await self._teardown(sess)
+            sess.page = None
+            sess.browser = None
+            return await self._open_inner(sess, url, headless)
+
+    async def _teardown(self, sess: BrowserSession):
+        if sess.browser is not None:
+            try:
+                await _bridge.run(sess.browser.close())
+            except Exception:
+                pass
+
+    async def _open_inner(self, sess: BrowserSession, url: str,
+                          headless: bool) -> str:
         # 浏览器不可用（未启动 / 启动失败残留）则（重）启；
         # 之前只判 sess.browser is None，start() 失败后残留 service 对象会导致
         # 复用路径跳过 start，page=None 直接 goto 报错。
         if sess.browser is None or sess.page is None or sess.browser.browser is None:
-            if sess.browser is not None:
-                try:
-                    await _bridge.run(sess.browser.close())
-                except Exception:
-                    pass
+            await self._teardown(sess)
             sess.browser = PlaywrightService()
             await _bridge.run(sess.browser.start(headless=headless))
             # headless: 固定视口 1920x1080（与点选坐标换算 VIEWPORT_WIDTH 一致）；
@@ -161,7 +183,7 @@ class BrowserSessionManager:
 
         await _bridge.run(sess.page.goto(url, wait_until="networkidle", timeout=60000))
         sess.touch()
-        return sid
+        return sess.session_id
 
     def _find_by_project(self, project_id: str) -> Optional[str]:
         for sid, s in self.sessions.items():
