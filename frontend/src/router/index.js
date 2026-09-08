@@ -87,8 +87,9 @@ const router = createRouter({
         },
         {
           path: 'auto/ui',
-          name: 'AutoUI',
-          redirect: '/ai/convert',
+          name: 'AutoUITest',
+          component: () => import('@/views/AutoUITest.vue'),
+          meta: { title: 'UI自动化测试' }
         },
         {
           path: 'auto/regression',
