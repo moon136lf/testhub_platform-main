@@ -13,6 +13,7 @@ from app.models.generation import GenerationSession, HallucinationConfig
 from app.models.system import SystemSetting, TestEnv, TokenQuota, OperationLog
 from app.models.regression import RegressionSet
 from app.models.case_batch import CaseBatch
+from app.models.test_set import TestSet
 
 __all__ = [
     "Project",
@@ -40,4 +41,5 @@ __all__ = [
     "OperationLog",
     "RegressionSet",
     "CaseBatch",
+    "TestSet",
 ]
