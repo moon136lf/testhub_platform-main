@@ -132,8 +132,8 @@ const open = () => {
 defineExpose({ open })
 
 const resetDialog = () => {
+  // 只重置文件选择；cases 保留——关导入弹框会触发 close，此时预览数据正在用
   file.value = null
-  cases.value = []
   warnings.value = []
 }
 
@@ -161,7 +161,8 @@ const doPreview = async () => {
   try {
     const ext = (file.value.name.split('.').pop() || 'xlsx').toLowerCase()
     const res = await testCaseAPI.importPreview(file.value, ext)
-    const data = res.data || res
+    // importPreview 返回 {code, data:{format, cases, warnings}}（axios 已剥一层 data）
+    const data = res?.data?.cases ? res.data : (res || {})
     // 行 key 供 el-table row-key 使用
     cases.value = (data.cases || []).map((c, i) => ({ ...c, __idx: i }))
     warnings.value = data.warnings || []
@@ -186,7 +187,7 @@ const doConfirm = async () => {
   try {
     const payload = cases.value.map(({ __idx, ...c }) => c)
     const res = await testCaseAPI.importConfirm(projectId.value, payload, aiOptimize.value)
-    const data = res.data || res
+    const data = res?.data?.imported != null ? res.data : (res || {})
     previewVisible.value = false
     visible.value = false
     if (data.failed > 0 && Array.isArray(data.errors) && data.errors.length) {
