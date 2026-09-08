@@ -33,7 +33,7 @@
       </el-table-column>
       <el-table-column label="期望值" width="160">
         <template #default="{ row }">
-          <el-input v-if="row.action === 'assert_db' || row.action === 'assert_text'"
+          <el-input v-if="row.action === 'assert_db'"
             v-model="row.expected" size="small" placeholder="期望文本" />
           <span v-else class="hint">—</span>
         </template>

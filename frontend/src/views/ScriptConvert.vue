@@ -220,9 +220,9 @@
       </template>
     </el-dialog>
 
-    <!-- 步骤化编辑弹窗（StepEditor，阶段2核心件） -->
+    <!-- 步骤化编辑弹窗（StepEditor，阶段2核心件）；key 强制重开时重建组件（重置 rows） -->
     <el-dialog v-model="stepEditorVisible" :title="`编辑脚本：${editingScript?.name || ''}`" width="900px">
-      <StepEditor :initial-steps="editingScript?.step_mapping || []" @save="handleSaveSteps" />
+      <StepEditor :key="editingScript?.id || 'none'" :initial-steps="toEditorRows(editingScript?.step_mapping)" @save="handleSaveSteps" />
     </el-dialog>
 
     <!-- 脚本代码弹窗 -->
@@ -371,7 +371,8 @@ const loadPointsAndCases = async () => {
   if (!form.projectId) { allCases.value = []; return }
   try {
     const tcResp = await aiCaseAPI.getTestCases(form.projectId, 0, 1000)
-    allCases.value = tcResp.data || []
+    // 仅展示已定稿用例（与原 loadCases is_finalized 过滤一致；该端点无服务端过滤参数，前端过滤）
+    allCases.value = (tcResp.data || []).filter(c => c.is_finalized)
   } catch { allCases.value = [] }
   // 测试点 page_name 用于树分组（点可能已删，容错）
   try {
@@ -510,6 +511,51 @@ const codeVisible = ref(false)
 // ---- 步骤化编辑（阶段2 StepEditor）----
 const stepEditorVisible = ref(false)
 const editingScript = ref(null)
+
+// pipeline step_mapping（{step,case_req,impl,element_name,action,value,assertion}）→ 编辑器行式结构。
+// impl 是 Playwright 定位器串（如 page.get_by_role("button", name="登录") 或 #btn），提取可用定位值。
+const ACTION_MAP = {
+  navigate: 'navigate', click: 'click', fill: 'input', select: 'select',
+  check: 'click', create: 'input', edit: 'input', delete: 'click', workflow_action: 'click',
+}
+
+const extractLocator = (impl) => {
+  if (!impl) return ''
+  const m = String(impl).match(/"([^"]+)"/)   // get_by_xxx("val", ...) / locator("#btn") → 取引号内
+  if (m) return m[1]
+  return String(impl).replace(/^page\./, '').replace(/\)$/, '')  // 裸 css（page.#btn 罕见）兜底
+}
+
+const fromPipelineMapping = (m) => {
+  const action = ACTION_MAP[m.action]
+  if (!action) {
+    console.warn('[StepEditor] 无法映射的 pipeline action，降级为 wait 1s:', m.action, m)
+    return [{ seq: m.step || 0, action: 'wait', target: '', value: '1', element_name: '', expected: '' }]
+  }
+  const rows = [{
+    seq: m.step || 0,
+    action,
+    target: action === 'navigate' ? '' : (extractLocator(m.impl) || m.element_name || ''),
+    value: m.value || '',
+    element_name: m.element_name || '',
+    expected: '',
+  }]
+  // 断言单独成行：assertion.expected 非空追加一行 assert_text
+  const expected = (m.assertion && m.assertion.expected) || ''
+  if (expected) {
+    rows.push({
+      seq: m.step || 0, action: 'assert_text',
+      target: m.assertion.target ? extractLocator(m.assertion.target) : (rows[0].target),
+      value: expected, element_name: '', expected: expected,
+    })
+  }
+  return rows
+}
+
+const toEditorRows = (stepMapping) => {
+  const rows = (stepMapping || []).flatMap(fromPipelineMapping)
+  return rows.map((r, i) => ({ ...r, seq: i + 1 }))
+}
 
 const openStepEditor = (row) => {
   editingScript.value = row
