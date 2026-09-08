@@ -126,13 +126,26 @@ watch(
       if (!form.project_id && props.projects.length > 0) {
         form.project_id = props.projects[0].id
       }
+      if (!form.url) {
+        const p = props.projects.find((x) => x.id === form.project_id)
+        if (p?.target_url) form.url = p.target_url
+      }
       loadLoginState()
     }
   }
 )
 
-// 项目切换时重新加载登录态（@change 已绑定，watch 兜底）
-watch(() => form.project_id, loadLoginState)
+// 项目切换：预填项目管理里配置的被测应用地址；账密置空（无默认值）
+watch(
+  () => form.project_id,
+  (pid) => {
+    loadLoginState()
+    const p = props.projects.find((x) => x.id === pid)
+    if (p?.target_url) form.url = p.target_url
+    form.username = ''
+    form.password = ''
+  }
+)
 
 const handleStart = () => {
   if (!form.project_id) {
