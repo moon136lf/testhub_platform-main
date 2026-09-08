@@ -118,6 +118,20 @@ def setup_logging(log_dir: str = "logs",
     for f in list(root.filters):
         root.removeFilter(f)
 
+    # pytest 环境开关：conftest 在 app.main 导入前设置。跳过文件 handler，
+    # 否则 conftest 的日志隔离（先跑）会被后续 import 触发的 setup_logging 挂回
+    # app.log handler，测试 ERROR 全灌进真实流量日志。
+    if os.getenv("MOONTEST_LOG_DISABLE_FILE"):
+        if level_console is None:
+            level_console = "INFO" if settings.DEBUG else "WARNING"
+        sh = logging.StreamHandler()
+        sh.setLevel(level_console)
+        sh.setFormatter(build_formatter(color=True))
+        sh.addFilter(RequestIdFilter())
+        root.addHandler(sh)
+        root.setLevel(level_console)
+        return
+
     os.makedirs(log_dir, exist_ok=True)
     fh = RotatingFileHandler(os.path.join(log_dir, log_file),
                              maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT,

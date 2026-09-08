@@ -15,6 +15,13 @@ if BACKEND_DIR not in sys.path:
 # 测试日志分流: pytest 运行时把根 logger 的文件输出指到 logs/test.log,
 # 与真实流量日志 (app.log/app-worker.log) 隔离, 避免测试 ERROR 淹没真实报错。
 # 控制台 handler 保留 (pytest -s 仍可见)。
+#
+# 时序漏洞修复：conftest 比 app.main 先执行，此时 setup_logging 还没挂 app.log
+# handler，这里清理是空操作；测试模块 import app.main 时 setup_logging 又把
+# app.log handler 挂回来，测试日志全灌进真实流量日志。通过环境变量让
+# setup_logging 跳过文件 handler（见 logging_setup.setup_logging）。
+os.environ["MOONTEST_LOG_DISABLE_FILE"] = "1"
+
 import logging
 from logging.handlers import RotatingFileHandler
 
