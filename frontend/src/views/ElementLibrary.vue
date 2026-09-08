@@ -78,6 +78,9 @@
                 <div class="element-list">
                   <div class="element-list-toolbar">
                     <el-checkbox v-model="selectAll" @change="handleSelectAll">全选</el-checkbox>
+                    <el-button type="primary" size="small" :disabled="selectedElementIds.length === 0" @click="showImportDialog">
+                      一键入库 ({{ selectedElementIds.length }})
+                    </el-button>
                   </div>
                   <el-checkbox-group v-model="selectedElementIds">
                     <div
@@ -109,11 +112,6 @@
                       </el-checkbox>
                     </div>
                   </el-checkbox-group>
-                  <div class="element-list-footer">
-                    <el-button type="primary" :disabled="selectedElementIds.length === 0" @click="showImportDialog">
-                      一键入库 ({{ selectedElementIds.length }})
-                    </el-button>
-                  </div>
                 </div>
               </el-card>
             </el-col>
@@ -244,7 +242,7 @@
             </el-table-column>
             <el-table-column prop="confidence" label="置信度" width="80" />
             <el-table-column label="入库时间" width="170">
-              <template #default="{ row }">{{ (row.created_at || '').replace('T', ' ').slice(0, 19) }}</template>
+              <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="80">
               <template #default="{ row }">
@@ -486,6 +484,14 @@ const assignDefaultAliases = () => {
     counters[cn] = (counters[cn] || 0) + 1
     el.element_name = `${cn}${counters[cn]}`
   })
+}
+
+const formatTime = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d)) return (iso || '').replace('T', ' ').slice(0, 19)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 const strategyCount = (locatorStrategies) => {
