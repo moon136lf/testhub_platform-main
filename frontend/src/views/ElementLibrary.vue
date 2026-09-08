@@ -93,7 +93,13 @@
                           <el-tag :type="getElementTypeColor(element.element_type)" size="small">
                             {{ element.element_type }}
                           </el-tag>
-                          <span class="element-text">{{ element.element_text || element.temp_id }}</span>
+                          <el-input
+                            v-model="element.element_name"
+                            size="small"
+                            style="width: 130px"
+                            :placeholder="defaultAlias(element)"
+                            @click.stop
+                          />
                           <el-tooltip :content="formatStrategies(element.locator_strategies)" placement="top">
                             <el-tag size="small" type="info" effect="plain">
                               {{ strategyCount(element.locator_strategies) }} 策略
@@ -230,6 +236,7 @@
 
         <div class="stored-table">
           <el-table :data="filteredStoredElements" border max-height="480" v-loading="storedLoading">
+            <el-table-column type="index" label="序号" width="70" align="center" />
             <el-table-column prop="element_name" label="别名" min-width="140" show-overflow-tooltip />
             <el-table-column prop="element_type" label="类型" width="90" />
             <el-table-column label="定位策略数" width="100">
@@ -398,6 +405,7 @@ const handleFetch = async () => {
         // 完成消息（type=success, progress=1.0）：加载元素结果
         if (data.type === 'success' && data.progress >= 1.0 && data.data?.elements) {
           elements.value = data.data.elements
+          assignDefaultAliases()
           const raw = data.data.screenshot_url || ''
         // MinIO bucket 非公开, 直链 403 — 走后端代理
         const m = String(raw).match(/\/moontest\/(.+)$/)
@@ -447,6 +455,37 @@ const getElementTypeColor = (type) => {
 const msgTypeTag = (type) => {
   const map = { system: 'info', ai: 'primary', success: 'success', error: 'danger', cost: 'warning' }
   return map[type] || 'info'
+}
+
+// 别名默认值：element_text > placeholder > 类型中文+序号（按类型计序，抓取完成时生成）
+const TYPE_CN = { button: '按钮', input: '输入框', select: '下拉框', link: '链接', textarea: '文本域',
+  span: '文本', p: '文本', h1: '标题', h2: '标题', h3: '标题', label: '标签', td: '单元格', th: '表头' }
+const defaultAlias = (element) => {
+  if (element.element_name) return element.element_name
+  const hint = element.semantic_info?.placeholder
+  if (hint) return hint
+  const cn = TYPE_CN[element.element_type] || '元素'
+  return cn
+}
+
+// 抓取完成后为每个元素生成默认中文别名（可编辑，随入库带入）
+const assignDefaultAliases = () => {
+  const counters = {}
+  elements.value.forEach((el) => {
+    if (el.element_name) return
+    const hint = el.semantic_info?.placeholder
+    if (hint && !el.element_text) {
+      el.element_name = hint
+      return
+    }
+    if (el.element_text) {
+      el.element_name = el.element_text
+      return
+    }
+    const cn = TYPE_CN[el.element_type] || '元素'
+    counters[cn] = (counters[cn] || 0) + 1
+    el.element_name = `${cn}${counters[cn]}`
+  })
 }
 
 const strategyCount = (locatorStrategies) => {
