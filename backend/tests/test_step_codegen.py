@@ -1,7 +1,13 @@
 """步骤化编辑器 → Playwright 代码生成。
 操作类型词表 = 转脚本 ActionIntent 词表 + assert_db 数据库断言。"""
+import ast
+
 import pytest
 from app.services.step_codegen import generate_script, SUPPORTED_ACTIONS
+
+
+def _valid(code: str):
+    ast.parse(code)
 
 
 class TestCodegen:
@@ -87,3 +93,32 @@ class TestCodegen:
         # 前端下拉数据源契约
         for a in ("navigate", "click", "input", "select", "wait", "assert_text", "assert_visible", "assert_db"):
             assert a in SUPPORTED_ACTIONS
+
+    def test_multiline_value_escaped(self):
+        # 多行 SQL 是 assert_db 主路径输入：真实换行必须转义且产出可 parse 的脚本
+        steps = [{"seq": 1, "action": "assert_db", "target": "",
+                  "value": "SELECT count(*)\nFROM test_case", "element_name": "用例数",
+                  "expected": "5"}]
+        code = generate_script("t", steps)
+        assert "\\n" in code  # 换行被转义为字面 \n
+        _valid(code)
+
+    def test_value_none_tolerated(self):
+        steps = [{"seq": 1, "action": "input", "target": "#user", "value": None, "element_name": ""}]
+        code = generate_script("t", steps)
+        assert 'page.locator("#user").fill("")' in code
+        _valid(code)
+
+    def test_ast_valid_for_all_actions(self):
+        samples = {
+            "navigate": [{"seq": 1, "action": "navigate", "value": "https://x.com"}],
+            "click": [{"seq": 1, "action": "click", "target": "#a"}],
+            "input": [{"seq": 1, "action": "input", "target": "#a", "value": 'v"1'}],
+            "select": [{"seq": 1, "action": "select", "target": "#a", "value": "dev"}],
+            "wait": [{"seq": 1, "action": "wait", "value": "2"}],
+            "assert_text": [{"seq": 1, "action": "assert_text", "target": ".t", "value": "中文\"引号"}],
+            "assert_visible": [{"seq": 1, "action": "assert_visible", "target": ".c"}],
+            "assert_db": [{"seq": 1, "action": "assert_db", "value": "SELECT 1\n-- c", "expected": "1"}],
+        }
+        for action, steps in samples.items():
+            _valid(generate_script(f"t_{action}", steps))

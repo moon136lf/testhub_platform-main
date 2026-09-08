@@ -7,6 +7,7 @@ ActionIntent 对齐，扩展 assert_db 数据库断言（SQL+期望值）。
 assert_db 执行语义：生成的脚本里调用 assert_db(page, sql=..., expected=...)，
 该函数由脚本执行器（script_executor）在运行上下文注入——本模块只管生成。"""
 from typing import Dict, List
+import json
 
 SUPPORTED_ACTIONS = [
     "navigate", "click", "input", "select", "wait",
@@ -21,11 +22,13 @@ def run(page):
 
 
 def _escape(v: str) -> str:
-    return (v or "").replace("\\", "\\\\").replace('"', '\\"')
+    """生成 Python 安全的双引号字符串字面量（json.dumps 兼容 Python 字符串转义）。
+    输出含首尾双引号，调用处模板不需再包引号。"""
+    return json.dumps(v or "", ensure_ascii=False)
 
 
 def _loc(target: str) -> str:
-    return f'page.locator("{_escape(target)}")'
+    return f'page.locator({_escape(target)})'
 
 
 def _gen_step(step: Dict) -> str:
@@ -34,7 +37,7 @@ def _gen_step(step: Dict) -> str:
     value = step.get("value", "")
 
     if action == "navigate":
-        return f'    page.goto("{_escape(value)}")'
+        return f'    page.goto({_escape(value)})'
     if action == "click":
         if not target:
             raise ValueError("click 需要 target（元素定位）")
@@ -42,11 +45,11 @@ def _gen_step(step: Dict) -> str:
     if action == "input":
         if not target:
             raise ValueError("input 需要 target（元素定位）")
-        return f'    {_loc(target)}.fill("{_escape(value)}")'
+        return f'    {_loc(target)}.fill({_escape(value)})'
     if action == "select":
         if not target:
             raise ValueError("select 需要 target（元素定位）")
-        return f'    {_loc(target)}.select_option("{_escape(value)}")'
+        return f'    {_loc(target)}.select_option({_escape(value)})'
     if action == "wait":
         try:
             ms = int(float(value or 1) * 1000)
@@ -56,7 +59,7 @@ def _gen_step(step: Dict) -> str:
     if action == "assert_text":
         if not target:
             raise ValueError("assert_text 需要 target（元素定位）")
-        return f'    expect({_loc(target)}).to_have_text("{_escape(value)}")'
+        return f'    expect({_loc(target)}).to_have_text({_escape(value)})'
     if action == "assert_visible":
         if not target:
             raise ValueError("assert_visible 需要 target（元素定位）")
@@ -64,8 +67,8 @@ def _gen_step(step: Dict) -> str:
     if action == "assert_db":
         sql = _escape(value)
         expected = _escape(step.get("expected", ""))
-        return (f'    assert_db(page, sql="{sql}", expected="{expected}", '
-                f'name="{_escape(step.get("element_name", ""))}")  # DB断言')
+        return (f'    assert_db(page, sql={sql}, expected={expected}, '
+                f'name={_escape(step.get("element_name", ""))})  # DB断言：expected 一律为字符串，比较语义由执行器决定')
     raise ValueError(f"不支持的操作类型: {action}")
 
 
