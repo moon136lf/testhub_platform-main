@@ -144,6 +144,17 @@
       <!-- 点选补抓定位卡片弹层 -->
       <el-dialog v-model="pickCardVisible" title="点选补抓 — 定位卡片" width="560px">
         <div v-if="pickCard">
+          <!-- 面包屑：祖先链，每级可点 → 页面高亮 + 定位策略重新生成 -->
+          <div class="pick-breadcrumb" v-if="chain.length">
+            <template v-for="(c, i) in chain" :key="i">
+              <span v-if="i > 0" class="crumb-sep">▸</span>
+              <span
+                class="crumb"
+                :class="{ active: i === currentIdx }"
+                @click="switchLevel(i)"
+              >{{ c.tag }}{{ c.text ? `«${c.text.slice(0, 12)}»` : '' }}</span>
+            </template>
+          </div>
           <div class="pick-card-row">
             <el-tag :type="typeColor(pickCard.element_type)" size="small">{{ pickCard.element_type }}</el-tag>
             <span class="pick-card-text">{{ pickCard.element_text || '(无文本)' }}</span>
@@ -165,6 +176,20 @@
             >
               {{ s.type }} ({{ s.score }})
             </el-tag>
+          </div>
+          <!-- 同级兄弟元素列表：可点切换目标 -->
+          <div class="pick-card-row" v-if="siblings.length">
+            <span class="pick-label">同级元素 ({{ siblings.length }})：</span>
+            <div class="sibling-list">
+              <div
+                v-for="(sib, i) in siblings" :key="i"
+                class="sibling-item"
+                @click="switchToSibling(sib)"
+              >
+                <el-tag size="small" effect="plain">{{ sib.tag }}</el-tag>
+                <span class="sibling-text">{{ sib.text || '(无文本)' }}</span>
+              </div>
+            </div>
           </div>
         </div>
         <template #footer>
@@ -234,6 +259,10 @@ const importing = ref(false)
 // pick
 const pickCard = ref(null)
 const pickCardVisible = ref(false)
+// 面包屑：祖先链 + 当前选中层级 + 同级兄弟
+const chain = ref([])
+const currentIdx = ref(0)
+const siblings = ref([])
 const addingPicked = ref(false)
 
 // 实际视口尺寸：由 status 接口返回（headed 模式跟随窗口大小，动态变化）
@@ -430,6 +459,10 @@ const onShotClick = async (event) => {
   const x = Math.round(((event.clientX - rect.left) / rect.width) * viewportW.value)
   const y = Math.round(((event.clientY - rect.top) / rect.height) * viewportH.value)
   try {
+    const info = await elementAPI.getNodeInfo(browserSessionId.value, x, y)
+    chain.value = info.chain || []
+    currentIdx.value = info.chain?.length ? info.chain.length - 1 : 0
+    siblings.value = []
     pickCard.value = await elementAPI.pickBrowserElement(browserSessionId.value, x, y)
     pickCardVisible.value = true
   } catch (err) {
@@ -437,6 +470,59 @@ const onShotClick = async (event) => {
       ElMessage.warning('该坐标未命中可交互元素，请重试')
     } else {
       ElMessage.error('点选失败: ' + (err.response?.data?.detail || err.message))
+    }
+  }
+}
+
+// 切面包屑层级：页面高亮确认 → 重跑定位流水线 → 更新卡片 + 拉同级
+const switchLevel = async (i) => {
+  if (!chain.value[i] || i === currentIdx.value) return
+  const cssPath = chain.value[i].css_path
+  if (!cssPath) return
+  try {
+    const h = await elementAPI.highlightNode(browserSessionId.value, cssPath)
+    if (!h.found) {
+      ElMessage.warning('页面已变化，请重新点选')
+      pickCardVisible.value = false
+      chain.value = []
+      return
+    }
+    const r = await elementAPI.getNodeLocators(browserSessionId.value, cssPath)
+    pickCard.value = r.element
+    siblings.value = r.siblings || []
+    currentIdx.value = i
+  } catch (err) {
+    if (err.response?.status === 404) {
+      ElMessage.warning('页面已变化，请重新点选')
+      pickCardVisible.value = false
+      chain.value = []
+    } else {
+      ElMessage.error('切换层级失败: ' + (err.response?.data?.detail || err.message))
+    }
+  }
+}
+
+// 切同级兄弟元素：高亮 + 重跑定位流水线
+const switchToSibling = async (sib) => {
+  if (!sib?.css_path) return
+  try {
+    const h = await elementAPI.highlightNode(browserSessionId.value, sib.css_path)
+    if (!h.found) {
+      ElMessage.warning('页面已变化，请重新点选')
+      pickCardVisible.value = false
+      chain.value = []
+      return
+    }
+    const r = await elementAPI.getNodeLocators(browserSessionId.value, sib.css_path)
+    pickCard.value = r.element
+    siblings.value = r.siblings || []
+  } catch (err) {
+    if (err.response?.status === 404) {
+      ElMessage.warning('页面已变化，请重新点选')
+      pickCardVisible.value = false
+      chain.value = []
+    } else {
+      ElMessage.error('切换失败: ' + (err.response?.data?.detail || err.message))
     }
   }
 }
@@ -654,4 +740,45 @@ defineExpose({ phase, start })
   font-size: 13px;
   color: var(--mt-text-secondary, #606266);
 }
+.pick-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 6px 8px;
+  background: var(--mt-bg-secondary, #f5f7fa);
+  border-radius: 4px;
+}
+.crumb {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--el-color-primary);
+  padding: 0 2px;
+}
+.crumb:hover { text-decoration: underline; }
+.crumb.active {
+  color: var(--el-text-color-primary);
+  font-weight: 600;
+  cursor: default;
+}
+.crumb-sep { color: var(--mt-text-secondary, #909399); font-size: 12px; }
+.sibling-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+  width: 100%;
+}
+.sibling-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.sibling-item:hover { background: var(--el-fill-color-light, #f5f7fa); }
+.sibling-text { font-size: 13px; }
 </style>

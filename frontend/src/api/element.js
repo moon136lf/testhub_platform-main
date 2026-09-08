@@ -186,6 +186,33 @@ export const elementAPI = {
     return response.data.data
   },
 
+  /**
+   * 点选面包屑：按坐标命中元素 → 祖先链（每层含 tag/css_path/index_in_parent）
+   * @returns {Promise<Object>} { chain, current_index }
+   */
+  async getNodeInfo(sessionId, x, y) {
+    const response = await axios.post(`/elements/capture/browser/${sessionId}/node-info`, { x, y })
+    return response.data.data
+  },
+
+  /**
+   * 面包屑层级高亮：css_path 查节点 → 橙色闪烁 2 秒
+   * @returns {Promise<Object>} { found }
+   */
+  async highlightNode(sessionId, cssPath) {
+    const response = await axios.post(`/elements/capture/browser/${sessionId}/node-highlight`, { css_path: cssPath })
+    return response.data.data
+  },
+
+  /**
+   * 面包屑切层级：对 css_path 节点重跑定位器流水线
+   * @returns {Promise<Object>} { element, siblings: [{tag, text, css_path}] }
+   */
+  async getNodeLocators(sessionId, cssPath) {
+    const response = await axios.post(`/elements/capture/browser/${sessionId}/node-locators`, { css_path: cssPath })
+    return response.data.data
+  },
+
   /** 关闭并删除整个浏览器会话 */
   async closeBrowserSession(sessionId) {
     const response = await axios.post(`/elements/capture/browser/${sessionId}/close`)
