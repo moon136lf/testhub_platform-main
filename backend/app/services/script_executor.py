@@ -294,6 +294,19 @@ class ScriptExecutor:
             except Exception as e:
                 logger.error(f"【脚本执行】浏览器启动失败 | script={script_asset.name} target={target_url} 原因={e} 建议=检查chromium安装与target可达性")
                 page = None
+        # 阶段3 T4: 登录态复用——config 带 env_credentials.login 则先走登录流程
+        # （page 由 _launch_browser 创建，登录发生在该 page 所属 context 上，后续步骤天然带登录态；
+        #   外部注入 page 时不重复登录）
+        env_credentials = getattr(config, "env_credentials", None)
+        if isinstance(env_credentials, dict) and env_credentials.get("login") and launched:
+            from app.services.login_state_service import LoginStateService, LoginError
+            try:
+                await LoginStateService().ensure_state(
+                    getattr(config, "env_id", "default"), env_credentials, page,
+                    base_url=str(target_url or ""))
+            except LoginError as e:
+                logger.warning(f"登录态获取失败（非阻断，继续无登录执行）: {e}")
+
         failures = 0
         overall_status = "pass"
         last_failure = None
@@ -315,6 +328,10 @@ class ScriptExecutor:
                                            progress=((i + 1) / max(len(steps), 1)) * 0.9)
                 except Exception as e:
                     last_failure = await collect_failure(page, step, e, storage=self.storage)
+                    # 阶段3 T4: 执行失败时若被踢回登录页 → 失效登录态（下次重登）
+                    if page is not None and "login" in (getattr(page, "url", "") or ""):
+                        from app.services.login_state_service import LoginStateService
+                        await LoginStateService().invalidate(getattr(config, "env_id", "default"))
                     failures += 1
                     overall_status = "fail"
                     await sse.send_message(type="error", stage="execute",
@@ -366,6 +383,10 @@ class ScriptExecutor:
                                            progress=((i + 1) / max(len(steps), 1)) * 0.9)
                 except Exception as e:
                     last_failure = await collect_failure(page, step, e, storage=self.storage)
+                    # 阶段3 T4: 执行失败时若被踢回登录页 → 失效登录态（下次重登）
+                    if page is not None and "login" in (getattr(page, "url", "") or ""):
+                        from app.services.login_state_service import LoginStateService
+                        await LoginStateService().invalidate(getattr(config, "env_id", "default"))
                     failures += 1
                     overall_status = "fail"
                     # #5b 审查 #3: 自愈失败也保留 heal_log (ElementNotFoundError 携带), 供 heal_status="failed" 判定
