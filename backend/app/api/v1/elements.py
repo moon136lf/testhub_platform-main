@@ -207,7 +207,8 @@ async def import_elements(
             "placeholder": attrs.get("placeholder"),
             "value": attrs.get("value"),
             "href": attrs.get("href"),
-            "element_name": sem.get("aria_label"),
+            # 用户在列表/弹窗编辑过的别名优先（element_name 是 d 的顶层键）
+            "element_name": d.get("element_name") or sem.get("aria_label"),
         })
 
     if not selected_elements:
@@ -602,7 +603,7 @@ async def import_from_capture_session(
             "placeholder": attrs.get("placeholder"),
             "value": attrs.get("value"),
             "href": attrs.get("href"),
-            "element_name": sem.get("aria_label"),
+            "element_name": e.get("element_name") or sem.get("aria_label"),
         })
 
     imported, skipped = await ElementService.batch_import_elements(db, page_id, selected_elements)
