@@ -122,11 +122,12 @@ export const testCaseAPI = {
     return response
   },
 
-  async importPreview(file, format = 'xlsx') {
+  async importPreview(file, format = 'xlsx', aiOptimize = false) {
     const form = new FormData()
     form.append('file', file)
     const response = await axios.post('/test-cases/import/preview', form, {
-      params: { format }
+      params: { format, ai_optimize: aiOptimize },
+      timeout: 300000  // AI 标准化逐条调 LLM，耗时较长
     })
     return response.data
   },

@@ -106,12 +106,32 @@ async def download_import_template():
 async def import_preview(
     file: UploadFile = File(...),
     format: str = Query("xlsx", pattern="^(xlsx|csv|md)$"),
+    ai_optimize: bool = Query(False, description="解析后逐条调 LLM 标准化步骤四元组"),
 ):
-    """解析上传文件为候选用例（不写库），返回预览列表。"""
+    """解析上传文件为候选用例（不写库），返回预览列表。
+
+    ai_optimize=True 时逐条经 LLM 拆分动作/目标/数据/预期（单条失败兜底原样，不阻塞）。
+    """
     from app.services.smart_import_service import SmartImportService
     try:
         file_bytes = await file.read()
         result = SmartImportService.parse_preview(file_bytes, format)
+        if ai_optimize:
+            import asyncio as _asyncio
+            from app.services.import_ai_optimizer import optimize_case
+
+            async def _opt_one(i, case):
+                try:
+                    optimized, ai_ok = await optimize_case(case.model_dump(), "")
+                    return i, optimized, ai_ok
+                except Exception:
+                    return i, case.model_dump(), False
+
+            # 并发逐条优化（LLM 网关内部限流），单条失败原样保留
+            results = await _asyncio.gather(*[_opt_one(i, c) for i, c in enumerate(result["cases"])])
+            for i, optimized, ai_ok in sorted(results):
+                result["cases"][i] = optimized
+            result["ai_optimized_count"] = sum(1 for _, _, ok in results if ok)
         return {"code": 0, "data": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
