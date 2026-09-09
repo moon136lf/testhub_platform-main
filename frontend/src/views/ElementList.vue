@@ -33,10 +33,6 @@
           @click="selectNode('all')"
         >📁 全部元素</div>
         <div
-          class="tree-node" :class="{ active: treeFilter.mode === 'global' }"
-          @click="selectNode('global')"
-        >🌐 全局元素</div>
-        <div
           v-for="page in pages" :key="page.id"
           class="tree-node page-node" :class="{ active: treeFilter.mode === 'page' && treeFilter.pageId === page.id }"
           @click="selectNode('page', page.id)"
@@ -74,7 +70,11 @@
           <el-table-column label="引用数" width="80" align="center">
             <template #default="{ row }">{{ refCounts[row.id] ?? '-' }}</template>
           </el-table-column>
-          <el-table-column prop="source" label="来源" width="100" show-overflow-tooltip />
+          <el-table-column label="来源" width="100" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-tag size="small" :type="sourceTag(row.source)">{{ sourceLabel(row.source) }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="更新时间" width="160">
             <template #default="{ row }">{{ formatTime(row.updated_at || row.created_at) }}</template>
           </el-table-column>
@@ -91,12 +91,30 @@
     <!-- 右键上下文菜单 -->
     <teleport to="body">
       <div v-if="ctxMenu.visible" class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+        <div class="ctx-item" @click="openPageCreate('sub')">新建子级页面</div>
+        <div class="ctx-item" @click="openPageCreate('sibling')">新建同级页面</div>
         <div class="ctx-item" @click="renamePage">重命名</div>
         <div class="ctx-item" @click="moveCtxPage('up')">上移</div>
         <div class="ctx-item" @click="moveCtxPage('down')">下移</div>
         <div class="ctx-item danger" @click="deleteCtxPage">删除</div>
       </div>
     </teleport>
+
+    <!-- 新建子级/同级页面弹窗 -->
+    <el-dialog v-model="pageCreateVisible" :title="pageCreateMode === 'sub' ? '新建子级页面' : '新建同级页面'" width="440px">
+      <el-form label-width="80px">
+        <el-form-item label="页面名称" required>
+          <el-input v-model="pageCreateForm.name" placeholder="必填" @keyup.enter="submitPageCreate" />
+        </el-form-item>
+        <el-form-item label="页面 URL">
+          <el-input v-model="pageCreateForm.url" placeholder="可选，留空后端生成占位 URL" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="pageCreateVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitPageCreate">创建</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 详情抽屉 -->
     <el-drawer v-model="detailVisible" :title="detailRow?.element_name || '元素详情'" size="480px">
@@ -321,6 +339,16 @@ const statusTag = (status) => {
   return 'info'
 }
 
+// ---- 来源中文映射 ----
+const SOURCE_MAP = {
+  manual: { label: '手工', tag: 'warning' },
+  auto: { label: '自动抓取', tag: 'success' },
+  healed: { label: '自愈', tag: 'danger' },
+  ai_fixed: { label: 'AI修复', tag: 'primary' },
+}
+const sourceLabel = (source) => SOURCE_MAP[source]?.label || '原始'
+const sourceTag = (source) => SOURCE_MAP[source]?.tag || 'info'
+
 const formatTime = (timeStr) => {
   if (!timeStr) return '-'
   return new Date(timeStr).toLocaleString('zh-CN', {
@@ -417,6 +445,47 @@ const openCtxMenu = (event, page) => {
   ctxMenu.x = event.clientX
   ctxMenu.y = event.clientY
   ctxMenu.page = page
+}
+
+// ---- 右键新建子级/同级页面 ----
+const pageCreateVisible = ref(false)
+const pageCreateMode = ref('sub') // 'sub' | 'sibling'
+const pageCreateForm = ref({ name: '', url: '' })
+const pageCreateParentId = ref(null)
+
+const openPageCreate = (mode) => {
+  const page = ctxMenu.page
+  closeCtxMenu()
+  if (!page) return
+  pageCreateMode.value = mode
+  if (mode === 'sub') {
+    pageCreateParentId.value = page.id
+  } else {
+    pageCreateParentId.value = page.parent_id || null
+  }
+  pageCreateForm.value = { name: '', url: '' }
+  pageCreateVisible.value = true
+}
+
+const submitPageCreate = async () => {
+  const name = (pageCreateForm.value.name || '').trim()
+  if (!name) {
+    ElMessage.warning('请输入页面名称')
+    return
+  }
+  try {
+    await elementAPI.createSubPage({
+      project_id: projectId.value,
+      parent_id: pageCreateParentId.value,
+      page_name: name,
+      page_url: (pageCreateForm.value.url || '').trim() || undefined,
+    })
+    ElMessage.success('页面已创建')
+    pageCreateVisible.value = false
+    loadPages()
+  } catch (e) {
+    ElMessage.error('创建页面失败: ' + (e.message || e))
+  }
 }
 
 const renamePage = async () => {
