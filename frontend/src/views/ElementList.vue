@@ -10,6 +10,11 @@
         <el-select v-model="projectId" filterable placeholder="选择项目" style="width: 220px" @change="onProjectChange">
           <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
         </el-select>
+        <el-select v-model="scopeFilter" clearable placeholder="作用域：全部" style="width: 150px"
+          :disabled="treeFilter.mode === 'page'" @change="onScopeChange" @clear="onScopeChange">
+          <el-option label="页面级" value="page" />
+          <el-option label="全局" value="global" />
+        </el-select>
         <el-input v-model="keyword" placeholder="搜索元素名称/文本，回车触发" clearable style="width: 240px"
           @keyup.enter="loadElements" @clear="loadElements" />
         <el-button :icon="Upload" @click="importDialogVisible = true">导入</el-button>
@@ -300,6 +305,7 @@ const refCounts = reactive({})
 const refCountsLoaded = ref(false)
 
 const treeFilter = ref({ mode: 'all', pageId: null })
+const scopeFilter = ref('')
 
 // ---- 分页 ----
 const page = ref(1)
@@ -397,7 +403,7 @@ const loadElements = async () => {
   try {
     const filter = treeFilter.value
     const response = await elementAPI.listElementsAsset(projectId.value, {
-      scope: filter.mode === 'global' ? 'global' : undefined,
+      scope: filter.mode === 'page' ? undefined : (scopeFilter.value || undefined),
       pageId: filter.mode === 'page' ? filter.pageId : undefined,
       keyword: keyword.value || undefined,
       page: page.value,
@@ -461,11 +467,19 @@ const fetchProjects = async () => {
 
 const onProjectChange = () => {
   treeFilter.value = { mode: 'all', pageId: null }
+  scopeFilter.value = ''
   loadAll()
 }
 
 const selectNode = (mode, pageId = null) => {
   treeFilter.value = { mode, pageId }
+  if (mode !== 'all') scopeFilter.value = ''
+  loadElements()
+}
+
+const onScopeChange = () => {
+  // 下拉触发时回到「全部元素」节点（页面节点自带 page 过滤，与下拉互斥）
+  if (treeFilter.value.mode !== 'all') treeFilter.value = { mode: 'all', pageId: null }
   loadElements()
 }
 
@@ -663,7 +677,7 @@ const submitLocator = async () => {
     newLocator.value = { type: 'css', value: '', score: 50 }
     // 后端返回的 locators 可能未含新增项，重新拉该元素列表并保持抽屉打开
     const response = await elementAPI.listElementsAsset(projectId.value, {
-      scope: treeFilter.value.mode === 'global' ? 'global' : undefined,
+      scope: treeFilter.value.mode === 'page' ? undefined : (scopeFilter.value || undefined),
       pageId: treeFilter.value.mode === 'page' ? treeFilter.value.pageId : undefined,
       keyword: keyword.value || undefined,
     })
