@@ -758,11 +758,12 @@ async def capture_browser_page(
 
     # Playwright 对象绑定在 bridge loop（Proactor），所有调用须投递过去
     raw_elements = await _bridge.run(scan_interactive_elements(page, include_text=True))
-    from app.tasks.element_tasks import _apply_filters
-    raw_elements = _apply_filters(raw_elements, text_filter="", type_filter="", debug_mode=False,
-                                  exclude_menu=exclude_menu, max_list_rows=max_list_rows,
-                                  viewport_width=1920)
+    # 先验证提取为 dict（_apply_filters 消费 dict 形态的 position_x/element_type）
     elements = await _bridge.run(_verify_elements(page, raw_elements))
+    from app.tasks.element_tasks import _apply_filters
+    elements = _apply_filters(elements, text_filter="", type_filter="", debug_mode=False,
+                              exclude_menu=exclude_menu, max_list_rows=max_list_rows,
+                              viewport_width=1920)
 
     # 截图上传 MinIO → 批次截图 URL
     screenshot_url = ""
