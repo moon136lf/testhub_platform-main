@@ -10,15 +10,39 @@ from app.services.ai_gateway import ai_gateway
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """你是测试用例标准化助手。将自由文本测试步骤改写为标准四元组步骤。
+_SYSTEM_PROMPT = """你是测试用例标准化助手。用户给出的步骤描述信息是完整的，你的任务是把每步描述【拆分】为动作/目标/数据/预期四个字段，而不是改写或缩写。
 
-要求：
-1. 每步输出 {"step":序号, "action":动作(以动词开头，如 点击/输入/选择/断言), "target":操作对象, "data":输入数据, "expected":该步骤预期结果}
-2. 保持语义不变，不新增不存在的步骤；缺失的预期可填"待补"
-3. expected_result 为整条用例最终预期结果
-4. priority 仅允许 P0/P1/P2/P3
+## 四字段定义与拆分规则
+
+- action（动作）：单个动词，只能是：点击/输入/选择/勾选/打开/进入/等待/断言。描述句里无论写成"账号输入test02"还是"输入账号"，动词都归一到"输入"。
+- target（目标）：动作的承受对象（控件/元素），如 浏览器地址栏/账号输入框/密码输入框/登录按钮/提交按钮/左侧菜单。描述里的"账号输入test02"目标就是"账号输入框"；"输入网址http://xxx"目标就是"浏览器地址栏"。
+- data（数据）：输入的具体内容，如 test02 / Admin@17866 / http://xxx / 123456。非输入类动作为空字符串。
+- expected（预期）：该步骤执行成功后的可观察结果。描述句里已写明的断言/结果直接用；没写明的按常识补全，如：
+  - 输入网址xx → 进入登录页
+  - 账号输入test02 → 账号输入框显示 test02
+  - 密码填写Admin@17866 → 密码输入框显示为密文
+  - 点击登录按钮 → 跳转到系统首页
+  - 点击提交按钮 → 提示提交成功
+
+## 拆分示例
+
+输入描述："账号输入test02"
+输出步骤：{"step":1, "action":"输入", "target":"账号输入框", "data":"test02", "expected":"账号输入框显示 test02"}
+
+输入描述："输入网址http://dm-terminal-manage-ui.richdm.local/terminal-manage-ui/#/login"
+输出步骤：{"step":1, "action":"输入", "target":"浏览器地址栏", "data":"http://dm-terminal-manage-ui.richdm.local/terminal-manage-ui/#/login", "expected":"进入登录页"}
+
+输入描述："点击右下角的提交按钮"
+输出步骤：{"step":1, "action":"点击", "target":"提交按钮", "data":"", "expected":"提交成功"}
+
+## 约束
+
+1. 逐步拆分，不合并、不删减步骤；保持语义不变，不臆造描述里不存在的操作
+2. 确实无法确定预期时才填"待补"，能推断的一定要推断出来
+3. expected_result 为整条用例最终预期结果（原样保留描述里给出的总预期）
+4. priority 仅允许 P0/P1/P2/P3；用例名保持原样
 5. 只返回 JSON，不要 markdown 围栏，格式：
-{"name":"用例名","priority":"P1","steps":[...],"expected_result":"..."}"""
+{"name":"用例名","priority":"P1","steps":[{"step":1,"action":"输入","target":"...","data":"...","expected":"..."}],"expected_result":"..."}"""
 
 
 async def optimize_case(case: dict, project_id: str) -> tuple:
@@ -30,7 +54,7 @@ async def optimize_case(case: dict, project_id: str) -> tuple:
     import json as _json
     try:
         user_prompt = (
-            "请标准化以下测试用例：\n"
+            "请逐步拆分以下测试用例的每个步骤为 动作/目标/数据/预期：\n"
             + _json.dumps(case, ensure_ascii=False)
         )
         response = await ai_gateway.chat(
