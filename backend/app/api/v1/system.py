@@ -1,5 +1,9 @@
 """System settings API endpoints (prefix /system)."""
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.models.system import TestEnv
+from typing import Optional
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -186,3 +190,62 @@ async def token_usage(project_id: str = Query(...),
                       svc: TokenService = Depends(get_token_service)):
     usage = await svc.get_usage(project_id, days)
     return {"code": 0, "data": usage.model_dump()}
+
+
+# ---- env login config (阶段3 T4 登录态复用) ----
+class LoginConfigRequest(BaseModel):
+    login_url: Optional[str] = Field(None, description="登录页路径或完整 URL")
+    username_selector: Optional[str] = None
+    username: Optional[str] = Field(None, description="敏感：入库走既有 credentials 加密约定")
+    password_selector: Optional[str] = None
+    password: Optional[str] = Field(None, description="敏感：入库走既有 credentials 加密约定")
+    submit_selector: Optional[str] = None
+    success_check: Optional[str] = Field(None, description="登录成功标识（URL/页面文本包含即成功）")
+    state_ttl_minutes: Optional[int] = Field(120, ge=1, le=1440)
+
+
+@router.put("/envs/{env_id}/login-config")
+async def save_login_config(env_id: str, request: LoginConfigRequest,
+                            db: AsyncSession = Depends(get_db)):
+    """保存环境登录配置（写 credentials.login 块）。
+
+    注意：username/password 传 None 时不覆盖已存值（避免前端回显脱敏后误清密码）。"""
+    import uuid as uuid_mod
+    env = await db.get(TestEnv, uuid_mod.UUID(env_id))
+    if not env:
+        raise HTTPException(status_code=404, detail="环境不存在")
+    payload = request.model_dump(exclude_unset=True)
+    creds = env.credentials or {}
+    login_block = dict(creds.get("login") or {})
+    for k, v in payload.items():
+        if k in ("username", "password") and (v is None or v == ""):
+            continue  # 不覆盖已存敏感值
+        login_block[k] = v
+    creds["login"] = login_block
+    env.credentials = creds
+    await db.commit()
+    return {"code": 0, "message": "login config saved"}
+
+
+@router.post("/envs/{env_id}/test-login")
+async def test_login(env_id: str, db: AsyncSession = Depends(get_db)):
+    """测试登录：真跑一次登录流程验证配置。"""
+    import uuid as uuid_mod
+    env = await db.get(TestEnv, uuid_mod.UUID(env_id))
+    if not env:
+        raise HTTPException(status_code=404, detail="环境不存在")
+    from app.services.login_state_service import login_state_service, LoginError
+    from app.services.playwright_service import PlaywrightService
+    pw = PlaywrightService()
+    try:
+        await pw.start(headless=True)
+        page = await pw.browser.new_page()
+        await login_state_service.ensure_state(str(env.id), env.credentials or {}, page,
+                                               base_url=env.url)
+        return {"code": 0, "message": "登录成功，登录态已缓存"}
+    except LoginError as e:
+        return {"code": 1, "message": str(e)}
+    except Exception as e:
+        return {"code": 1, "message": f"登录失败: {str(e)[:200]}"}
+    finally:
+        await pw.close()

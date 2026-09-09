@@ -132,6 +132,7 @@ async def list_scripts(
         d.update({
             "ai_suggested": bool(reg.ai_suggested) if reg else False,
             "ai_reason": reg.ai_reason if reg else None,
+            "included": bool(s.for_regression) if hasattr(s, "for_regression") else bool(reg.actual_included) if reg else False,
             "actual_included": bool(reg.actual_included) if reg else False,
             "include_source": reg.include_source if reg else None,
         })

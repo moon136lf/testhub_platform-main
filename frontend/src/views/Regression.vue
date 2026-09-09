@@ -50,7 +50,7 @@
       </el-table-column>
       <el-table-column label="是否纳入" width="100">
         <template #default="{ row }">
-          <el-tag :type="row.actual_included ? 'success' : 'info'" size="small">{{ row.actual_included ? '已纳入' : '未纳入' }}</el-tag>
+          <el-tag :type="row.included ? 'success' : 'info'" size="small">{{ row.included ? '已纳入' : '未纳入' }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="script.run_count" label="运行次数" width="90" />

@@ -107,23 +107,107 @@ class TestUpsertMember:
 
 class TestSetMembers:
     def test_add_sets_manual(self):
+        """阶段3语义: add → ScriptAsset.for_regression=True + RegressionSet 行同步 manual."""
         from app.models.regression import RegressionSet
-        existing = RegressionSet(project_id=uuid4(), script_id=uuid4(),
+        sid = uuid4()
+        script = _FakeScript(sid, for_regression=False)
+        existing = RegressionSet(project_id=uuid4(), script_id=sid,
                                  ai_suggested=False, actual_included=False,
                                  include_source="ai")
-        db = FakeRegressionDB([FakeResult(scalar=existing)])
+        db = FakeRegressionDB([FakeResult(scalar=script), FakeResult(scalar=existing)])
         svc = RegressionService(db)
-        asyncio_run(svc.set_member("p1", existing.script_id, action="add"))
+        asyncio_run(svc.set_member("p1", sid, action="add"))
+        assert script.for_regression is True          # 阶段3 主操作
         assert existing.actual_included is True
         assert existing.include_source == "manual"
 
     def test_remove_sets_manual(self):
         from app.models.regression import RegressionSet
-        existing = RegressionSet(project_id=uuid4(), script_id=uuid4(),
+        sid = uuid4()
+        script = _FakeScript(sid, for_regression=True)
+        existing = RegressionSet(project_id=uuid4(), script_id=sid,
                                  ai_suggested=True, actual_included=True,
                                  include_source="ai")
-        db = FakeRegressionDB([FakeResult(scalar=existing)])
+        db = FakeRegressionDB([FakeResult(scalar=script), FakeResult(scalar=existing)])
         svc = RegressionService(db)
-        asyncio_run(svc.set_member("p1", existing.script_id, action="remove"))
+        asyncio_run(svc.set_member("p1", sid, action="remove"))
+        assert script.for_regression is False         # 阶段3 主操作
         assert existing.actual_included is False
         assert existing.include_source == "manual"
+
+
+# ---- 阶段3 T2: 数据源切换 ScriptAsset.for_regression ----
+from uuid import UUID
+
+
+class _FakeScript:
+    """最小 ScriptAsset 替身 (有 id/module/for_regression/last_status)."""
+    def __init__(self, script_id, for_regression=True, module=None, last_status=None):
+        self.id = script_id
+        self.module = module
+        self.for_regression = for_regression
+        self.last_status = last_status
+        self.to_dict = MagicMock(return_value={"id": str(script_id), "name": "s1"})
+
+
+class TestForRegressionSource:
+    def test_list_view_uses_for_regression(self):
+        """list_view 主数据源 = ScriptAsset.for_regression；included 输出=for_regression 本身."""
+        sid = uuid4()
+        script = _FakeScript(sid, for_regression=True)
+        # 结果行: (script, reg) — reg 为 None (无 RegressionSet 行也应在列)
+        db = FakeRegressionDB([FakeResult(scalars=[(script, None)])])
+        svc = RegressionService(db)
+        items = asyncio_run(svc.list_view("p1"))
+        assert len(items) == 1
+        assert items[0]["script"]["id"] == str(sid)
+        assert items[0]["included"] is True            # for_regression 本身
+        assert items[0]["ai_suggested"] is False       # 无 reg 行 → 建议列显示空
+
+    def test_list_view_excludes_flag_false(self):
+        """for_regression=False 的脚本不进主列表."""
+        script = _FakeScript(uuid4(), for_regression=False)
+        db = FakeRegressionDB([FakeResult(scalars=[])])  # 查询本身按 flag 过滤 → 空
+        svc = RegressionService(db)
+        items = asyncio_run(svc.list_view("p1"))
+        assert items == []
+
+    def test_add_member_sets_flag(self):
+        """members add → ScriptAsset.for_regression=True (RegressionSet 行仍写做记录)."""
+        from app.models.regression import RegressionSet
+        sid = uuid4()
+        script = _FakeScript(sid, for_regression=False)
+        existing = RegressionSet(project_id=uuid4(), script_id=sid,
+                                 ai_suggested=False, actual_included=False,
+                                 include_source="ai")
+        db = FakeRegressionDB([FakeResult(scalar=script),   # 查 ScriptAsset
+                               FakeResult(scalar=existing)])  # 查 RegressionSet
+        svc = RegressionService(db)
+        asyncio_run(svc.set_member("p1", sid, action="add"))
+        assert script.for_regression is True
+        assert existing.actual_included is True       # RegressionSet 同步记录
+        assert existing.include_source == "manual"
+
+    def test_remove_member_clears_flag(self):
+        """members remove → for_regression=False."""
+        from app.models.regression import RegressionSet
+        sid = uuid4()
+        script = _FakeScript(sid, for_regression=True)
+        existing = RegressionSet(project_id=uuid4(), script_id=sid,
+                                 ai_suggested=True, actual_included=True,
+                                 include_source="ai")
+        db = FakeRegressionDB([FakeResult(scalar=script), FakeResult(scalar=existing)])
+        svc = RegressionService(db)
+        asyncio_run(svc.set_member("p1", sid, action="remove"))
+        assert script.for_regression is False
+        assert existing.actual_included is False
+
+    def test_run_uses_for_regression_scripts(self):
+        """run 取 for_regression=True 的脚本 (actual_included 不再参与)."""
+        s1 = _FakeScript(uuid4(), for_regression=True, last_status="passed")
+        s2 = _FakeScript(uuid4(), for_regression=False)
+        db = FakeRegressionDB([FakeResult(scalars=[s1])])  # 查询按 flag 过滤
+        svc = RegressionService(db)
+        stats = asyncio_run(svc.get_stats("p1"))
+        assert stats["total"] == 1
+        assert stats["passed"] == 1

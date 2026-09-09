@@ -210,3 +210,62 @@ class CaseRefiner:
         if not norm["assertion_executable"]:
             score -= 15
         return max(0, min(100, score))
+
+
+async def llm_rewrite_steps(steps: List[Dict], suggestions: List[Dict], chat_fn=None) -> List[Dict]:
+    """「断言增强」类建议的 LLM 改写：把软断言步骤改写为硬断言。
+
+    chat_fn 可注入（测试）；默认 ai_gateway.chat。LLM 失败/输出非法 → 返回原步骤。"""
+    if chat_fn is None:
+        from app.services.ai_gateway import ai_gateway
+        chat_fn = ai_gateway.chat
+
+    # 只处理断言增强且有 target_step 的建议
+    targets = [s for s in suggestions
+               if s.get("dimension") == "断言增强" and s.get("target_step")]
+    if not targets:
+        return steps
+
+    steps_text = json.dumps(steps, ensure_ascii=False)
+    issues_text = json.dumps(
+        [{"step": s["target_step"], "issue": s.get("issue", ""), "suggestion": s.get("suggestion", "")}
+         for s in targets], ensure_ascii=False)
+
+    system_prompt = "你是测试用例改写专家。只输出 JSON 数组，不要其他文字。"
+    user_prompt = f"""改写以下测试步骤中的软断言为硬断言。
+
+原步骤（JSON 数组）：
+{steps_text}
+
+需改写的步骤（含问题描述）：
+{issues_text}
+
+要求：
+1. 只改写列出的步骤，未列出的步骤原样保留
+2. action 用可执行动词（点击/填充/选择/断言），expected 必须可断言（URL/文本/数量）
+3. 每项保留 step/action/target/data/expected 字段
+4. 只输出改写后的完整步骤 JSON 数组"""
+
+    try:
+        resp = await chat_fn(
+            [{"role": "system", "content": system_prompt},
+             {"role": "user", "content": user_prompt}],
+            stage="refine", max_tokens=2000)
+        rewritten_steps = parse_llm_json(resp["content"])
+        if not isinstance(rewritten_steps, list):
+            return steps
+        # 按序号合并：LLM 返回的行覆盖同序号原行，其余保留
+        by_seq = {r.get("step"): r for r in rewritten_steps if isinstance(r, dict) and r.get("action")}
+        out = []
+        for s in steps:
+            r = by_seq.get(s.get("step"))
+            if r and r.get("action"):
+                merged = dict(s)
+                merged.update({k: r[k] for k in ("action", "target", "data", "expected") if r.get(k)})
+                out.append(merged)
+            else:
+                out.append(s)
+        return out
+    except Exception as e:
+        logger.warning(f"LLM 步骤改写失败（不阻塞）: {e}")
+        return steps

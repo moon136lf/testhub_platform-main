@@ -69,7 +69,7 @@ async def run_regression(request: RunRequest,
     """REG-04: 对 included=true 全部脚本批量执行 (exec_type=ui_regression)."""
     _pid(request.project_id)
     items = await svc.list_view(request.project_id)
-    script_ids = [it["script"]["id"] for it in items if it["actual_included"]]
+    script_ids = [it["script"]["id"] for it in items if it["included"]]
     if not script_ids:
         raise HTTPException(status_code=400, detail="回归集为空，无脚本可执行")
     session_id = str(uuid_mod.uuid4())

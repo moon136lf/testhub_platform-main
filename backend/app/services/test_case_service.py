@@ -67,6 +67,7 @@ class TestCaseService:
             steps=steps, expected_result=case.expected_result,
             is_finalized=case.is_finalized, version=case.version,
             hallucination_status=case.hallucination_status, created_by=case.created_by,
+            source_type=str(getattr(case, "source_type", None) or "ai_gen"),
             created_at=case.created_at.isoformat() if case.created_at else "",
             updated_at=case.updated_at.isoformat() if case.updated_at else "",
             is_deleted=case.is_deleted,
@@ -111,6 +112,9 @@ class TestCaseService:
 
         if filters.hallucination_status:
             conditions.append(TestCase.hallucination_status == filters.hallucination_status)
+
+        if filters.source_type:
+            conditions.append(TestCase.source_type == filters.source_type)
 
         # Keyword search in name, precondition, and expected_result
         if filters.keyword:
@@ -179,6 +183,7 @@ class TestCaseService:
                         is_finalized=case.is_finalized,
                         version=case.version,
                         hallucination_status=case.hallucination_status,
+                        source_type=str(case.source_type or "ai_gen"),
                         review_status=case.review_status,
                         feasibility_level=case.feasibility_level,
                         refinement_report=case.refinement_report,
@@ -502,6 +507,14 @@ class TestCaseService:
             # refined_case 里有比 case 更完整的字段时同步过来
             if refined.get("precondition") and not case.precondition:
                 case.precondition = refined["precondition"]
+            # 阶段3 T6: 断言增强类建议走 LLM 改写（软断言→硬断言真正落地）
+            pending_assertion = [s for s in report.get("suggestions", [])
+                                 if s.get("dimension") == "断言增强"
+                                 and s.get("status") == "pending"
+                                 and (suggestion_ids is None or s.get("id") in suggestion_ids)]
+            if pending_assertion:
+                from app.services.case_refiner import llm_rewrite_steps
+                case.steps = await llm_rewrite_steps(case.steps or [], pending_assertion)
             # mark suggestions applied (all pending, or only the specified ids)
             for s in report.get("suggestions", []):
                 if suggestion_ids is None or s.get("id") in suggestion_ids:

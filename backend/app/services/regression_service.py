@@ -61,8 +61,13 @@ class RegressionService:
         # T2 契约: score_script 返回 (score: int, reason: str), included 由调用方判定
         score, reason = score_script(data)
         included = score >= INCLUDED_THRESHOLD
-        return await self.upsert_member(str(script.project_id), script.id,
-                                        included=included, reason=reason)
+        row = await self.upsert_member(str(script.project_id), script.id,
+                                       included=included, reason=reason)
+        # 阶段3: AI 建议纳入 → 同步置 for_regression=True (只做建议不 removal,
+        # 未建议且当前 True 的不动, 人工控制移出)
+        if included:
+            script.for_regression = True
+        return row
 
     async def _assemble(self, script: ScriptAsset) -> dict:
         """ORM → score_script 输入 dict (T2 契约, recent_runs 旧→新)."""
@@ -90,14 +95,13 @@ class RegressionService:
         details = er.scalars().all()
         recent_runs = [d.status == "pass" for d in reversed(details)]
 
-        # R4 数据: 同 module 是否已有 included
+        # R4 数据: 同 module 是否已有回归脚本 (阶段3: 按 for_regression)
         module_has_included = False
         if script.module:
             mr = await self.db.execute(
-                select(RegressionSet.id)
-                .join(ScriptAsset, ScriptAsset.id == RegressionSet.script_id)
-                .where(RegressionSet.project_id == script.project_id,
-                       RegressionSet.actual_included.is_(True),
+                select(ScriptAsset.id)
+                .where(ScriptAsset.project_id == script.project_id,
+                       ScriptAsset.for_regression.is_(True),
                        ScriptAsset.module == script.module,
                        ScriptAsset.id != script.id)
                 .limit(1))
@@ -143,7 +147,13 @@ class RegressionService:
         return row
 
     async def set_member(self, project_id: str, script_id: UUID, action: str) -> None:
-        """REG-03 手动调整: add/remove, include_source=manual (识别不再覆盖)."""
+        """REG-03 手动调整 (阶段3): 主操作 = ScriptAsset.for_regression 置/清;
+        RegressionSet 行仍写做记录 (include_source=manual, 识别不再覆盖)."""
+        sr = await self.db.execute(
+            select(ScriptAsset).where(ScriptAsset.id == script_id))
+        script = sr.scalar_one_or_none()
+        if script is not None:
+            script.for_regression = (action == "add")
         r = await self.db.execute(
             select(RegressionSet).where(
                 RegressionSet.project_id == _uuid(project_id),
@@ -162,12 +172,11 @@ class RegressionService:
     # ---- 统计 / 列表 ----
 
     async def get_stats(self, project_id: str) -> dict:
-        """统计卡: included=true ⋈ script_asset.last_status 聚合 (页面加载即有值)."""
+        """统计卡 (阶段3): for_regression=True ⋈ script_asset.last_status 聚合."""
         result = await self.db.execute(
             select(ScriptAsset)
-            .join(RegressionSet, RegressionSet.script_id == ScriptAsset.id)
-            .where(RegressionSet.project_id == _uuid(project_id),
-                   RegressionSet.actual_included.is_(True)))
+            .where(ScriptAsset.project_id == _uuid(project_id),
+                   ScriptAsset.for_regression.is_(True)))
         scripts = result.scalars().all()
         total = len(scripts)
         passed = sum(1 for s in scripts if s.last_status == "passed")
@@ -177,12 +186,14 @@ class RegressionService:
 
     async def list_view(self, project_id: str, category: Optional[str] = None,
                         keyword: Optional[str] = None) -> list:
-        """管理视图: 全量 confirmed 脚本 LEFT JOIN regression_set (含未纳入行)."""
+        """管理视图 (阶段3): 主数据源 = ScriptAsset.for_regression=True;
+        LEFT JOIN RegressionSet 取 ai_suggested/ai_reason 做建议列 (无行显示空)."""
         q = (
             select(ScriptAsset, RegressionSet)
             .outerjoin(RegressionSet, RegressionSet.script_id == ScriptAsset.id)
             .where(ScriptAsset.project_id == _uuid(project_id),
-                   ScriptAsset.status == "confirmed")
+                   ScriptAsset.status == "confirmed",
+                   ScriptAsset.for_regression.is_(True))
         )
         if category:
             q = q.where(ScriptAsset.category == category)
@@ -194,10 +205,9 @@ class RegressionService:
         for s, reg in result.all():
             items.append({
                 "script": s.to_dict(),
+                "included": bool(s.for_regression),
                 "ai_suggested": bool(reg.ai_suggested) if reg else False,
                 "ai_reason": reg.ai_reason if reg else None,
-                "actual_included": bool(reg.actual_included) if reg else False,
-                "include_source": reg.include_source if reg else None,
             })
         return items
 

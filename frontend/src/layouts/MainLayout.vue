@@ -18,18 +18,15 @@
           <span>项目管理</span>
         </el-menu-item>
 
-        <el-sub-menu index="ai">
+        <el-sub-menu index="case-assets">
           <template #title>
             <el-icon><MagicStick /></el-icon>
-            <span>AI与用例</span>
+            <span>用例资产</span>
           </template>
+          <el-menu-item index="/cases">用例管理</el-menu-item>
+          <el-menu-item index="/reviews">用例评审与E2E精修</el-menu-item>
           <el-menu-item index="/ai/generate">AI智能用例生成</el-menu-item>
           <el-menu-item index="/ai/knowledge">知识库管理</el-menu-item>
-          <el-menu-item index="/ai/rules">测试规则管理</el-menu-item>
-          <el-menu-item index="/ai/history">生成历史</el-menu-item>
-          <el-menu-item index="/reviews">用例评审与E2E精修</el-menu-item>
-          <el-menu-item index="/ai/convert">用例转自动化脚本</el-menu-item>
-          <el-menu-item index="/cases">用例管理</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu index="element-assets">
@@ -41,6 +38,21 @@
           <el-menu-item index="/elements/list">元素管理</el-menu-item>
         </el-sub-menu>
 
+        <el-sub-menu index="auto">
+          <template #title>
+            <el-icon><VideoCameraFilled /></el-icon>
+            <span>自动化</span>
+          </template>
+          <el-menu-item index="/ai/convert">用例转自动化脚本</el-menu-item>
+          <el-menu-item index="/auto/ui">UI自动化测试</el-menu-item>
+          <el-menu-item index="/auto/regression">回归自动化</el-menu-item>
+        </el-sub-menu>
+
+        <el-menu-item index="/whitescan">
+          <el-icon><Document /></el-icon>
+          <span>白盒测试</span>
+        </el-menu-item>
+
         <el-sub-menu index="api">
           <template #title>
             <el-icon><Connection /></el-icon>
@@ -50,24 +62,6 @@
           <el-menu-item index="/api/manage" disabled>接口管理（二期）</el-menu-item>
           <el-menu-item index="/api/debug" disabled>单接口调试（二期）</el-menu-item>
           <el-menu-item index="/api/oneclick" disabled>一键测试（二期）</el-menu-item>
-        </el-sub-menu>
-
-        <el-sub-menu index="auto">
-          <template #title>
-            <el-icon><VideoCameraFilled /></el-icon>
-            <span>自动化</span>
-          </template>
-          <el-menu-item index="/auto/ui">UI自动化测试</el-menu-item>
-          <el-menu-item index="/auto/regression">回归测试</el-menu-item>
-        </el-sub-menu>
-
-        <el-sub-menu index="quality">
-          <template #title>
-            <el-icon><Document /></el-icon>
-            <span>质量与报告</span>
-          </template>
-          <el-menu-item index="/whitescan">白盒测试</el-menu-item>
-          <el-menu-item index="/reports">执行记录与报告</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu index="settings">

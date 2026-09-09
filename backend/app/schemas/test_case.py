@@ -39,6 +39,7 @@ class CaseFilterParams(BaseModel):
     is_finalized: Optional[bool] = Field(None, description="Finalized status")
     hallucination_status: Optional[str] = Field(None, pattern=_pattern(HALLUCINATION_STATUSES))
     keyword: Optional[str] = Field(None, max_length=100, description="Search keyword for name/steps")
+    source_type: Optional[str] = Field(None, pattern="^(ai_gen|whitescan|manual)$")
     page: int = Field(1, ge=1, description="Page number")
     page_size: int = Field(20, ge=1, le=100, description="Items per page")
 
@@ -176,6 +177,7 @@ class CaseResponse(BaseModel):
     is_finalized: bool
     version: int
     hallucination_status: str
+    source_type: Optional[str] = None
     # W7 review fields on list items (avoids frontend N+1 detail fan-out;
     # frontend hooks on review_status presence and skips detail pulls)
     review_status: Optional[str] = None
@@ -204,6 +206,7 @@ class CaseDetailResponse(BaseModel):
     is_finalized: bool
     version: int
     hallucination_status: str
+    source_type: Optional[str] = None
     created_by: Optional[str] = None
     created_at: str
     updated_at: str

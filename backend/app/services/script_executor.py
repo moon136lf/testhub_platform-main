@@ -64,6 +64,70 @@ async def collect_failure(page, step: int, error: Exception, storage=None) -> di
     }
 
 
+def parse_editor_steps(step_mapping):
+    """解析编辑器行式步骤（seq 键）与旧 pipeline 步骤（step 键），统一为可执行列表。"""
+    rows = [s for s in (step_mapping or []) if isinstance(s, dict)]
+    return [s for s in rows if (s.get("step", 0) or s.get("seq", 0))]
+
+
+async def _run_assert_db_query(sql: str):
+    """assert_db 的 DB 查询（独立只读会话）。"""
+    from sqlalchemy import text as _text
+    from app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        await db.execute(_text("SET TRANSACTION READ ONLY"))
+        result = await db.execute(_text(sql))
+        row = result.scalar()
+        return str(row) if row is not None else ""
+
+
+async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
+    """执行单条编辑器动作。返回 None=通过；AssertionError=断言失败；ValueError=未知操作。
+
+    expect_mod: playwright.async_api.expect（由调用方传入，便于测试注入）"""
+    action = step.get("action", "")
+    target = step.get("target", "")
+    value = step.get("value", "")
+
+    if action == "navigate":
+        await page.goto(value)
+        return None
+    if action == "click":
+        await page.locator(target).click()
+        return None
+    if action == "input":
+        await page.locator(target).fill(value)
+        return None
+    if action == "select":
+        await page.locator(target).select_option(value)
+        return None
+    if action == "wait":
+        try:
+            ms = int(float(value or 1) * 1000)
+        except (ValueError, TypeError):
+            ms = 1000
+        await page.wait_for_timeout(ms)
+        return None
+    if action == "assert_text":
+        if expect_mod is None:
+            from playwright.async_api import expect as expect_mod
+        await expect_mod(page.locator(target)).to_have_text(value)
+        return None
+    if action == "assert_visible":
+        if expect_mod is None:
+            from playwright.async_api import expect as expect_mod
+        await expect_mod(page.locator(target)).to_be_visible()
+        return None
+    if action == "assert_db":
+        query = db_query or _run_assert_db_query
+        actual = await query(value)
+        if actual != str(step.get("expected", "")):
+            raise AssertionError(
+                f"DB断言失败: SQL「{value[:60]}」期望 {step.get('expected')} 实际 {actual}")
+        return None
+    raise ValueError(f"不支持的操作类型: {action}")
+
+
 def _element_to_dict(el) -> dict:
     """ElementRepository ORM 或 dict → SmartLocator 需的 dict."""
     if isinstance(el, dict):
@@ -212,7 +276,13 @@ class ScriptExecutor:
         """
         start = time.time()
         step_mapping = script_asset.step_mapping or []
-        steps = [s for s in step_mapping if s.get("step", 0) > 0]
+        steps = parse_editor_steps(step_mapping)
+        # 阶段3 T0: 编辑器行式步骤（含 seq 键或含 navigate/wait/assert 类动作）走编辑器执行链路
+        is_editor_format = any(
+            s.get("seq") or s.get("action") in (
+                "navigate", "wait", "assert_text", "assert_visible", "assert_db")
+            for s in steps
+        )
         await sse.send_message(type="system", stage="execute",
                                content=f"开始执行脚本：{script_asset.name}", progress=0.0)
         # page=None 时启动真实浏览器 (单测 monkeypatch _launch_browser)
@@ -224,65 +294,110 @@ class ScriptExecutor:
             except Exception as e:
                 logger.error(f"【脚本执行】浏览器启动失败 | script={script_asset.name} target={target_url} 原因={e} 建议=检查chromium安装与target可达性")
                 page = None
+        # 阶段3 T4: 登录态复用——config 带 env_credentials.login 则先走登录流程
+        # （page 由 _launch_browser 创建，登录发生在该 page 所属 context 上，后续步骤天然带登录态；
+        #   外部注入 page 时不重复登录）
+        env_credentials = getattr(config, "env_credentials", None)
+        if isinstance(env_credentials, dict) and env_credentials.get("login") and launched:
+            from app.services.login_state_service import login_state_service, LoginError
+            try:
+                await login_state_service.ensure_state(
+                    getattr(config, "env_id", "default"), env_credentials, page,
+                    base_url=str(target_url or ""))
+            except LoginError as e:
+                logger.warning(f"登录态获取失败（非阻断，继续无登录执行）: {e}")
+
         failures = 0
         overall_status = "pass"
         last_failure = None
         max_failures = getattr(config, "max_failures", 8) or 8
         heal_logs = []  # #5b T5: 收集每步 SmartLocator 透传的 heal_log (聚合填 ExecutionDetail)
-        for i, sm in enumerate(steps):
-            step = sm.get("step", i + 1)
-            action = sm.get("action", "unknown")
-            element_name = sm.get("element_name")
-            await sse.send_message(type="system", stage="execute",
-                                   content=f"第 {step}/{len(steps)} 步：{action} {element_name or ''}",
-                                   progress=(i / max(len(steps), 1)) * 0.9)
-            # 旧 step_mapping 兼容：缺 element_name → script_error
-            if not element_name:
-                last_failure = await collect_failure(None, step, ValueError(f"步骤 {step} 缺 element_name，无法执行"))
-                failures += 1
-                overall_status = "fail"
-                if failures >= max_failures:
-                    break
-                continue
-            # 查元素库
-            element_data = await self.element_svc.find_by_name(str(script_asset.project_id), element_name)
-            if not element_data:
-                last_failure = await collect_failure(None, step, ValueError(f"元素库未找到：{element_name}"))
-                failures += 1
-                overall_status = "fail"
-                if failures >= max_failures:
-                    break
-                continue
-            # 执行
-            locator = SmartLocator(_element_to_dict(element_data), gateway=self.gateway)
-            try:
-                result = await locator.locate_and_interact(page, action, value=sm.get("value"))
-                # #5b T5: 收集 heal 信号 (SmartLocator 透传 heal_log/writeback)
-                heal_logs.append(result.get("heal_log") or [])
-                writeback = result.get("writeback")
-                if writeback:
-                    await self._do_writeback(writeback)
-                had_heal = bool(result.get("heal_log"))
-                # 断言校验 (action 成功后): 若 assertion 存在且 is_valid → _check_assertion
-                assertion = sm.get("assertion")
-                if assertion:
-                    await self._check_assertion(page, assertion)
+        if is_editor_format:
+            # 编辑器行式步骤: target 即定位符, 不经元素库 (阶段3 T0)
+            from playwright.async_api import expect as _async_expect
+            for i, sm in enumerate(steps):
+                step = sm.get("seq") or i + 1
+                action = sm.get("action", "unknown")
                 await sse.send_message(type="system", stage="execute",
-                                       content=f"第 {step} 步：✅ 通过" + ("（自愈）" if had_heal else ""),
-                                       progress=((i + 1) / max(len(steps), 1)) * 0.9)
-            except Exception as e:
-                last_failure = await collect_failure(page, step, e, storage=self.storage)
-                failures += 1
-                overall_status = "fail"
-                # #5b 审查 #3: 自愈失败也保留 heal_log (ElementNotFoundError 携带), 供 heal_status="failed" 判定
-                failed_heal_log = getattr(e, "heal_log", None)
-                if failed_heal_log:
-                    heal_logs.append(failed_heal_log)
-                await sse.send_message(type="error", stage="execute",
-                                       content=f"第 {step} 步：❌ 失败（{last_failure['error_type']}）",
-                                       progress=((i + 1) / max(len(steps), 1)) * 0.9)
-                if failures >= max_failures:
-                    break
+                                       content=f"第 {step}/{len(steps)} 步：{action} {sm.get('element_name') or sm.get('target') or ''}",
+                                       progress=(i / max(len(steps), 1)) * 0.9)
+                try:
+                    await dispatch_editor_action(page, sm, _async_expect)
+                    await sse.send_message(type="system", stage="execute",
+                                           content=f"第 {step} 步：✅ 通过",
+                                           progress=((i + 1) / max(len(steps), 1)) * 0.9)
+                except Exception as e:
+                    last_failure = await collect_failure(page, step, e, storage=self.storage)
+                    # 阶段3 T4: 执行失败时若被踢回登录页 → 失效登录态（下次重登）
+                    if page is not None and "login" in (getattr(page, "url", "") or ""):
+                        from app.services.login_state_service import login_state_service
+                        await login_state_service.invalidate(getattr(config, "env_id", "default"))
+                    failures += 1
+                    overall_status = "fail"
+                    await sse.send_message(type="error", stage="execute",
+                                           content=f"第 {step} 步：❌ 失败（{last_failure['error_type']}）",
+                                           progress=((i + 1) / max(len(steps), 1)) * 0.9)
+                    if failures >= max_failures:
+                        break
+        else:
+            for i, sm in enumerate(steps):
+                step = sm.get("step", i + 1)
+                action = sm.get("action", "unknown")
+                element_name = sm.get("element_name")
+                await sse.send_message(type="system", stage="execute",
+                                       content=f"第 {step}/{len(steps)} 步：{action} {element_name or ''}",
+                                       progress=(i / max(len(steps), 1)) * 0.9)
+                # 旧 step_mapping 兼容：缺 element_name → script_error
+                if not element_name:
+                    last_failure = await collect_failure(None, step, ValueError(f"步骤 {step} 缺 element_name，无法执行"))
+                    failures += 1
+                    overall_status = "fail"
+                    if failures >= max_failures:
+                        break
+                    continue
+                # 查元素库
+                element_data = await self.element_svc.find_by_name(str(script_asset.project_id), element_name)
+                if not element_data:
+                    last_failure = await collect_failure(None, step, ValueError(f"元素库未找到：{element_name}"))
+                    failures += 1
+                    overall_status = "fail"
+                    if failures >= max_failures:
+                        break
+                    continue
+                # 执行
+                locator = SmartLocator(_element_to_dict(element_data), gateway=self.gateway)
+                try:
+                    result = await locator.locate_and_interact(page, action, value=sm.get("value"))
+                    # #5b T5: 收集 heal 信号 (SmartLocator 透传 heal_log/writeback)
+                    heal_logs.append(result.get("heal_log") or [])
+                    writeback = result.get("writeback")
+                    if writeback:
+                        await self._do_writeback(writeback)
+                    had_heal = bool(result.get("heal_log"))
+                    # 断言校验 (action 成功后): 若 assertion 存在且 is_valid → _check_assertion
+                    assertion = sm.get("assertion")
+                    if assertion:
+                        await self._check_assertion(page, assertion)
+                    await sse.send_message(type="system", stage="execute",
+                                           content=f"第 {step} 步：✅ 通过" + ("（自愈）" if had_heal else ""),
+                                           progress=((i + 1) / max(len(steps), 1)) * 0.9)
+                except Exception as e:
+                    last_failure = await collect_failure(page, step, e, storage=self.storage)
+                    # 阶段3 T4: 执行失败时若被踢回登录页 → 失效登录态（下次重登）
+                    if page is not None and "login" in (getattr(page, "url", "") or ""):
+                        from app.services.login_state_service import login_state_service
+                        await login_state_service.invalidate(getattr(config, "env_id", "default"))
+                    failures += 1
+                    overall_status = "fail"
+                    # #5b 审查 #3: 自愈失败也保留 heal_log (ElementNotFoundError 携带), 供 heal_status="failed" 判定
+                    failed_heal_log = getattr(e, "heal_log", None)
+                    if failed_heal_log:
+                        heal_logs.append(failed_heal_log)
+                    await sse.send_message(type="error", stage="execute",
+                                           content=f"第 {step} 步：❌ 失败（{last_failure['error_type']}）",
+                                           progress=((i + 1) / max(len(steps), 1)) * 0.9)
+                    if failures >= max_failures:
+                        break
 
         # 关闭自启的浏览器 (避免泄漏; 真实化阶段应统一管理生命周期)
         if launched and page is not None:
