@@ -61,10 +61,12 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { systemAPI } from '@/api/system.js'
 
-const providers = ['glm-4', 'qwen', 'deepseek', 'claude']
+// provider 名与后端 ai_gateway 注册名严格一致（glm-2.5 注册名，底层模型 glm-5.2）；
+// 之前这里写死 'glm-4' 是改名前遗留，导致设置页存的 key 后端不读、fallback 链指向不存在的 provider
+const providers = ['glm-2.5', 'qwen', 'deepseek', 'claude', 'moonshot']
 const providerRows = ref(providers.map(p => ({ provider: p, apiKey: '', apiUrl: '', showKey: false, testing: false })))
-const defaultProvider = ref('glm-4')
-const fallbackProviders = ref(['glm-4', 'qwen', 'deepseek'])
+const defaultProvider = ref('glm-2.5')
+const fallbackProviders = ref(['glm-2.5', 'qwen', 'deepseek'])
 
 const loadSettings = async () => {
   try {
