@@ -1092,7 +1092,7 @@ async def list_elements_asset(project_id: str = Query(...),
         if page is None:
             els = await svc.list_elements(project_id, scope, page_id, keyword=keyword)
             return {"code": 0, "data": await svc.attach_page_names(els)}
-        rows, total = await svc.list_elements(
+        rows, total = await svc.list_elements_paged(
             project_id, scope, page_id, keyword=keyword, page=page, page_size=page_size)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

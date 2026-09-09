@@ -276,17 +276,13 @@ class ElementAssetService:
 
     async def list_elements(self, project_id: str, scope: Optional[str] = None,
                             page_id: Optional[str] = None, status: str = "active",
-                            keyword: Optional[str] = None,
-                            page: Optional[int] = None,
-                            page_size: Optional[int] = None):
+                            keyword: Optional[str] = None) -> List:
         """元素列表：scope/page/keyword 过滤，updated_at 倒序（NULL 最后）。
 
         page_id='all' 表示全部（含全局）；page_id=具体页面时自动附带全局元素
-        （全局可被任何页面的脚本引用）。
-        分页：page=None 返回全量 ORM 列表（向后兼容）；
-        page 传入时返回 (rows, total) 元组，page_size 缺省 10。"""
+        （全局可被任何页面的脚本引用）。"""
         from app.models.element import ElementRepository
-        from sqlalchemy import or_, func
+        from sqlalchemy import or_
         conds = [ElementRepository.project_id == (_to_uuid(project_id) or project_id),
                  ElementRepository.status == status]
         if scope:
@@ -300,20 +296,41 @@ class ElementAssetService:
         if keyword:
             conds.append(or_(ElementRepository.element_name.ilike(f"%{keyword}%"),
                              ElementRepository.element_text.ilike(f"%{keyword}%")))
-        order = ElementRepository.updated_at.desc().nulls_last()
-        if page is None:
-            result = await self.db.execute(
-                select(ElementRepository).where(*conds).order_by(order)
-            )
-            return result.scalars().all()
-        # 分页：先取 total 再取当前页
+        result = await self.db.execute(
+            select(ElementRepository).where(*conds)
+            .order_by(ElementRepository.updated_at.desc().nulls_last())
+        )
+        return result.scalars().all()
+
+    async def list_elements_paged(self, project_id: str, scope: Optional[str] = None,
+                                  page_id: Optional[str] = None, keyword: Optional[str] = None,
+                                  page: int = 1, page_size: int = 10):
+        """分页版元素列表：返回 (rows, total)，updated_at 倒序（NULL 最后）。
+
+        与 list_elements 同过滤条件；page_size 上限 100 由端点 Query 约束。"""
+        from app.models.element import ElementRepository
+        from sqlalchemy import func as _func, or_
+        conds = [ElementRepository.project_id == (_to_uuid(project_id) or project_id),
+                 ElementRepository.status == "active"]
+        if scope:
+            conds.append(ElementRepository.scope == scope)
+        if page_id and page_id != "all":
+            uid = _to_uuid(page_id)
+            if uid is None:
+                raise ValueError("无效的页面ID")
+            conds.append(or_(ElementRepository.page_id == uid,
+                             ElementRepository.scope == "global"))
+        if keyword:
+            conds.append(or_(ElementRepository.element_name.ilike(f"%{keyword}%"),
+                             ElementRepository.element_text.ilike(f"%{keyword}%")))
         cresult = await self.db.execute(
-            select(func.count(ElementRepository.id)).where(*conds)
+            select(_func.count(ElementRepository.id)).where(*conds)
         )
         total = cresult.scalar() or 0
         result = await self.db.execute(
-            select(ElementRepository).where(*conds).order_by(order)
-            .offset((page - 1) * (page_size or 10)).limit(page_size or 10)
+            select(ElementRepository).where(*conds)
+            .order_by(ElementRepository.updated_at.desc().nulls_last())
+            .offset((page - 1) * page_size).limit(page_size)
         )
         return result.scalars().all(), total
 

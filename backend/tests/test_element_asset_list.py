@@ -130,9 +130,11 @@ class TestSetStatus:
 
 
 class TestPagination:
+    """T6：分页 + updated_at 倒序（list_elements_paged + 端点信封）"""
+
     @pytest.mark.asyncio
     async def test_unpaginated_returns_list(self):
-        """不带 page 参数 → 返回全量列表（向后兼容）"""
+        """不带 page 参数 → list_elements 仍返回全量列表（向后兼容）"""
         db = _db()
         els = [_element(), _element()]
         db.execute = _exec_scalars(els)
@@ -141,7 +143,7 @@ class TestPagination:
         assert out == els
 
     @pytest.mark.asyncio
-    async def test_paginated_returns_rows_and_total(self):
+    async def test_paged_returns_rows_and_total(self):
         db = _db()
         rows = [_element()]
         calls = []
@@ -157,7 +159,7 @@ class TestPagination:
         db.execute = _execute
 
         svc = ElementAssetService(db)
-        out, total = await svc.list_elements("p1", page=2, page_size=10)
+        out, total = await svc.list_elements_paged("p1", page=2, page_size=10)
         assert total == 23
         assert out == rows
         sql = str(calls[1]).lower()
@@ -165,9 +167,8 @@ class TestPagination:
 
     @pytest.mark.asyncio
     async def test_order_by_updated_at_desc_nullslast(self):
-        """排序应为 updated_at DESC NULLS LAST（分页与不分页一致）"""
+        """分页查询排序应为 updated_at DESC NULLS LAST"""
         from sqlalchemy.dialects import postgresql
-        from app.models.element import ElementRepository
         db = _db()
         calls = []
 
@@ -182,6 +183,25 @@ class TestPagination:
         db.execute = _execute
 
         svc = ElementAssetService(db)
-        await svc.list_elements("p1", page=1)
+        await svc.list_elements_paged("p1", page=1)
         sql = str(calls[1].compile(dialect=postgresql.dialect())).upper()
+        assert "UPDATED_AT DESC NULLS LAST" in sql
+
+    @pytest.mark.asyncio
+    async def test_unpaged_order_by_updated_at_desc_nullslast(self):
+        """不分页查询同样按 updated_at DESC NULLS LAST 排序"""
+        from sqlalchemy.dialects import postgresql
+        db = _db()
+        calls = []
+
+        async def _execute(q):
+            calls.append(q)
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = []
+            return r
+        db.execute = _execute
+
+        svc = ElementAssetService(db)
+        await svc.list_elements("p1")
+        sql = str(calls[0].compile(dialect=postgresql.dialect())).upper()
         assert "UPDATED_AT DESC NULLS LAST" in sql
