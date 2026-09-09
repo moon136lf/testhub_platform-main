@@ -7,7 +7,9 @@ from app.services.element_asset_service import ElementAssetService
 
 
 def _db():
-    return MagicMock()
+    db = MagicMock()
+    db.refresh = AsyncMock()
+    return db
 
 
 def _exec_scalars(rows):

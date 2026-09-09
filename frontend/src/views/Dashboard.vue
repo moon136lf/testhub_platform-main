@@ -154,12 +154,21 @@ const initCharts = () => {
       tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
       legend: { data: ['调用次数', 'Token消耗'], bottom: 0, icon: 'circle',
         itemWidth: 8, itemHeight: 8, textStyle: { color: CHART_TEXT, fontSize: 12 } },
-      grid: { left: 48, right: 48, top: 24, bottom: 48 },
+      grid: { left: 48, right: 56, top: 24, bottom: 48 },
       xAxis: { type: 'category', data: aiTrend.value.map(i => i.date), ...AXIS_STYLE },
-      yAxis: { type: 'value', ...AXIS_STYLE },
+      // 双 Y 轴：调用次数与 Token 消耗量级差大（次数几百 vs Token 几十万），
+      // 共轴会压成一条横线；左轴次数/右轴 Token 各自缩放
+      yAxis: [
+        { type: 'value', name: '调用次数', ...AXIS_STYLE,
+          nameTextStyle: { color: CHART_TEXT, fontSize: 11, padding: [0, 0, 0, -30] },
+          axisLabel: { color: CHART_TEXT, fontSize: 12, width: 44, overflow: 'truncate', hideOverlap: true } },
+        { type: 'value', name: 'Token消耗', ...AXIS_STYLE,
+          nameTextStyle: { color: CHART_TEXT, fontSize: 11, padding: [0, -30, 0, 0] },
+          splitLine: { show: false } },
+      ],
       series: [
-        smoothArea('调用次数', aiTrend.value.map(i => i.call_count), CHART_COLORS[0]),
-        smoothArea('Token消耗', aiTrend.value.map(i => i.tokens), CHART_COLORS[1]),
+        smoothArea('调用次数', aiTrend.value.map(i => i.call_count), CHART_COLORS[0], { yAxisIndex: 0 }),
+        smoothArea('Token消耗', aiTrend.value.map(i => i.tokens), CHART_COLORS[1], { yAxisIndex: 1 }),
       ],
     })
   }

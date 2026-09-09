@@ -56,8 +56,8 @@ export function donutPiece(name, data, centerText = '') {
   }
 }
 
-/** 平滑折线 + 面积渐变 片段 */
-export function smoothArea(name, data, color = CHART_COLORS[0]) {
+/** 平滑折线 + 面积渐变 片段（opts 可传 yAxisIndex 等额外 series 属性） */
+export function smoothArea(name, data, color = CHART_COLORS[0], opts = {}) {
   return {
     name,
     type: 'line',
@@ -74,5 +74,6 @@ export function smoothArea(name, data, color = CHART_COLORS[0]) {
       },
     },
     data,
+    ...opts,
   }
 }

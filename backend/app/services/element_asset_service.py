@@ -363,6 +363,9 @@ class ElementAssetService:
             raise ValueError("元素不存在")
         el.status = status
         await self.db.commit()
+        # commit 后 onupdate 列(updated_at)被 expire，async session 下访问会
+        # 触发隐式懒加载 IO → MissingGreenlet。显式刷新加载全量属性。
+        await self.db.refresh(el)
         return el
 
     # ---------------- 导入导出（可移植 JSON，跨项目/环境复用） ----------------
