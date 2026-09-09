@@ -463,9 +463,12 @@ async def _pick_element_via_dom(page, x: float, y: float) -> Optional[Dict[str, 
             verified_locators, semantic = await _pipeline_for_locator(page, locator)
         finally:
             # 无论成败都移除标记，避免污染后续扫描
+            # 注意: Locator 作为 evaluate 参数会被序列化为 undefined（P2 教训同源），
+            # 必须用选择器字符串让 JS 自己找元素
             await page.evaluate(
-                "el => el.removeAttribute('data-pick-hit')",
-                locator,
+                "sel => { const el = document.querySelector(sel);"
+                " if (el) el.removeAttribute('data-pick-hit'); }",
+                PICK_HIT_SELECTOR,
             )
     except Exception as e:
         logger.warning(

@@ -121,11 +121,12 @@ async def import_preview(
             from app.services.import_ai_optimizer import optimize_case
 
             async def _opt_one(i, case):
+                raw = case.model_dump() if hasattr(case, "model_dump") else case
                 try:
-                    optimized, ai_ok = await optimize_case(case.model_dump(), "")
+                    optimized, ai_ok = await optimize_case(raw, "")
                     return i, optimized, ai_ok
                 except Exception:
-                    return i, case.model_dump(), False
+                    return i, raw, False
 
             # 并发逐条优化（LLM 网关内部限流），单条失败原样保留
             results = await _asyncio.gather(*[_opt_one(i, c) for i, c in enumerate(result["cases"])])

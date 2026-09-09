@@ -172,13 +172,17 @@ const doPreview = async () => {
   parsing.value = true
   try {
     const ext = (file.value.name.split('.').pop() || 'xlsx').toLowerCase()
-    const res = await testCaseAPI.importPreview(file.value, ext)
+    // 勾选 AI 优化时，解析后立即逐条调 LLM 标准化（动作/目标/数据/预期），预览里直接看到结果
+    const res = await testCaseAPI.importPreview(file.value, ext, aiOptimize.value)
     // importPreview 返回 {code, data:{format, cases, warnings}}（axios 已剥一层 data）
     const data = res?.data?.cases ? res.data : (res || {})
     // 行 key 供 el-table row-key 使用
     cases.value = (data.cases || []).map((c, i) => ({ ...c, __idx: i }))
     warnings.value = data.warnings || []
     importFormat.value = data.format || 'template'
+    if (data.ai_optimized_count != null) {
+      ElMessage.info(`AI 标准化完成：${data.ai_optimized_count}/${cases.value.length} 条`)
+    }
     if (!cases.value.length) {
       ElMessage.warning('未解析到用例数据')
       return
