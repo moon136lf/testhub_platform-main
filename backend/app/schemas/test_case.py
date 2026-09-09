@@ -196,6 +196,8 @@ class CaseDetailResponse(BaseModel):
     id: str
     project_id: str
     point_id: Optional[str] = None
+    project_name: Optional[str] = None
+    test_point_name: Optional[str] = None
     name: str
     priority: str
     case_type: str

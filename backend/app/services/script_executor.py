@@ -98,6 +98,23 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
     if action == "input":
         await page.locator(target).fill(value)
         return None
+    if action == "input_captcha":
+        # 复合动作：截图验证码图片(target) → ddddocr 识别 → 自动填入输入框(value)
+        # target=验证码图片元素定位器, value=验证码输入框定位器
+        import ddddocr
+        ocr = ddddocr.DdddOcr(show_ad=False)
+        last_err = None
+        for attempt in range(2):  # 识别失败重试 1 次（普通字符型验证码识别率 ~90%）
+            img_bytes = await page.locator(target).screenshot()
+            text = ocr.classification(img_bytes)
+            text = (text or "").strip()
+            if text:
+                await page.locator(value).fill(text)
+                return None
+            last_err = f"OCR 识别结果为空 (attempt={attempt + 1})"
+            await page.wait_for_timeout(500)
+        raise RuntimeError(f"验证码识别失败: {last_err}。ddddocr 仅支持普通字符型图形验证码，"
+                           f"算术题/滑块/点选类需人工处理")
     if action == "select":
         await page.locator(target).select_option(value)
         return None

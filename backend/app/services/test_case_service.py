@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.test_case import TestCase, TestPoint, CaseVersion
+from app.models.project import Project
 from app.schemas.test_case import (
     CaseCreateRequest,
     CaseUpdateRequest,
@@ -62,6 +63,8 @@ class TestCaseService:
         return CaseDetailResponse(
             id=str(case.id), project_id=str(case.project_id),
             point_id=str(case.point_id) if case.point_id else None,
+            project_name=case._project_name if isinstance(getattr(case, "_project_name", None), str) else None,
+            test_point_name=case._test_point_name if isinstance(getattr(case, "_test_point_name", None), str) else None,
             name=case.name, priority=case.priority, case_type=case.case_type,
             automation_status=case.automation_status, precondition=case.precondition,
             steps=steps, expected_result=case.expected_result,
@@ -216,18 +219,25 @@ class TestCaseService:
             CaseDetailResponse or None if not found
         """
         try:
-            query = select(TestCase).where(
-                and_(
-                    TestCase.id == UUID(case_id),
-                    TestCase.is_deleted.is_(False)
+            query = (
+                select(TestCase, Project.name.label("project_name"), TestPoint.name.label("test_point_name"))
+                .outerjoin(Project, TestCase.project_id == Project.id)
+                .outerjoin(TestPoint, TestCase.point_id == TestPoint.id)
+                .where(
+                    and_(
+                        TestCase.id == UUID(case_id),
+                        TestCase.is_deleted.is_(False)
+                    )
                 )
             )
 
             result = await self.db.execute(query)
-            case = result.scalar_one_or_none()
-
-            if not case:
+            row = result.first()
+            if not row:
                 return None
+            case = row[0]
+            case._project_name = row[1]
+            case._test_point_name = row[2]
 
             return self._to_detail(case)
 

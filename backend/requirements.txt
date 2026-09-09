@@ -39,6 +39,9 @@ email-validator==2.2.0
 # Browser Automation
 playwright==1.45.0
 
+# Captcha OCR (识别验证码动作 input_captcha)
+ddddocr==1.5.6
+
 # AI & NLP
 openai==1.35.0
 tiktoken==0.7.0

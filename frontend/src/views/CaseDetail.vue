@@ -181,6 +181,37 @@
           </el-descriptions>
         </el-card>
 
+        <!-- 测试步骤卡片（置于详细信息之后、评审与精修之前） -->
+        <el-card class="info-card" shadow="never">
+          <template #header>
+            <h3>测试步骤</h3>
+          </template>
+          <el-table
+            :data="caseData.steps"
+            border
+            stripe
+            style="width: 100%"
+          >
+            <el-table-column prop="step" label="步骤" width="80" align="center" />
+            <el-table-column prop="action" label="操作" min-width="250" show-overflow-tooltip />
+            <el-table-column prop="target" label="目标" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="data" label="测试数据" min-width="180">
+              <template #default="{ row }">
+                <!-- 长文本折叠：默认显示前 80 字，点击展开全文（边界测试类 data 可达 2000 字符） -->
+                <template v-if="(row.data || '').length > 80">
+                  <span v-if="expandedData[row.id + '_' + row.step]">{{ row.data }}</span>
+                  <span v-else>{{ row.data.slice(0, 80) }}…</span>
+                  <el-button type="primary" link size="small" @click="toggleDataExpand(row)">
+                    {{ expandedData[row.id + '_' + row.step] ? '收起' : '展开' }}
+                  </el-button>
+                </template>
+                <template v-else>{{ row.data || '-' }}</template>
+              </template>
+            </el-table-column>
+            <el-table-column prop="expected" label="预期结果" min-width="250" show-overflow-tooltip />
+          </el-table>
+        </el-card>
+
         <!-- W5: 评审与精修卡片 -->
         <el-card class="info-card" shadow="never">
           <template #header>
@@ -304,37 +335,6 @@
             </el-timeline-item>
           </el-timeline>
           <el-empty v-else description="暂无版本历史" :image-size="60" />
-        </el-card>
-
-        <!-- 测试步骤卡片 -->
-        <el-card class="info-card" shadow="never">
-          <template #header>
-            <h3>测试步骤</h3>
-          </template>
-          <el-table
-            :data="caseData.steps"
-            border
-            stripe
-            style="width: 100%"
-          >
-            <el-table-column prop="step" label="步骤" width="80" align="center" />
-            <el-table-column prop="action" label="操作" min-width="250" show-overflow-tooltip />
-            <el-table-column prop="target" label="目标" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="data" label="测试数据" min-width="180">
-              <template #default="{ row }">
-                <!-- 长文本折叠：默认显示前 80 字，点击展开全文（边界测试类 data 可达 2000 字符） -->
-                <template v-if="(row.data || '').length > 80">
-                  <span v-if="expandedData[row.id + '_' + row.step]">{{ row.data }}</span>
-                  <span v-else>{{ row.data.slice(0, 80) }}…</span>
-                  <el-button type="primary" link size="small" @click="toggleDataExpand(row)">
-                    {{ expandedData[row.id + '_' + row.step] ? '收起' : '展开' }}
-                  </el-button>
-                </template>
-                <template v-else>{{ row.data || '-' }}</template>
-              </template>
-            </el-table-column>
-            <el-table-column prop="expected" label="预期结果" min-width="250" show-overflow-tooltip />
-          </el-table>
         </el-card>
 
         <!-- 元数据卡片 -->

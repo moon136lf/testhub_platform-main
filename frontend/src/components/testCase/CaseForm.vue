@@ -1,5 +1,5 @@
 <template>
-  <el-form ref="formRef" :model="formData" :rules="rules" label-width="120px">
+  <el-form ref="formRef" :model="formData" :rules="rules" label-width="120px" class="case-form">
     <el-form-item label="用例名称" prop="name">
       <el-input
         v-model="formData.name"
@@ -192,17 +192,26 @@ const rules = {
   ]
 }
 
+let syncingFromProps = false
+
 watch(() => props.modelValue, (newVal) => {
   if (newVal && Object.keys(newVal).length > 0) {
-    formData.value = {
-      ...formData.value,
-      ...newVal,
-      steps: newVal.steps || []
+    syncingFromProps = true
+    try {
+      formData.value = {
+        ...formData.value,
+        ...newVal,
+        steps: newVal.steps || []
+      }
+    } finally {
+      syncingFromProps = false
     }
   }
 }, { immediate: true, deep: true })
 
 watch(formData, (newVal) => {
+  // 防递归：由 props 同步引起的变更不再回传，避免 modelValue/formData 两个 deep watch 互相触发死循环
+  if (syncingFromProps) return
   emit('update:modelValue', newVal)
 }, { deep: true })
 
@@ -247,7 +256,13 @@ defineExpose({
 </script>
 
 <style scoped>
-.el-form {
-  max-width: 800px;
+.case-form {
+  max-width: 100%;
+}
+
+.case-form :deep(.el-form-item__content) {
+  /* 测试步骤编辑器占满表单剩余宽度，避免表格被 800px 上限压窄出现横向滚动 */
+  flex: 1;
+  min-width: 0;
 }
 </style>

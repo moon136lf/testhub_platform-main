@@ -181,7 +181,8 @@ class TestGetCaseDetail:
         mock_case.refined_at = None
 
         result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = mock_case
+        # get_case_detail 用 .first() 取 (case, project_name, test_point_name) 行
+        result_mock.first.return_value = (mock_case, "Test Project", "Test Point")
         mock_db.execute.return_value = result_mock
 
         result = await service.get_case_detail(sample_case_id)
@@ -190,12 +191,15 @@ class TestGetCaseDetail:
         assert result.name == "Test login"
         assert result.priority == "P1"
         assert len(result.steps) == 1
+        assert result.project_name == "Test Project"
+        assert result.test_point_name == "Test Point"
 
     @pytest.mark.asyncio
     async def test_get_case_detail_not_found(self, service, mock_db, sample_case_id):
         """Test getting case detail when case does not exist"""
         result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = None
+        # get_case_detail 用 .first()；无行返回 None
+        result_mock.first.return_value = None
         mock_db.execute.return_value = result_mock
 
         result = await service.get_case_detail(sample_case_id)
