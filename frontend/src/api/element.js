@@ -69,13 +69,20 @@ export const elementAPI = {
   },
 
   // ---- 元素管理（阶段1） ----
-  async listElementsAsset(projectId, { scope, pageId, keyword } = {}) {
+  async listElementsAsset(projectId, { scope, pageId, keyword, page, pageSize } = {}) {
     const response = await axios.get('/elements-asset', { params: {
       project_id: projectId,
       scope: scope || undefined,
       page_id: pageId || undefined,
       keyword: keyword || undefined,
+      page: page || undefined,
+      page_size: pageSize || undefined,
     }})
+    // 传 page 参数时返回分页信封 {code, data: {items, total, page, page_size}}
+    return response.data
+  },
+  async setElementStatus(elementId, status) {
+    const response = await axios.put(`/elements-asset/${elementId}/status`, { status })
     return response.data
   },
   async createElementAsset(data) {

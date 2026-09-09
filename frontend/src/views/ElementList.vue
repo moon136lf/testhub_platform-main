@@ -43,6 +43,7 @@
 
       <el-card shadow="never" class="table-card">
         <el-table :data="elements" v-loading="loading" stripe>
+          <el-table-column type="index" :index="indexOffset" label="序号" width="70" align="center" />
           <el-table-column prop="element_name" label="元素名" min-width="160" show-overflow-tooltip />
           <el-table-column prop="element_type" label="类型" width="90">
             <template #default="{ row }">
@@ -62,9 +63,15 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="status" label="状态" width="90">
+          <el-table-column label="所属页面" width="130" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.page_name || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="130">
             <template #default="{ row }">
-              <el-tag size="small" :type="statusTag(row.status)">{{ row.status }}</el-tag>
+              <el-switch :model-value="row.status === 'active'" @change="(v) => toggleStatus(row, v)" />
+              <el-tag size="small" :type="row.status === 'active' ? 'success' : 'info'" style="margin-left: 6px">
+                {{ row.status === 'active' ? '启用' : '禁用' }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="引用数" width="80" align="center">
@@ -85,6 +92,17 @@
             </template>
           </el-table-column>
         </el-table>
+        <div class="pagination-bar">
+          <el-pagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="total"
+            layout="total, sizes, prev, pager, next"
+            @size-change="loadElements"
+            @current-change="loadElements"
+          />
+        </div>
       </el-card>
     </div>
 
@@ -283,6 +301,12 @@ const refCountsLoaded = ref(false)
 
 const treeFilter = ref({ mode: 'all', pageId: null })
 
+// ---- 分页 ----
+const page = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const indexOffset = (index) => (page.value - 1) * pageSize.value + index + 1
+
 // ---- 详情抽屉 ----
 const detailVisible = ref(false)
 const detailRow = ref(null)
@@ -376,13 +400,30 @@ const loadElements = async () => {
       scope: filter.mode === 'global' ? 'global' : undefined,
       pageId: filter.mode === 'page' ? filter.pageId : undefined,
       keyword: keyword.value || undefined,
+      page: page.value,
+      pageSize: pageSize.value,
     })
-    elements.value = (response && response.data) || response || []
+    // 分页信封 {code, data: {items, total, page, page_size}}
+    const data = (response && response.data) || {}
+    elements.value = data.items || []
+    total.value = data.total ?? elements.value.length
     loadRefCounts()
   } catch (e) {
     ElMessage.error('获取元素列表失败: ' + (e.message || e))
   } finally {
     loading.value = false
+  }
+}
+
+// ---- 状态切换 ----
+const toggleStatus = async (row, enabled) => {
+  try {
+    await elementAPI.setElementStatus(row.id, enabled ? 'active' : 'deprecated')
+    row.status = enabled ? 'active' : 'deprecated'
+    ElMessage.success(enabled ? '已启用' : '已禁用')
+  } catch (e) {
+    ElMessage.error('状态切换失败: ' + (e.message || e))
+    loadElements()
   }
 }
 
