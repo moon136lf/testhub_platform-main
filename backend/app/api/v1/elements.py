@@ -1078,13 +1078,49 @@ async def list_elements_asset(project_id: str = Query(...),
                               scope: Optional[str] = Query(None, pattern="^(page|global)$"),
                               page_id: Optional[str] = Query(None, description="页面ID或all"),
                               keyword: Optional[str] = Query(None, max_length=100),
+                              page: Optional[int] = Query(None, ge=1,
+                                  description="页码（传入即启用分页，返回分页信封；不传保持旧版平铺列表，向后兼容）"),
+                              page_size: int = Query(10, ge=1, le=100),
                               db: AsyncSession = Depends(get_db)):
-    """元素列表（管理页数据源）：scope/page/keyword 过滤。"""
+    """元素列表（管理页数据源）：scope/page/keyword 过滤，updated_at 倒序（NULL 最后）。
+
+    向后兼容：不带 page 参数 → 返回旧版平铺列表 {"data": [dict,...]}（已附带 page_name）；
+    带 page 参数 → 分页信封 {"data": {"items": [...], "total": N, "page": p, "page_size": s}}。
+    """
+    svc = ElementAssetService(db)
     try:
-        els = await ElementAssetService(db).list_elements(project_id, scope, page_id, keyword=keyword)
+        if page is None:
+            els = await svc.list_elements(project_id, scope, page_id, keyword=keyword)
+            return {"code": 0, "data": await svc.attach_page_names(els)}
+        rows, total = await svc.list_elements(
+            project_id, scope, page_id, keyword=keyword, page=page, page_size=page_size)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {"code": 0, "data": [e.to_dict() for e in els]}
+    return {"code": 0, "data": {
+        "items": await svc.attach_page_names(rows),
+        "total": total, "page": page, "page_size": page_size,
+    }}
+
+
+from pydantic import BaseModel, Field
+
+
+class ElementStatusRequest(BaseModel):
+    status: str = Field(..., pattern="^(active|deprecated)$",
+                        description="active=启用 deprecated=禁用")
+
+
+@asset_router.put("/elements-asset/{element_id}/status")
+async def set_element_status(element_id: str, request: ElementStatusRequest,
+                             db: AsyncSession = Depends(get_db)):
+    """启用/禁用元素（复用 status 字段：active/deprecated）。
+
+    禁用后转脚本链路 find_by_name（仅匹配 active）自动排除该元素。"""
+    try:
+        el = await ElementAssetService(db).set_status(element_id, request.status)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": el.to_dict()}
 
 
 @asset_router.post("/elements-asset")

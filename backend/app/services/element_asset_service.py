@@ -276,13 +276,17 @@ class ElementAssetService:
 
     async def list_elements(self, project_id: str, scope: Optional[str] = None,
                             page_id: Optional[str] = None, status: str = "active",
-                            keyword: Optional[str] = None) -> List:
-        """元素列表：scope/page/keyword 过滤。
+                            keyword: Optional[str] = None,
+                            page: Optional[int] = None,
+                            page_size: Optional[int] = None):
+        """元素列表：scope/page/keyword 过滤，updated_at 倒序（NULL 最后）。
 
         page_id='all' 表示全部（含全局）；page_id=具体页面时自动附带全局元素
-        （全局可被任何页面的脚本引用）。"""
+        （全局可被任何页面的脚本引用）。
+        分页：page=None 返回全量 ORM 列表（向后兼容）；
+        page 传入时返回 (rows, total) 元组，page_size 缺省 10。"""
         from app.models.element import ElementRepository
-        from sqlalchemy import or_
+        from sqlalchemy import or_, func
         conds = [ElementRepository.project_id == (_to_uuid(project_id) or project_id),
                  ElementRepository.status == status]
         if scope:
@@ -296,10 +300,53 @@ class ElementAssetService:
         if keyword:
             conds.append(or_(ElementRepository.element_name.ilike(f"%{keyword}%"),
                              ElementRepository.element_text.ilike(f"%{keyword}%")))
-        result = await self.db.execute(
-            select(ElementRepository).where(*conds).order_by(ElementRepository.updated_at.desc())
+        order = ElementRepository.updated_at.desc().nulls_last()
+        if page is None:
+            result = await self.db.execute(
+                select(ElementRepository).where(*conds).order_by(order)
+            )
+            return result.scalars().all()
+        # 分页：先取 total 再取当前页
+        cresult = await self.db.execute(
+            select(func.count(ElementRepository.id)).where(*conds)
         )
-        return result.scalars().all()
+        total = cresult.scalar() or 0
+        result = await self.db.execute(
+            select(ElementRepository).where(*conds).order_by(order)
+            .offset((page - 1) * (page_size or 10)).limit(page_size or 10)
+        )
+        return result.scalars().all(), total
+
+    async def attach_page_names(self, els: List) -> List[Dict]:
+        """批量给元素 dict 附 page_name（全局元素无页面 → None）。"""
+        from app.models.element import PageRepository
+        page_ids = {e.page_id for e in els if getattr(e, "page_id", None)}
+        page_names: Dict = {}
+        if page_ids:
+            result = await self.db.execute(
+                select(PageRepository).where(PageRepository.id.in_(page_ids))
+            )
+            page_names = {p.id: (p.page_name or "") for p in result.scalars().all()}
+        out = []
+        for e in els:
+            d = e.to_dict()
+            d["page_name"] = page_names.get(e.page_id)
+            out.append(d)
+        return out
+
+    async def set_status(self, element_id: str, status: str) -> "ElementRepository":
+        """启用/禁用开关：active=启用，deprecated=禁用（回收站状态 deleted 不可用此端点改）。
+
+        禁用后转脚本链路 find_by_name（status=='active' 过滤）自动不再匹配。"""
+        if status not in ("active", "deprecated"):
+            raise ValueError("status 仅支持 active/deprecated")
+        from app.models.element import ElementRepository
+        el = await self.db.get(ElementRepository, _uuid.UUID(element_id))
+        if not el or el.status == "deleted":
+            raise ValueError("元素不存在")
+        el.status = status
+        await self.db.commit()
+        return el
 
     # ---------------- 导入导出（可移植 JSON，跨项目/环境复用） ----------------
 
