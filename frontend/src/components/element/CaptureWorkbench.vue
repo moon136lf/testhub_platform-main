@@ -70,7 +70,16 @@
               <div class="shot-header">
                 <span>浏览器实时画面</span>
                 <div class="shot-header-actions">
+                  <el-switch v-model="pickMenu" size="small" active-text="抓菜单栏" />
                   <el-switch v-model="pickMode" size="small" active-text="点选补抓" />
+                  <el-input-number
+                    v-model="listRows"
+                    size="small"
+                    :min="1" :max="50"
+                    placeholder="列表行数"
+                    style="width: 110px"
+                    :controls="false"
+                  />
                   <el-button size="small" type="primary" :loading="capturing" :disabled="browserReleased" @click="captureNow">
                     开始抓取元素
                   </el-button>
@@ -248,6 +257,9 @@ const screenshotSrc = ref('')
 const refreshingShot = ref(false)
 const capturing = ref(false)
 const pickMode = ref(false)
+// 抓取过滤：抓菜单栏（默认关=排除左侧菜单）、列表行数（空=全部，填 N=td/th 只抓最上 N 行）
+const pickMenu = ref(false)
+const listRows = ref(null)
 
 // staging 列表
 const stagingState = ref(null)
@@ -390,8 +402,8 @@ const captureNow = async () => {
   capturing.value = true
   try {
     const r = await elementAPI.captureBrowserPage(browserSessionId.value, {
-      exclude_menu: props.excludeMenu,
-      max_list_rows: props.maxListRows || undefined
+      exclude_menu: !pickMenu.value,
+      max_list_rows: listRows.value || undefined
     })
     stagingSessionId.value = r.staging_session_id
     await refreshStaging()
