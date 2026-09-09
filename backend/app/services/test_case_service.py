@@ -507,6 +507,14 @@ class TestCaseService:
             # refined_case 里有比 case 更完整的字段时同步过来
             if refined.get("precondition") and not case.precondition:
                 case.precondition = refined["precondition"]
+            # 阶段3 T6: 断言增强类建议走 LLM 改写（软断言→硬断言真正落地）
+            pending_assertion = [s for s in report.get("suggestions", [])
+                                 if s.get("dimension") == "断言增强"
+                                 and s.get("status") == "pending"
+                                 and (suggestion_ids is None or s.get("id") in suggestion_ids)]
+            if pending_assertion:
+                from app.services.case_refiner import llm_rewrite_steps
+                case.steps = await llm_rewrite_steps(case.steps or [], pending_assertion)
             # mark suggestions applied (all pending, or only the specified ids)
             for s in report.get("suggestions", []):
                 if suggestion_ids is None or s.get("id") in suggestion_ids:

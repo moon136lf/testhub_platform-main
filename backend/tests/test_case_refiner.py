@@ -197,3 +197,56 @@ class TestRefineService:
         svc_db.execute.return_value = Mock(scalar_one_or_none=Mock(return_value=case))
         svc = TestCaseService(svc_db)
         assert await svc.apply_suggestions(str(case.id), None) is None
+
+
+# ---------------------------------------------------------------------------
+# LLM rewrite on apply (阶段3 T6)
+# ---------------------------------------------------------------------------
+
+class TestLLMRewriteOnApply:
+    @pytest.mark.asyncio
+    async def test_rewrite_soft_assert_steps(self):
+        """应用「断言增强」建议 → LLM 改写软断言步骤 → case.steps 实际更新"""
+        from app.services.case_refiner import llm_rewrite_steps
+
+        steps = [
+            {"step": 1, "action": "打开页面", "target": "", "data": "", "expected": "页面展示"},
+            {"step": 2, "action": "查看列表", "target": ".list", "data": "", "expected": "看到数据"},
+        ]
+        suggestions = [
+            {"id": "S1", "dimension": "断言增强", "target_step": 2,
+             "issue": "步骤2含软断言词「查看」", "suggestion": "转为硬断言，验证操作导致的业务结果"},
+        ]
+
+        async def fake_chat(messages, **kw):
+            return {"content": '[{"step": 2, "action": "断言列表加载", "target": ".list", "data": "", "expected": "列表显示3条数据"}]', "tokens": 100}
+
+        rewritten = await llm_rewrite_steps(steps, suggestions, chat_fn=fake_chat)
+        # 步骤1 不变；步骤2 被改写
+        assert rewritten[0]["action"] == "打开页面"
+        assert rewritten[1]["action"] == "断言列表加载"
+        assert rewritten[1]["expected"] == "列表显示3条数据"
+
+    @pytest.mark.asyncio
+    async def test_rewrite_llm_failure_returns_original(self):
+        """LLM 失败 → 返回原步骤（不阻塞应用流程）"""
+        from app.services.case_refiner import llm_rewrite_steps
+
+        async def fake_chat(messages, **kw):
+            raise Exception("LLM down")
+
+        steps = [{"step": 1, "action": "查看列表", "target": ".l", "data": "", "expected": "看到"}]
+        rewritten = await llm_rewrite_steps(steps, [{"id": "S1", "dimension": "断言增强", "target_step": 1}], chat_fn=fake_chat)
+        assert rewritten == steps
+
+    @pytest.mark.asyncio
+    async def test_rewrite_invalid_llm_output_keeps_step(self):
+        """LLM 返回非法结构（缺 step/action）→ 该步保持原样"""
+        from app.services.case_refiner import llm_rewrite_steps
+
+        async def fake_chat(messages, **kw):
+            return {"content": '[{"foo": "bar"}]', "tokens": 10}
+
+        steps = [{"step": 1, "action": "查看", "target": ".l", "data": "", "expected": "x"}]
+        rewritten = await llm_rewrite_steps(steps, [{"id": "S1", "dimension": "断言增强", "target_step": 1}], chat_fn=fake_chat)
+        assert rewritten[0]["action"] == "查看"
