@@ -44,6 +44,14 @@
         <el-switch v-model="form.include_text" />
         <span class="hint-text">开启后同时抓取页面文字/不可点击元素（span/p/标题等）</span>
       </el-form-item>
+      <el-form-item label="菜单栏">
+        <el-switch v-model="form.exclude_menu" />
+        <span class="hint-text">关闭后排除左侧菜单栏元素（每页菜单都会重复入库）</span>
+      </el-form-item>
+      <el-form-item label="列表行数">
+        <el-input-number v-model="form.max_list_rows" :min="1" :max="50" placeholder="全部" style="width: 130px" />
+        <span class="hint-text">表格单元格只抓最上 N 行（大列表抓取耗时 10 分钟的根因）</span>
+      </el-form-item>
 
       <el-divider content-position="left">登录态</el-divider>
 
@@ -91,7 +99,9 @@ const form = reactive({
   textFilter: '',
   typeFilter: [],
   debug_mode: false,
-  include_text: false
+  include_text: false,
+  exclude_menu: false,
+  max_list_rows: null
 })
 
 const loginStateLoading = ref(false)
@@ -164,7 +174,9 @@ const handleStart = () => {
     text_filter: form.textFilter,
     type_filter: form.typeFilter.join(','),
     debug_mode: form.debug_mode,
-    include_text: form.include_text
+    include_text: form.include_text,
+    exclude_menu: form.exclude_menu,
+    max_list_rows: form.max_list_rows || null
   })
 }
 </script>

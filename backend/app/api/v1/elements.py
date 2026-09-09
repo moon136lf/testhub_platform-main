@@ -745,7 +745,11 @@ async def _verify_elements(page, raw_elements) -> list:
 
 
 @router.post("/capture/browser/{sid}/capture")
-async def capture_browser_page(sid: str):
+async def capture_browser_page(
+    sid: str,
+    exclude_menu: bool = Query(False, description="排除左侧菜单栏元素"),
+    max_list_rows: Optional[int] = Query(None, ge=1, le=50, description="表格单元格只保留最上 N 行"),
+):
     """抓当前页元素 → 复用 P3 staging（CaptureSessionService）追加批次。"""
     sess = _browser_sess_or_404(sid)
     page = browser_mgr.get_page(sid)
@@ -754,6 +758,10 @@ async def capture_browser_page(sid: str):
 
     # Playwright 对象绑定在 bridge loop（Proactor），所有调用须投递过去
     raw_elements = await _bridge.run(scan_interactive_elements(page, include_text=True))
+    from app.tasks.element_tasks import _apply_filters
+    raw_elements = _apply_filters(raw_elements, text_filter="", type_filter="", debug_mode=False,
+                                  exclude_menu=exclude_menu, max_list_rows=max_list_rows,
+                                  viewport_width=1920)
     elements = await _bridge.run(_verify_elements(page, raw_elements))
 
     # 截图上传 MinIO → 批次截图 URL

@@ -126,6 +126,8 @@
         <CaptureWorkbench
           :projects="projects"
           :default-project-id="fetchForm.project_id"
+          :exclude-menu="fetchForm.exclude_menu"
+          :max-list-rows="fetchForm.max_list_rows"
           @imported="handleCaptureImported"
           @closed="handleCaptureClosed"
         />
@@ -303,7 +305,9 @@ const fetchForm = ref({
   text_filter: '',
   type_filter: '',
   debug_mode: false,
-  include_text: false
+  include_text: false,
+  exclude_menu: false,
+  max_list_rows: null
 })
 
 // ---- P3 会话式抓取（工作台内部自持状态机，本页只做事件响应） ----

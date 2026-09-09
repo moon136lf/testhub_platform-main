@@ -166,8 +166,10 @@ export const elementAPI = {
    * 抓当前页元素 → staging 批次
    * @returns {Promise<Object>} { elements, total_count, batch_idx, batch_count, staging_session_id }
    */
-  async captureBrowserPage(sessionId) {
-    const response = await axios.post(`/elements/capture/browser/${sessionId}/capture`)
+  async captureBrowserPage(sessionId, opts = {}) {
+    const response = await axios.post(`/elements/capture/browser/${sessionId}/capture`, null, {
+      params: { exclude_menu: opts.exclude_menu || false, max_list_rows: opts.max_list_rows || undefined }
+    })
     return response.data.data
   },
 

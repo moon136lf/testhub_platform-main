@@ -209,7 +209,9 @@ import { elementAPI } from '@/api/element'
 
 const props = defineProps({
   projects: { type: Array, default: () => [] },
-  defaultProjectId: { type: String, default: '' }
+  defaultProjectId: { type: String, default: '' },
+  excludeMenu: { type: Boolean, default: false },
+  maxListRows: { type: Number, default: null }
 })
 const emit = defineEmits(['imported', 'closed'])
 
@@ -387,7 +389,10 @@ const refreshScreenshot = async () => {
 const captureNow = async () => {
   capturing.value = true
   try {
-    const r = await elementAPI.captureBrowserPage(browserSessionId.value)
+    const r = await elementAPI.captureBrowserPage(browserSessionId.value, {
+      exclude_menu: props.excludeMenu,
+      max_list_rows: props.maxListRows || undefined
+    })
     stagingSessionId.value = r.staging_session_id
     await refreshStaging()
     ElMessage.success(`批次 ${r.batch_idx + 1} 抓取完成：+${r.total_count} 元素`)
