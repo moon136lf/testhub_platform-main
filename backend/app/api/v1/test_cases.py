@@ -146,9 +146,11 @@ async def import_confirm(
     project_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """确认导入候选用例（可选 AI 标准化），逐条入库。"""
-    from app.services.smart_import_service import SmartImportService
-    from app.services.import_ai_optimizer import optimize_case
+    """确认导入候选用例，逐条入库。
+
+    AI 标准化已在 /import/preview 阶段完成（ai_optimize 查询参数），此处直接入库不再调 LLM。
+    request.ai_optimize 字段保留兼容旧前端，但被忽略。
+    """
     from app.services.case_batch_service import CaseBatchService
 
     try:
@@ -179,12 +181,6 @@ async def import_confirm(
     for idx, candidate in enumerate(request.cases):
         try:
             case_data = candidate.model_dump()
-
-            # 可选 AI 标准化
-            if request.ai_optimize:
-                case_data, ai_ok = await optimize_case(case_data, project_id)
-                if ai_ok:
-                    ai_ok_count += 1
 
             # 重名自动后缀（查重范围：项目已有 + 本批已用）
             base_name = (case_data.get("name") or "未命名用例").strip()[:100]

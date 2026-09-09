@@ -2,8 +2,7 @@
 测试导入确认端点 POST /test-cases/import/confirm
 
 - 重名自动后缀 (2)/(3)
-- ai_optimize=True + mock ai_gateway.chat 返回合法 JSON → steps 重写 + ai_ok_count
-- chat 抛异常 → 兜底规则版 ai_ok=False
+- confirm 不调 LLM（AI 标准化已移至 preview 阶段），ai_optimize=True 也直接入库
 - 无 AI 优化直接入库
 """
 import pytest
@@ -98,7 +97,8 @@ async def test_confirm_duplicate_name_auto_suffix(mock_db_session):
 
 
 @pytest.mark.asyncio
-async def test_confirm_ai_optimize_success(mock_db_session):
+async def test_confirm_ignores_ai_optimize_flag(mock_db_session):
+    """AI 标准化已移到 /import/preview 阶段；confirm 即使传 ai_optimize=True 也不调 LLM 直接入库。"""
     async with _make_client() as client:
         with patch("app.services.import_ai_optimizer.ai_gateway") as mock_gw:
             mock_gw.chat = AsyncMock(return_value=AI_OK_RESPONSE)
@@ -108,23 +108,6 @@ async def test_confirm_ai_optimize_success(mock_db_session):
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["imported"] == 1
-    assert data["ai_ok_count"] == 1
+    mock_gw.chat.assert_not_called()  # 不应触发任何 LLM 调用
     saved = mock_db_session.add.call_args_list[-1].args[0]
-    assert saved.name == "AI优化用例"
-    assert saved.steps[0]["action"] == "点击登录按钮"
-
-
-@pytest.mark.asyncio
-async def test_confirm_ai_optimize_failure_fallback(mock_db_session):
-    async with _make_client() as client:
-        with patch("app.services.import_ai_optimizer.ai_gateway") as mock_gw:
-            mock_gw.chat = AsyncMock(side_effect=RuntimeError("LLM down"))
-            resp = await client.post(
-                "/api/v1/test-cases/import/confirm?project_id=00000000-0000-0000-0000-000000000001",
-                json={"cases": [_case_body()], "ai_optimize": True})
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["imported"] == 1
-    assert data["ai_ok_count"] == 0  # 兜底规则版
-    saved = mock_db_session.add.call_args_list[-1].args[0]
-    assert saved.name == "测试用例A"  # 原名保留
+    assert saved.name == "测试用例A"  # 原样入库，不做 AI 改写
