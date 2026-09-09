@@ -5,6 +5,57 @@
 
 ---
 
+## 快照 #61 — 2026-09-09 18:30（manual，详细存档·关机前）
+
+**当前分支**：master，本地=远程（a87f1a8），工作区干净（仅 backend/_check_elems.py 临时脚本 + docs/ACCEPTANCE_CHECKLIST_3PHASES.md 未跟踪）
+
+### 本日完成（跨两个会话，按主题归组）
+
+**一、AI 智能用例导入闭环（本会话主线）**
+- 8dd499e feat(import-ai): AI 拆分提示词升级——动作归一化（动词枚举）、目标/数据/预期推断规则、3 个 few-shot 示例
+- d663be9 feat(import-dialog): 预览步骤 动作/目标/数据/预期 四列全部可编辑
+- 0f824ad feat(import): AI 标准化改在【预览阶段】执行（勾选→解析预览即调 LLM），预览直接看结果
+- 3e35f8f fix: preview ai_optimize 处理 dict 候选（parse_preview 返回 dict 非 pydantic）
+- 7227e2c fix(import): confirm 不再调 LLM——AI 只在 preview 阶段做一次，确认导入秒级入库；避免 LLM 二次改写覆盖人工修正
+- 前端 api importPreview 加 ai_optimize 参数 + 300s 超时
+
+**二、识别验证码（ddddocr OCR）全链路**
+- f9cbd2a feat(captcha): ①AI 导入 prompt 验证码固定拆法（原文一步/两步统一合并为一步：动作=识别验证码/目标=验证码图片/数据=验证码输入框，禁止后续再拆出输入验证码步）②转脚本 pipeline VALID_ACTIONS 加 input_captcha + STEP1_PROMPT 映射规则 ③执行引擎 input_captcha 分支：截图→ddddocr 识别→自动填入，空结果重试1次 ④前端动作列改下拉（9 动作+可输入），选识别验证码时目标/数据列 placeholder 联动 ⑤ddddocr==1.5.6 已装并验证
+- 用例写法：操作步骤=识别验证码，操作目标=验证码图片元素，测试数据=验证码输入框（一步完成，无需单独输入步）
+
+**三、AI 设置 provider 名对齐**
+- 6db51e8 fix(ai-settings): AISettings.vue 遗留 'glm-4' 改为后端注册名 ['glm-2.5','qwen','deepseek','claude','moonshot']——旧代码致设置页存的 key 后端不读、fallback 链指向不存在 provider。实际模型参数一直是 glm-5.2（.env MODEL_NAME），glm-2.5 只是 provider 注册名
+- 注意：旧 glm-4 行的 key 不自动迁移，需在 glm-2.5 行重填（.env 已有 GLM_API_KEY 可不填）
+
+**四、用例详情页 5 问题修复**
+- 所属项目/测试点未展示 → 后端 get_case_detail LEFT JOIN project/test_point 返回 project_name/test_point_name（schema 同步）
+- 测试步骤卡片移到详细信息之后、评审与精修之前
+- 编辑态步骤表格加宽（CaseForm 去 800px 上限，操作列 220px）
+- 添加步骤/上移下移无反应 + 递归更新报错 → CaseStepEditor/CaseForm 双 deep watch 回环，加 syncingFromProps 防递归打标；上下移改数组原地交换
+- Dashboard AI 趋势双 Y 轴（调用次数 vs Token 量级差大共轴压成横线）；元素状态切换 MissingGreenlet 修复（commit 后 refresh）
+
+**五、元素库增强 P1（另一会话并行，本日 5 commit）**
+- 683bfca T1-T3 页面树右键建子/同级页、来源中文化、去全局节点
+- 82e1f39+afac60b+409af1f T4-T6 资产列表 page_name+状态切换端点、分页、前端筛选/分页
+- 74c1e84 ⑤ scope filter dropdown；39cdbfc+55f8ac2 会话工作台抓菜单栏/列表行数开关
+- e9dcc6b merge phase3: 回归 for_regression 标志、登录态复用、菜单重组、评审 LLM rewrite、编辑器假成功修复
+
+### 测试状态
+779 passed（1 失败 test_case_refiner::test_apply_suggestions_applies_steps_and_marks 为遗留问题——stash 验证与本日改动无关，建议下次会话排查：apply_suggestions 应用 LLM 重写步骤后 case.steps 与 report.refined_case.steps 不一致）
+
+### 用户验收状态（待重启 backend 后验证）
+- 智能导入全流程：上传自由文本 Excel → 勾 AI 优化 → 解析预览（LLM 拆分+可编辑）→ 确认秒级入库
+- 识别验证码：导入后步骤 4 拆成单条识别验证码步；转脚本执行走 OCR
+- AI 设置页显示 5 个正确 provider
+
+### 遗留 / 下次会话
+- test_case_refiner 遗留失败排查（见上）
+- 元素库 P1 剩余项（详见 #60 存档 + ACCEPTANCE_CHECKLIST_3PHASES.md）
+- F12 联动方案已否决，替代方案（平台内路径面包屑+悬停高亮）未开工
+- backend/_check_elems.py 临时脚本可删
+
+---
+
 ## 快照 #60 — 2026-09-09 17:50（下班交接）
 
 **当前分支**：master（主仓）
