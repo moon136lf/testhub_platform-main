@@ -52,9 +52,21 @@
           <template #default="{ row }">
             <el-table :data="row.steps" size="small" border style="margin: 8px 16px">
               <el-table-column prop="step" label="#" width="50" />
-              <el-table-column prop="action" label="动作" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="target" label="目标" width="160" show-overflow-tooltip />
-              <el-table-column prop="data" label="数据" width="140" show-overflow-tooltip />
+              <el-table-column label="动作" min-width="200">
+                <template #default="{ row: s }">
+                  <el-input v-model="s.action" size="small" />
+                </template>
+              </el-table-column>
+              <el-table-column label="目标" width="180">
+                <template #default="{ row: s }">
+                  <el-input v-model="s.target" size="small" placeholder="点击对象/输入框" />
+                </template>
+              </el-table-column>
+              <el-table-column label="数据" width="160">
+                <template #default="{ row: s }">
+                  <el-input v-model="s.data" size="small" placeholder="输入内容" />
+                </template>
+              </el-table-column>
               <el-table-column label="预期(步)" width="220">
                 <template #default="{ row: s }">
                   <el-input v-model="s.expected" size="small" :class="{ 'pending-input': s.expected === '待补' }" />
