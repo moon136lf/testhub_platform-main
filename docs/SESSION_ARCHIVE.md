@@ -5,6 +5,39 @@
 
 ---
 
+## 快照 #60 — 2026-09-09 17:50（下班交接）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- da06060 docs: CLAUDE.md — phase3 progress pointer
+- affad1e docs: session archive #57 (manual) - smart import + browser self-heal + log isolation + 422 fixes
+- be7aa11 docs: 阶段3进度存档 — 6/8 tasks 完成，剩 T6+T7
+- 42fed17 fix(import-dialog): response unwrapping + resetDialog wipe fix
+- 266ef9d feat(case-import): smart import — Excel 自动解析/预览确认/AI 优化/模板下载（含元素过滤扩展 exclude_menu/max_list_rows）
+- f8b8778 feat(case-import): 中文失败原因翻译 + 逐行弹窗
+- a8868c3 feat(elements): 面包屑卡片 + 同级切换（#elem-bc T2）
+- c9a1ff4 feat(elements): node breadcrumb 端点 — chain/highlight/locators（#elem-bc T1）
+
+### 未提交变更
+- M frontend/src/components/element/FetchDialog.vue（菜单栏/列表行数开关 UI 进行中，后端 exclude_menu/max_list_rows 已提交在 266ef9d，差前端 payload 透传）
+- 另一阶段工作文件已全部入库（无未提交业务代码冲突）
+
+### 今日进度
+- 智能导入功能交付（Excel 自由文本解析/预览确认/AI 优化/模板下载，730 tests）
+- 浏览器自愈（TargetClosedError 重启重试）+ 测试日志隔离 + 422 修复批次
+- 面包屑点选（方案1）完成并审查 Approved
+- 元素过滤扩展：exclude_menu（排除左侧菜单）+ max_list_rows（表格只抓顶 N 行）后端完成，前端开关进行中
+- 4 项 UX 验收修复（工具栏重叠/橙色闪烁/同 URL 页面去重/重复计数）
+
+### 明日待办
+1. **完成 FetchDialog 前端收尾**（进行中）：form reactive 补 exclude_menu/max_list_rows 字段 + handleStart payload 透传 + CaptureWorkbench 同步
+2. 用户实测：headed 登录全流程、点选补抓（含面包屑）、菜单栏排除/列表行数过滤
+3. 元素管理 7 条需求（plan: docs/superpowers/plans/2026-09-08-element-manage-7req.md）
+4. F12 式面包屑方案1 已完成待验收；pick 404 诊断日志已加（等用户复现日志）
+
+---
+
 ## 快照 #59 — 2026-09-08 17:50（下班交接）
 
 **当前分支**：master（主仓）
