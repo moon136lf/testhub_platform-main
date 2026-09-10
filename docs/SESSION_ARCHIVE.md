@@ -5,6 +5,33 @@
 
 ---
 
+## 快照 #63 — 2026-09-10 17:50（下班交接）
+
+**当前分支**：master（主仓）
+
+### 最近 8 条提交
+- a5bd26e docs: session archive #62 (元素库专项补录·关机前详细存档)
+- f9f8452 docs: 3-phase acceptance checklist + round2 handoff + CLAUDE.md progress
+- ad803b9 fix(elements): batch import upserts existing element_id — refresh locator/coords
+- f48c06b docs: session archive #61 (manual, detailed)
+- a87f1a8 fix: element status toggle refresh (MissingGreenlet) + Dashboard AI trend dual Y-axis
+- 7227e2c fix(import): confirm no longer calls LLM — AI 只在 preview 阶段
+- f9cbd2a feat(captcha): 识别验证码 action — ddddocr OCR end-to-end
+- 74c1e84 feat(elements): scope filter dropdown — page/global views
+
+### 未提交变更
+- 仅 backend/_check_elems.py 临时脚本（可删）
+
+### 今日进度
+无新开发（昨日已详细存档 #61/#62）。元素库全部需求交付完毕，代码全绿，待用户按 ACCEPTANCE_CHECKLIST_3PHASES.md 实测验收。
+
+### 明日待办
+1. **用户按 docs/ACCEPTANCE_CHECKLIST_3PHASES.md 验收三阶段**——重点：会话式抓取 headed 人工登录全流程（唯一未实测环节）、面包屑点选切换、菜单排除/列表行数开关
+2. 验收出问题看 logs/app.log（pick 404 有分类诊断日志）
+3. test_case_refiner 遗留失败排查（#61 已记录）；backend/_check_elems.py 临时脚本可删
+
+---
+
 ## 快照 #62 — 2026-09-10 08:00（详细存档·关机前·元素库专项补录）
 
 **当前分支**：master · 工作区干净（仅 backend/_check_elems.py 临时脚本未跟踪，可删）
