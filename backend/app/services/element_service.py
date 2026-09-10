@@ -161,6 +161,14 @@ class ElementService:
             seen_element_ids: set = set()
             skipped_duplicates = 0
 
+            # 库内已有 element_id（同页面先前抓取过）：命中则更新定位器而非新插入，
+            # 否则唯一约束 uq_element_repository_page_element 整批回滚
+            existing_result = await db.execute(
+                select(ElementRepository.element_id).where(
+                    ElementRepository.page_id == page_id)
+            )
+            existing_ids = {row[0] for row in existing_result.all()}
+
             for elem_data in elements:
                 # 生成元素唯一标识（element_id）
                 element_id = ElementService._generate_element_id(elem_data)
@@ -171,6 +179,31 @@ class ElementService:
                     )
                     continue
                 seen_element_ids.add(element_id)
+
+                if element_id in existing_ids:
+                    # 已存在：刷新定位策略链与坐标（重新抓取覆盖旧值），不重复插入
+                    upd_result = await db.execute(
+                        select(ElementRepository).where(
+                            ElementRepository.page_id == page_id,
+                            ElementRepository.element_id == element_id)
+                    )
+                    existing_el = upd_result.scalar_one_or_none()
+                    if existing_el is not None:
+                        coords0 = elem_data.get("coords") or {}
+                        existing_el.position_x = int(coords0["x"]) if coords0.get("x") is not None else existing_el.position_x
+                        existing_el.position_y = int(coords0["y"]) if coords0.get("y") is not None else existing_el.position_y
+                        existing_el.width = int(coords0["width"]) if coords0.get("width") is not None else existing_el.width
+                        existing_el.height = int(coords0["height"]) if coords0.get("height") is not None else existing_el.height
+                        chain = elem_data.get("locator_chain") or {}
+                        if isinstance(chain, dict) and chain.get("strategies"):
+                            existing_el.locator_strategies = chain
+                        elif isinstance(chain, list) and chain:
+                            existing_el.locator_strategies = {"strategies": chain}
+                        if existing_el.status == "recycled":
+                            existing_el.status = "active"  # 重抓复活
+                        skipped_duplicates += 1
+                        logger.info(f"Refresh existing element '{element_id}' on page {page_id}")
+                    continue
 
                 # 归一化文本
                 text = (elem_data.get("text") or "").strip()
@@ -254,7 +287,7 @@ class ElementService:
             await db.commit()
 
             # 更新页面元素计数
-            page.element_count = len(element_objects)
+            page.element_count = (page.element_count or 0) + len(element_objects)
             page.last_fetch_at = func.now()
             await db.commit()
 
