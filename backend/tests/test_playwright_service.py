@@ -31,6 +31,9 @@ def _make_element(attrs=None, text="登录", tag="button", box=None):
     async def evaluate(script, *args):
         # 区分不同的 evaluate 调用：tagName / 复杂脚本
         s = script if isinstance(script, str) else ""
+        if "getBoundingClientRect" in s:
+            b = box or {"x": 10, "y": 20, "width": 80, "height": 30}
+            return {"x": b["x"], "y": b["y"]}
         if "tagName.toLowerCase()" in s and "parentElement" not in s and "siblings" not in s and "indexOf" not in s:
             return tag
         if "parentElement?.tagName" in s:
@@ -263,6 +266,27 @@ class TestExtractSemanticInfo:
         assert info["coords"]["height"] == 30
 
     @pytest.mark.asyncio
+    async def test_coords_are_document_coords(self):
+        """coords 必须是文档坐标（rect+scroll），与 full_page 截图坐标系对齐（红框偏移根因）。"""
+        element = _make_element(box={"x": 100, "y": 50, "width": 80, "height": 30})
+        # rect 是视口坐标：y=50 是滚动后视口内位置；scrollY=150 → 文档 y=200
+        # 但 _make_element 的 rect 分支返回不带 scroll 的值，这里直接覆盖 evaluate
+        async def eval_rect(script, *args):
+            if "getBoundingClientRect" in script:
+                return {"x": 100, "y": 200}  # 已含 scroll 后的文档坐标
+            if "parentElement?.tagName" in script:
+                return "form"
+            if "Array.from(el.parentElement" in script:
+                return ["form", "button", "input"]
+            return "button"  # tagName 等其他脚本
+        element.evaluate = eval_rect
+        page = MagicMock()
+
+        info = await extract_semantic_info(page, element)
+
+        assert info["coords"] == {"x": 100, "y": 200, "width": 80, "height": 30}
+
+    @pytest.mark.asyncio
     async def test_extracts_text_and_type(self):
         element = _make_element(text="登录按钮", tag="button")
         page = MagicMock()
@@ -298,6 +322,16 @@ class TestExtractSemanticInfo:
     async def test_handles_missing_bounding_box(self):
         element = _make_element()
         element.bounding_box = AsyncMock(return_value=None)
+        # rect evaluate 失败且 bounding_box 返回 None → coords 全部回退 0
+        async def eval_rect(script, *args):
+            if "getBoundingClientRect" in script:
+                return None
+            if "parentElement?.tagName" in script:
+                return "form"
+            if "Array.from(el.parentElement" in script:
+                return ["form", "button", "input"]
+            return "button"
+        element.evaluate = eval_rect
         page = MagicMock()
 
         info = await extract_semantic_info(page, element)

@@ -249,14 +249,35 @@ async def extract_semantic_info(page, element) -> Dict[str, Any]:
     Returns:
         语义信息字典 {type, text, placeholder, aria_label, aria_role, coords, context}
     """
-    # 获取边界框
-    box = await element.bounding_box()
-    coords = {
-        "x": int(box["x"]) if box else 0,
-        "y": int(box["y"]) if box else 0,
-        "width": int(box["width"]) if box else 0,
-        "height": int(box["height"]) if box else 0,
-    }
+    # 文档坐标（rect + scroll），与 full_page 截图坐标系对齐——一次性抓取红框
+    # 偏移的根因是 bounding_box() 视口坐标对不上整页截图。rect 取不到时回退
+    # bounding_box（视口坐标，页面未滚动时二者等价）。
+    box = None
+    try:
+        rect = await element.evaluate(
+            "el => { const r = el.getBoundingClientRect(); "
+            "return {x: r.x + window.scrollX, y: r.y + window.scrollY}; }"
+        )
+    except Exception:
+        rect = None
+    try:
+        box = await element.bounding_box()
+    except Exception:
+        box = None
+    if isinstance(rect, dict) and "x" in rect and "y" in rect:
+        coords = {
+            "x": int(rect["x"]),
+            "y": int(rect["y"]),
+            "width": int(box["width"]) if box else 0,
+            "height": int(box["height"]) if box else 0,
+        }
+    else:
+        coords = {
+            "x": int(box["x"]) if box else 0,
+            "y": int(box["y"]) if box else 0,
+            "width": int(box["width"]) if box else 0,
+            "height": int(box["height"]) if box else 0,
+        }
 
     # 获取父节点和兄弟节点
     parent_tag = await element.evaluate("el => el.parentElement?.tagName.toLowerCase()")
