@@ -169,24 +169,36 @@ async def verify_and_score_locator(page, locator_candidate: Dict[str, Any], targ
         # el === target 恒为 False → 所有定位器验证失败 → 抓取 0 元素。
         # 必须先 evaluate_handle 拿到 ElementHandle 再做 DOM 身份比较。
         target_handle = await target_element.evaluate_handle("el => el")
-        target_found = False
-        for elem in found_elements:
+        target_index = -1
+        for i, elem in enumerate(found_elements):
             is_same = await elem.evaluate("(el, target) => el === target", target_handle)
             if is_same:
-                target_found = True
+                target_index = i
                 break
 
-        if not target_found:
+        if target_index < 0:
+            return None
+
+        # 消费方（执行引擎/自愈）都用 .first 取命中——非首个命中等于定位错元素。
+        # 典型场景：目标页面 id 重复（两个 input 都叫 #inputCode），批量抓取第二个框时
+        # `#inputCode` 命中的第一个不是它 → 该策略对该元素无效，剔除。
+        if target_index != 0:
+            logger.debug(
+                f"Locator '{locator_candidate['value']}' matches target at index "
+                f"{target_index} (not first) — discard for element-specific use"
+            )
             return None
 
         # 计算最终评分
         score = locator_candidate["base_score"]
 
         # 唯一性加减分
-        if len(found_elements) == 1:
+        unique = len(found_elements) == 1
+        if unique:
             score += 20
         else:
-            score -= 10
+            # 非唯一但首个命中：执行时 .first 恰好对，但页面顺序变化即失效，重扣
+            score -= 30
 
         # 稳定性扣分（含 nth-of-type/nth-child 的定位器不稳定）
         if "nth-of-type" in value or "nth-child" in value:
@@ -196,7 +208,7 @@ async def verify_and_score_locator(page, locator_candidate: Dict[str, Any], targ
             "type": locator_type,
             "value": value,
             "score": max(score, 0),
-            "unique": len(found_elements) == 1,
+            "unique": unique,
             "verified": True,
         }
 

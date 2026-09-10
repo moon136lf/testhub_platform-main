@@ -152,6 +152,7 @@ class TestVerifyAndScoreLocator:
 
     @pytest.mark.asyncio
     async def test_non_unique_locator_gets_penalty(self):
+        """非唯一但首个命中：保留策略但重扣（页面顺序变化即失效）"""
         page = MagicMock()
         elem1 = AsyncMock()
         elem1.evaluate = AsyncMock(return_value=True)  # 第一个是目标
@@ -166,7 +167,24 @@ class TestVerifyAndScoreLocator:
 
         assert result is not None
         assert result["unique"] is False
-        assert result["score"] == 60  # 70 - 10 非唯一扣分
+        assert result["score"] == 40  # 70 - 30 非唯一重扣
+
+    @pytest.mark.asyncio
+    async def test_non_first_match_discarded(self):
+        """定位器命中多个但目标非首个：消费方 .first 会取错元素，策略剔除"""
+        page = MagicMock()
+        elem1 = AsyncMock()
+        elem1.evaluate = AsyncMock(return_value=False)  # 第一个不是目标
+        elem2 = AsyncMock()
+        elem2.evaluate = AsyncMock(return_value=True)   # 目标是第二个（重复 id 场景）
+        locator_mock = AsyncMock()
+        locator_mock.all = AsyncMock(return_value=[elem1, elem2])
+        page.locator = MagicMock(return_value=locator_mock)
+
+        candidate = {"type": "id", "value": "#inputCode", "base_score": 100}
+        result = await verify_and_score_locator(page, candidate, elem2)
+
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_returns_none_when_no_element_found(self):

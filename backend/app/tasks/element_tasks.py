@@ -257,20 +257,10 @@ async def _fetch_elements_async(
         # 计算耗时
         duration = (datetime.now() - start_time).total_seconds()
 
-        # 阶段 8: 完成 (100%) - 元素落库 + 写入页面缓存（三类 Redis 键之一）
-        # 抓取结果持久化: page_repository(upsert) + element_repository + fetch_history
-        try:
-            imported, _skipped = await _persist_fetch_result(
-                project_id, url, screenshot_url, verified_elements, bool(username and password))
-            await sse.send_message(
-                type="system", stage="complete",
-                content=f"已入库 {imported} 个元素到元素库",
-                progress=0.99,
-            )
-        except Exception as persist_err:
-            logger.error(f"【元素库】结果入库失败 | project_id={project_id} url={url} 原因={persist_err} 建议=检查数据库连接")
-            imported = 0
-
+        # 阶段 8: 完成 (100%) — 不自动落库（方案 B）：
+        # 入库由用户在「入库确认」弹框勾选后触发（/elements/import），
+        # 自动全量入库会无视勾选把所有元素写进库（12 vs 6 问题根因）。
+        # 页面缓存仍写（供元素库页展示 count），但不落 element_repository。
         try:
             await ElementCacheService.cache_page(project_id, url, {
                 "url": url,
@@ -282,18 +272,18 @@ async def _fetch_elements_async(
 
         await sse.send_message(
             type="success", stage="complete",
-            content=f"抓取完成！共识别 {len(verified_elements)} 个有效元素，耗时 {duration:.1f}秒",
+            content=f"抓取完成！共识别 {len(verified_elements)} 个有效元素，耗时 {duration:.1f}秒，请在元素列表勾选后入库",
             progress=1.0,
             data={
                 "elements": verified_elements,
                 "screenshot_url": screenshot_url,
-                "imported_count": imported,
+                "imported_count": 0,
                 "total_count": len(verified_elements),
             },
         )
 
         logger.info(
-            f"【元素库】抓取完成 | session={session_id} 元素={len(verified_elements)} 耗时={duration:.1f}s 入库={imported}"
+            f"【元素库】抓取完成 | session={session_id} 元素={len(verified_elements)} 耗时={duration:.1f}s 入库=0(待用户确认)"
         )
 
         return {
@@ -302,7 +292,7 @@ async def _fetch_elements_async(
             "screenshot_url": screenshot_url,
             "elements": verified_elements,
             "total_count": len(verified_elements),
-            "imported_count": imported,
+            "imported_count": 0,
             "duration_seconds": int(duration),
         }
 
