@@ -136,6 +136,14 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
         "base_score": 55,
     })
 
+    # 策略 9: placeholder（输入框常用唯一标识；页面无 id/name 时是关键区分项）
+    if elem_data_placeholder := await element.get_attribute("placeholder"):
+        candidates.append({
+            "type": "placeholder",
+            "value": f"[placeholder='{elem_data_placeholder}']",
+            "base_score": 88,
+        })
+
     return candidates
 
 
@@ -200,8 +208,12 @@ async def verify_and_score_locator(page, locator_candidate: Dict[str, Any], targ
             # 非唯一但首个命中：执行时 .first 恰好对，但页面顺序变化即失效，重扣
             score -= 30
 
-        # 稳定性扣分（含 nth-of-type/nth-child 的定位器不稳定）
-        if "nth-of-type" in value or "nth-child" in value:
+        # 稳定性扣分：nth-of-type/nth-child 只对"结构位置型"策略扣（css/xpath 全路径
+        # 依赖位置，页面加个元素就失效）。但注意：对重复属性元素（页面 id 重复），
+        # nth 路径是唯一能区分的手段，且路径唯一命中时 unique=True 已有加分，
+        # 双重惩罚会把唯一可用策略压到阈值之下（点选补抓 404 的根因）。
+        # 改为：nth 路径且唯一命中 → 不扣；nth 路径且非唯一 → 照扣。
+        if ("nth-of-type" in value or "nth-child" in value) and not unique:
             score -= 15
 
         return {

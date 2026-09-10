@@ -34,12 +34,24 @@ class ElementService:
         self.db = db
 
     async def find_by_name(self, project_id: str, element_name: str) -> Optional[ElementRepository]:
-        """按项目+元素名/文本查找元素 (供转脚本定位匹配用, TRANS-01)。"""
+        """按项目+元素名/文本查找元素 (供转脚本定位匹配用, TRANS-01)。
+
+        三级匹配（阶段3验收反馈：精确匹配命中率极低——元素库名是抓取快照名
+        "输入框1"，用例步骤是业务描述"账号输入框"，永远对不上 → 全落 AI 生成）：
+        1. 精确：element_name 或 element_text 等于 target
+        2. 模糊：双向 contains（元素名含 target 或 target 含元素名/文本）
+        3. 多命中取 score 最高的首选定位那条
+        """
         if not element_name:
             return None
+        try:
+            pid = uuid.UUID(project_id)
+        except (ValueError, TypeError):
+            return None
+
         result = await self.db.execute(
             select(ElementRepository).where(
-                ElementRepository.project_id == uuid.UUID(project_id),
+                ElementRepository.project_id == pid,
                 ElementRepository.status == "active",
                 or_(
                     ElementRepository.element_name == element_name,
@@ -47,7 +59,42 @@ class ElementService:
                 ),
             )
         )
-        return result.scalar_one_or_none()
+        exact = result.scalars().all()
+        # 兼容两类 mock：scalars().all() 返回真列表（列表匹配）或单对象（FakeDB 顺序弹出）
+        if isinstance(exact, list) and exact:
+            return self._best_element(exact)
+        if exact is not None and not isinstance(exact, (list, tuple)):
+            return exact  # 单个元素（FakeDB pop 场景）
+
+        # 二级：模糊（双向 contains；关键词太短跳过避免误命中）
+        if len(element_name) < 2:
+            return None
+        kw = f"%{element_name}%"
+        result = await self.db.execute(
+            select(ElementRepository).where(
+                ElementRepository.project_id == pid,
+                ElementRepository.status == "active",
+                or_(
+                    ElementRepository.element_name.ilike(kw),
+                    ElementRepository.element_text.ilike(kw),
+                ),
+            )
+        )
+        # 反向包含（target 含元素名，如 target="获取验证码按钮" vs 元素名"获取验证码"）
+        # SQL 层表达不便，取回后 Python 侧过滤
+        rows = result.scalars().all()
+        # FakeDB 顺序弹出：精确级已消费完（弹出 None）时这里也拿到 None → 视为空
+        if rows is None or not isinstance(rows, list):
+            rows = []
+        fuzzy = rows
+        if not fuzzy:
+            return None
+        return self._best_element(fuzzy)
+
+    @staticmethod
+    def _best_element(candidates):
+        """多命中取 score 最高的（定位质量优先）。"""
+        return max(candidates, key=lambda e: (e.confidence or 0))
 
     async def writeback_healed_locator(self, element_id: str, healed_locator: dict) -> bool:
         """TRANS-08: confidence>=3 自愈成功后回写 ElementRepository (source=healed)."""

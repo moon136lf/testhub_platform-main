@@ -660,7 +660,10 @@ async def open_browser_session(request: BrowserOpenRequest):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
-    headless = not request.need_login
+    # 点选补抓坐标换算依赖真实窗口 —— headed 模式下 status 返回实际 innerWidth/innerHeight
+    # 供前端动态换算；headless 固定 1920x1080 但与用户屏幕不一致时点选会偏。
+    # 一律 headed：need_login=True 人工登录，False 时直接导航到目标页（不等待登录）。
+    headless = False
     sid = await browser_mgr.open(
         request.project_id, request.url, headless=headless,
         need_login=request.need_login,

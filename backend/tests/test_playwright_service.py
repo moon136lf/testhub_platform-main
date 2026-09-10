@@ -214,7 +214,7 @@ class TestVerifyAndScoreLocator:
 
     @pytest.mark.asyncio
     async def test_unstable_locator_gets_penalty(self):
-        """含 nth-of-type/nth-child 的定位器应扣 15 分"""
+        """nth 路径 + 唯一命中：不扣稳定性分（重复属性元素的唯一区分手段）"""
         page = MagicMock()
         found = AsyncMock()
         found.evaluate = AsyncMock(return_value=True)
@@ -226,8 +226,27 @@ class TestVerifyAndScoreLocator:
         result = await verify_and_score_locator(page, candidate, found)
 
         assert result is not None
-        # 50 + 20(唯一) - 15(不稳定) = 55
-        assert result["score"] == 55
+        # 50 + 20(唯一) = 70（唯一命中免 nth 扣分）
+        assert result["score"] == 70
+
+    @pytest.mark.asyncio
+    async def test_unstable_nonunique_locator_gets_penalty(self):
+        """nth 路径 + 非唯一：稳定性扣分仍生效"""
+        page = MagicMock()
+        e1 = AsyncMock()
+        e1.evaluate = AsyncMock(return_value=True)
+        e2 = AsyncMock()
+        e2.evaluate = AsyncMock(return_value=False)
+        locator_mock = AsyncMock()
+        locator_mock.all = AsyncMock(return_value=[e1, e2])
+        page.locator = MagicMock(return_value=locator_mock)
+
+        candidate = {"type": "css", "value": "div:nth-of-type(2)", "base_score": 50}
+        result = await verify_and_score_locator(page, candidate, e1)
+
+        assert result is not None
+        # 50 - 30(非唯一) - 15(nth) = 5
+        assert result["score"] == 5
 
 
 class TestExtractSemanticInfo:
