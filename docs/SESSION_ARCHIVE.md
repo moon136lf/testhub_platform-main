@@ -5,6 +5,43 @@
 
 ---
 
+## 快照 #62 — 2026-09-10 08:00（详细存档·关机前·元素库专项补录）
+
+**当前分支**：master · 工作区干净（仅 backend/_check_elems.py 临时脚本未跟踪，可删）
+
+### 补充：元素库会话式抓取与元素管理（本会话完成，#61 未覆盖部分）
+
+**一、P3 工作台全链（此前已交付）**
+- BrowserSessionManager 进程内浏览器池 + Proactor 桥接线程（解 uvicorn --reload Selector loop 无子进程限制）
+- 会话端点全套（open headed 人工登录/轻校验状态机、status 截图、capture、pick-element 活 DOM 反查、release 保留数据、close）
+- CaptureWorkbench 状态机前端（idle→awaiting_login→ready 双栏）+ 双 tab 布局
+
+**二、修复的深层 bug（多轮排查）**
+- Selector loop 无子进程 → NotImplementedError → Proactor 桥接线程（f44f698）
+- 全部 Playwright 调用跨 loop（pick 404 / TargetClosedError）→ 统一 _bridge.run（d465ba1）
+- await 传 Locator 序列化 undefined（removeAttribute 崩、身份比较恒 False 抓 0 元素）→ 选择器字符串/evaluate_handle（b189f7a 等）
+- awaiting_login 状态机死代码（state 从未写入）→ dataclass 显式字段（37103de）
+- headed 窗口忽大忽小 → no_viewport 跟随真实窗口（2f7f145）
+- 同 URL 多行页面 / 同属性 element_id 去重误杀（189→74）→ URL 规范化复用 + 坐标后缀（df63d63 / 496771d）
+
+**三、增强功能**
+- 面包屑方案1（node-info/highlight/locators 3 端点 + 面包屑卡片 + 同级切换，c9a1ff4/a8868c3，审查 Approved）
+- 元素管理 7 条需求全部完成（右键建子/同级、来源中文、去全局节点、所属页面列、作用域筛选、启停开关转脚本隔离、序号+分页+倒序；683bfca/82e1f39/afac60b/409af1f/74c1e84）
+- 一次性抓取：文本/类型过滤、调试模式、菜单排除开关、列表行数限制、可编辑别名中文默认、URL 预填 target_url
+- 状态开关 MissingGreenlet 修复（a87f1a8）
+
+### 未提交
+- 仅 backend/_check_elems.py 临时脚本（可删）
+- CLAUDE.md / ACCEPTANCE_CHECKLIST / SESSION_HANDOFF 文档已在本日前提交
+
+### 遗留 / 待办
+1. **用户按 docs/ACCEPTANCE_CHECKLIST_3PHASES.md 验收三阶段**（重点：会话式抓取 headed 人工登录全流程——唯一未实测环节；面包屑点选切换；菜单排除/列表行数开关效果）
+2. pick 404 诊断日志已加（elementFromPoint miss / pipeline failed 分类带 tag/text），复现时看 app.log 对应行
+3. test_case_refiner 遗留失败排查（#61 已记录）
+4. F12 联动已否决 → 平台内面包屑方案已实现；backend/_check_elems.py 可删
+
+---
+
 ## 快照 #61 — 2026-09-09 18:30（manual，详细存档·关机前）
 
 **当前分支**：master，本地=远程（a87f1a8），工作区干净（仅 backend/_check_elems.py 临时脚本 + docs/ACCEPTANCE_CHECKLIST_3PHASES.md 未跟踪）
