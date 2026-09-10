@@ -2,7 +2,7 @@
   <div class="step-editor">
     <el-alert type="info" :closable="false" style="margin-bottom: 12px">
       每行一个动作：选操作类型 → 填元素定位/参数 → 保存后自动生成 Playwright 脚本。
-      「数据库断言」填 SQL（可多行）+ 期望值（文本比对）。
+      「期望值」可选：填了则该步执行后断言文本；「数据库断言」填 SQL（可多行）+ 期望值（DB 比对）。
     </el-alert>
 
     <el-table :data="rows" border size="small">
@@ -33,9 +33,8 @@
       </el-table-column>
       <el-table-column label="期望值" width="160">
         <template #default="{ row }">
-          <el-input v-if="row.action === 'assert_db'"
-            v-model="row.expected" size="small" placeholder="期望文本" />
-          <span v-else class="hint">—</span>
+          <!-- 断言期望：所有动作行均可填（非空时执行完该步断言文本）；assert_db 为 DB 比对 -->
+          <el-input v-model="row.expected" size="small" placeholder="期望文本(可选)" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="110" align="center">

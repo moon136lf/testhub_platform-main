@@ -702,7 +702,7 @@ class TestGlobalLookup:
 
         async def _execute(q):
             r = MagicMock()
-            r.scalar_one_or_none.return_value = el
+            r.scalars.return_value.all.return_value = [el]
             return r
         db.execute = _execute
 

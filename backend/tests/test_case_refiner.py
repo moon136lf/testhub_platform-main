@@ -1,6 +1,6 @@
 """W5 review/refinement tests."""
 from uuid import uuid4
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -162,8 +162,11 @@ class TestRefineService:
         }
         svc_db.execute.return_value = Mock(scalar_one_or_none=Mock(return_value=case))
 
-        svc = TestCaseService(svc_db)
-        result = await svc.apply_suggestions(str(case.id), None)
+        # T6: 断言增强建议走 LLM 改写——测试环境 patch 掉（无 LLM 时降级返回原步骤）
+        with patch("app.services.case_refiner.llm_rewrite_steps",
+                   new=AsyncMock(side_effect=lambda steps, sugg: steps)):
+            svc = TestCaseService(svc_db)
+            result = await svc.apply_suggestions(str(case.id), None)
         assert case.steps == case.refinement_report["refined_case"]["steps"]
         assert case.version == 2  # incremented
         assert case.refinement_report["suggestions"][0]["status"] == "applied"

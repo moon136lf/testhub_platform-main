@@ -70,7 +70,8 @@ def test_open_session_no_login(client, mgr):
     d = r.json()["data"]
     assert d["state"] == "ready"
     _, kwargs = mgr.open.call_args
-    assert kwargs.get("headless") is True
+    # 会话式抓取一律 headed（点选补抓坐标换算依赖真实窗口），need_login=False 只是不等待登录
+    assert kwargs.get("headless") is False
 
 
 def test_open_session_bad_project(client, mgr):

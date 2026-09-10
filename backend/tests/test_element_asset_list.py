@@ -123,7 +123,7 @@ class TestSetStatus:
 
         async def _execute(q):
             r = MagicMock()
-            r.scalar_one_or_none.return_value = None
+            r.scalars.return_value.all.return_value = []  # 无命中（含禁用元素被 status 过滤）
             return r
         db.execute = _execute
 

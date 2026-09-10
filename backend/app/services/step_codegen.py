@@ -35,41 +35,55 @@ def _gen_step(step: Dict) -> str:
     action = step.get("action", "")
     target = step.get("target", "")
     value = step.get("value", "")
+    # 行内断言：非 assert_db 动作行带非空 expected → 动作完成后追加 to_have_text
+    # （阶段3验收反馈：断言合并进行内，不再每步另起一行）
+    inline_expected = step.get("expected", "") if action != "assert_db" else ""
 
     if action == "navigate":
-        return f'    page.goto({_escape(value)})'
+        line = f'    page.goto({_escape(value)})'
+        if inline_expected:
+            line += f'\n    # 行内断言（navigate 无元素定位，仅记录期望）: {_escape(inline_expected)}'
+        return line
     if action == "click":
         if not target:
             raise ValueError("click 需要 target（元素定位）")
-        return f"    {_loc(target)}.click()"
-    if action == "input":
+        line = f"    {_loc(target)}.click()"
+    elif action == "input":
         if not target:
             raise ValueError("input 需要 target（元素定位）")
-        return f'    {_loc(target)}.fill({_escape(value)})'
-    if action == "select":
+        line = f'    {_loc(target)}.fill({_escape(value)})'
+    elif action == "select":
         if not target:
             raise ValueError("select 需要 target（元素定位）")
-        return f'    {_loc(target)}.select_option({_escape(value)})'
-    if action == "wait":
+        line = f'    {_loc(target)}.select_option({_escape(value)})'
+    elif action == "wait":
         try:
             ms = int(float(value or 1) * 1000)
         except (ValueError, TypeError):
             ms = 1000
-        return f"    page.wait_for_timeout({ms})"
-    if action == "assert_text":
+        line = f"    page.wait_for_timeout({ms})"
+    elif action == "assert_text":
         if not target:
             raise ValueError("assert_text 需要 target（元素定位）")
-        return f'    expect({_loc(target)}).to_have_text({_escape(value)})'
-    if action == "assert_visible":
+        line = f'    expect({_loc(target)}).to_have_text({_escape(value)})'
+    elif action == "assert_visible":
         if not target:
             raise ValueError("assert_visible 需要 target（元素定位）")
-        return f"    expect({_loc(target)}).to_be_visible()"
-    if action == "assert_db":
+        line = f"    expect({_loc(target)}).to_be_visible()"
+    elif action == "assert_db":
         sql = _escape(value)
         expected = _escape(step.get("expected", ""))
         return (f'    assert_db(page, sql={sql}, expected={expected}, '
                 f'name={_escape(step.get("element_name", ""))})  # DB断言：expected 一律为字符串，比较语义由执行器决定')
-    raise ValueError(f"不支持的操作类型: {action}")
+    else:
+        raise ValueError(f"不支持的操作类型: {action}")
+
+    # 动作行的行内断言追加（expected 非空时）
+    if inline_expected and target:
+        line += f'\n    expect({_loc(target)}).to_have_text({_escape(inline_expected)})'
+    elif inline_expected:
+        line += f'\n    # 行内断言（无元素定位，仅记录期望）: {_escape(inline_expected)}'
+    return line
 
 
 def generate_script(title: str, steps: List[Dict]) -> str:
