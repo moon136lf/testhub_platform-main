@@ -114,22 +114,31 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
     })
 
     # 策略 8: XPath
-    xpath = await element.evaluate("""
-        el => {
-            if (el.id) return `//*[@id="${el.id}"]`;
-            let path = [];
-            while (el.parentElement) {
-                let siblings = Array.from(el.parentElement.children).filter(
-                    e => e.tagName === el.tagName
-                );
-                let index = siblings.indexOf(el) + 1;
-                path.unshift(`${el.tagName.toLowerCase()}[${index}]`);
-                el = el.parentElement;
-                if (path.length > 5) break;
+    # 注意：id 短路（//*[@id="x"]）只在 id 页面唯一时才安全——重复 id（目标页
+    # 违反 HTML 规范很常见）会让两个元素返回同一条 xpath，策略无法区分。
+    # 先验证 id 唯一性：命中多个元素时退回完整路径构建（带 index 能区分）。
+    xpath = None
+    if elem_id:
+        id_count = await element.evaluate(
+            "id => document.querySelectorAll(`[id='${id}']`).length", elem_id)
+        if id_count == 1:
+            xpath = f"//*[@id='{elem_id}']"
+    if xpath is None:
+        xpath = await element.evaluate("""
+            el => {
+                let path = [];
+                while (el.parentElement) {
+                    let siblings = Array.from(el.parentElement.children).filter(
+                        e => e.tagName === el.tagName
+                    );
+                    let index = siblings.indexOf(el) + 1;
+                    path.unshift(`${el.tagName.toLowerCase()}[${index}]`);
+                    el = el.parentElement;
+                    if (path.length > 8) break;
+                }
+                return '/' + path.join('/');
             }
-            return '/' + path.join('/');
-        }
-    """)
+        """)
     candidates.append({
         "type": "xpath",
         "value": xpath,
