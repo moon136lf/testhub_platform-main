@@ -234,18 +234,29 @@ const browserReleased = ref(false)
 const url = ref('')
 const needLogin = ref(false)
 
-// 选定项目后预填项目管理里配置的系统地址（用户可改）
+// 项目下拉可切换：可写 ref（原只读 computed 绑 v-model 导致切换赋值静默失败）
+const projectId = ref(props.defaultProjectId)
+// 项目切换（仅 idle 阶段下拉可见）：换项目后清空 URL 再按新项目预填系统地址
+watch(projectId, (pid) => {
+  if (phase.value !== 'idle') { projectId.value = props.defaultProjectId; return }
+  url.value = ''
+  const p = props.projects.find((x) => x.id === pid)
+  if (p?.target_url) url.value = p.target_url
+})
+// 父组件初始加载异步：projects/defaultProjectId 到位后同步 ref 并预填地址
 watch(
   () => props.defaultProjectId,
   (pid) => {
-    if (!pid || url.value) return
-    const p = props.projects.find((x) => x.id === pid)
-    if (p?.target_url) url.value = p.target_url
+    if (!pid) return
+    projectId.value = pid
+    if (!url.value) {
+      const p = props.projects.find((x) => x.id === pid)
+      if (p?.target_url) url.value = p.target_url
+    }
   },
   { immediate: true }
 )
 const starting = ref(false)
-const projectId = computed(() => props.defaultProjectId)
 
 // login
 const checking = ref(false)
