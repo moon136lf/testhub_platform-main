@@ -71,6 +71,7 @@
                 <span>浏览器实时画面</span>
                 <div class="shot-header-actions">
                   <el-switch v-model="pickMenu" size="small" active-text="抓菜单栏" />
+                  <el-switch v-model="pickText" size="small" active-text="抓展示文本" />
                   <el-switch v-model="pickMode" size="small" active-text="点选补抓" />
                   <el-input-number
                     v-model="listRows"
@@ -87,7 +88,16 @@
               </div>
             </template>
             <div class="shot-container" :class="{ picking: pickMode && !browserReleased }" @click="onShotClick">
-              <img v-if="screenshotSrc" :src="screenshotSrc" class="shot-img" referrerpolicy="no-referrer" />
+              <ElementHighlight
+                v-if="screenshotSrc && !pickMode"
+                :screenshot-url="screenshotSrc"
+                :elements="stagingState?.elements || []"
+                :selected-ids="selectedIds"
+                :hover-id="hoverId"
+                @pick="onHotspotPick"
+                @card-hover="onHotspotHover"
+              />
+              <img v-else-if="screenshotSrc" :src="screenshotSrc" class="shot-img" referrerpolicy="no-referrer" />
               <div v-else class="no-screenshot">{{ browserReleased ? '浏览器已释放' : '暂无截图，点击「刷新截图」' }}</div>
             </div>
             <div v-if="pickMode" class="pick-hint">点选模式已开启：点击截图中目标元素即可补抓单个元素</div>
@@ -117,14 +127,36 @@
               <div
                 v-for="el in stagingState.elements"
                 :key="el.temp_id"
+                :data-temp-id="el.temp_id"
                 class="wb-element"
-                :class="{ excluded: !el.included }"
+                :class="{ excluded: !el.included, 'wb-element-hover': hoverId === el.temp_id }"
+                @mouseenter="hoverId = el.temp_id"
+                @mouseleave="hoverId = ''"
               >
                 <el-checkbox :model-value="el.included" @change="(v) => toggleElement(el.temp_id, v)">
                   <el-tag :type="typeColor(el.element_type)" size="small">{{ el.element_type }}</el-tag>
-                  <span class="wb-el-text">{{ el.element_text || el.temp_id }}</span>
-                  <el-tag size="small" type="info" effect="plain">批次 {{ (el.batch_idx ?? 0) + 1 }}</el-tag>
                 </el-checkbox>
+                <el-input
+                  v-model="el._nameDraft"
+                  size="small"
+                  class="wb-el-name"
+                  placeholder="别名"
+                  @change="(v) => commitRename(el, v)"
+                  @keyup.enter="(e) => e.target.blur()"
+                />
+                <el-popover trigger="hover" placement="left" :width="360">
+                  <template #reference>
+                    <el-button size="small" text type="primary">
+                      {{ (el.locator_strategies?.strategies || []).length }} 策略
+                    </el-button>
+                  </template>
+                  <div class="strategy-pop">
+                    <div v-for="(s, i) in (el.locator_strategies?.strategies || [])" :key="i" class="strategy-line">
+                      {{ s.type }}: <span class="strategy-value" :title="s.value">{{ s.value }}</span> (score {{ s.score }})
+                    </div>
+                  </div>
+                </el-popover>
+                <el-tag size="small" type="info" effect="plain">批次 {{ (el.batch_idx ?? 0) + 1 }}</el-tag>
                 <el-button size="small" type="danger" text @click="removeElement(el.temp_id)">删除</el-button>
               </div>
             </div>
@@ -143,7 +175,7 @@
                 <el-option v-for="p in pages" :key="p.id" :label="p.page_name" :value="p.id" />
               </el-select>
               <el-button type="primary" size="small" :loading="importing" @click="importSelected">
-                入库 {{ stagingState.included_count }} 个
+                一键入库 ({{ stagingState.included_count }})
               </el-button>
             </div>
           </el-card>
@@ -215,6 +247,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { elementAPI } from '@/api/element'
+import ElementHighlight from '@/components/element/ElementHighlight.vue'
 
 const props = defineProps({
   projects: { type: Array, default: () => [] },
@@ -271,6 +304,13 @@ const pickMode = ref(false)
 // 抓取过滤：抓菜单栏（默认关=排除左侧菜单）、列表行数（空=全部，填 N=td/th 只抓最上 N 行）
 const pickMenu = ref(false)
 const listRows = ref(null)
+
+// staging 列表状态
+const pickText = ref(true)   // 抓展示文本（div叶子+无href链接），默认开
+const hoverId = ref('')
+const selectedIds = computed(() =>
+  (stagingState.value?.elements || []).filter((e) => e.included).map((e) => e.temp_id)
+)
 
 // staging 列表
 const stagingState = ref(null)
@@ -414,6 +454,7 @@ const captureNow = async () => {
   try {
     const r = await elementAPI.captureBrowserPage(browserSessionId.value, {
       exclude_menu: !pickMenu.value,
+      include_div_text: pickText.value,
       max_list_rows: listRows.value || undefined
     })
     stagingSessionId.value = r.staging_session_id
@@ -431,6 +472,11 @@ const refreshStaging = async () => {
   if (!stagingSessionId.value) { stagingState.value = null; return }
   try {
     stagingState.value = await elementAPI.getCaptureState(stagingSessionId.value)
+    if (stagingState.value?.elements) {
+      stagingState.value.elements.forEach((el) => {
+        el._nameDraft = el.element_name || el.element_text || ''
+      })
+    }
   } catch {
     stagingState.value = null
   }
@@ -477,6 +523,31 @@ const removeElement = async (tempId) => {
     ElMessage.error('删除失败')
   }
 }
+
+// 别名内联编辑：值变化才调 API，失败警告不阻塞列表
+const commitRename = async (el, value) => {
+  const name = (value || '').trim()
+  const original = (el.element_name || el.element_text || '').trim()
+  if (name === original) { el._nameDraft = el.element_name || el.element_text || ''; return }
+  try {
+    await elementAPI.renameCaptureElement(stagingSessionId.value, el.temp_id, name)
+    el.element_name = name
+    el._nameDraft = name
+  } catch {
+    ElMessage.warning('别名保存失败（会话可能已过期）')
+  }
+}
+
+// 截图框 → 列表行联动：点框滚动到对应行并短暂高亮
+const onHotspotPick = (tempId) => {
+  const row = document.querySelector(`[data-temp-id="${tempId}"]`)
+  if (row) {
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    row.classList.add('wb-row-flash')
+    setTimeout(() => row.classList.remove('wb-row-flash'), 1200)
+  }
+}
+const onHotspotHover = (tempId) => { hoverId.value = tempId || '' }
 
 // ---- ready：点选补抓 ----
 const onShotClick = async (event) => {
@@ -646,6 +717,7 @@ const closeSessionInternal = async (confirmMsg) => {
   screenshotSrc.value = ''
   browserReleased.value = false
   pickMode.value = false
+  pickText.value = true
   url.value = ''
   if (confirmMsg) ElMessage.success('会话已关闭')
   emit('closed')
@@ -809,4 +881,29 @@ defineExpose({ phase, start })
 }
 .sibling-item:hover { background: var(--el-fill-color-light, #f5f7fa); }
 .sibling-text { font-size: 13px; }
+.wb-el-name {
+  width: 130px;
+  margin: 0 6px;
+}
+.wb-element-hover {
+  background: var(--el-fill-color, #f0f2f5);
+}
+.wb-row-flash {
+  animation: row-flash 0.6s ease 2;
+}
+@keyframes row-flash {
+  50% { background: rgba(230, 162, 60, 0.35); }
+}
+.strategy-pop .strategy-line {
+  font-size: 12px;
+  line-height: 20px;
+}
+.strategy-pop .strategy-value {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: bottom;
+}
 </style>

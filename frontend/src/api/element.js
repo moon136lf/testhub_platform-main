@@ -175,7 +175,11 @@ export const elementAPI = {
    */
   async captureBrowserPage(sessionId, opts = {}) {
     const response = await axios.post(`/elements/capture/browser/${sessionId}/capture`, null, {
-      params: { exclude_menu: opts.exclude_menu || false, max_list_rows: opts.max_list_rows || undefined }
+      params: {
+        exclude_menu: opts.exclude_menu || false,
+        max_list_rows: opts.max_list_rows || undefined,
+        include_div_text: opts.include_div_text !== false
+      }
     })
     return response.data.data
   },
@@ -290,6 +294,15 @@ export const elementAPI = {
     const response = await axios.delete(`/elements/capture/sessions/${sessionId}/elements`, {
       data: { temp_id: tempId }
     })
+    return response.data
+  },
+
+  /** 会话式抓取：元素别名内联改名 */
+  async renameCaptureElement(sessionId, tempId, elementName) {
+    const response = await axios.post(
+      `/elements/capture/sessions/${sessionId}/elements/rename`,
+      { temp_id: tempId, element_name: elementName }
+    )
     return response.data
   },
 
