@@ -37,12 +37,23 @@
           class="tree-node" :class="{ active: treeFilter.mode === 'all' }"
           @click="selectNode('all')"
         >📁 全部元素</div>
-        <div
-          v-for="page in pages" :key="page.id"
-          class="tree-node page-node" :class="{ active: treeFilter.mode === 'page' && treeFilter.pageId === page.id }"
-          @click="selectNode('page', page.id)"
-          @contextmenu.prevent="openCtxMenu($event, page)"
-        >📄 {{ page.page_name }} <span class="count">({{ page.element_count ?? 0 }})</span></div>
+        <el-tree
+          v-if="pages.length"
+          :data="pages"
+          node-key="id"
+          :props="{ label: 'page_name', children: 'children' }"
+          default-expand-all
+          :expand-on-click-node="false"
+        >
+          <template #default="{ data }">
+            <span
+              class="tree-node page-node"
+              :class="{ active: treeFilter.mode === 'page' && treeFilter.pageId === data.id }"
+              @click="selectNode('page', data.id)"
+              @contextmenu.prevent="openCtxMenu($event, data)"
+            >📄 {{ data.page_name }} <span class="count">({{ data.element_count ?? 0 }})</span></span>
+          </template>
+        </el-tree>
         <div v-if="!pages.length" class="tree-empty">暂无页面，请先在「元素抓取」页抓取或点击右上角新增</div>
       </el-card>
 
@@ -152,11 +163,7 @@
         <div v-if="detailRow.element_text" class="detail-text">显示文本：{{ detailRow.element_text }}</div>
 
         <div class="section-title">
-          定位器（按置信度排序）
-          <el-button size="small" text type="primary" :icon="Plus" @click="locatorDialogVisible = true">自定义定位器</el-button>
-        </div>
-        <div class="section-title">
-          定位器（数组原序，↑↓ 调序后后端重算 score）
+          定位器 ({{ drawerLocators.length }})
           <el-button size="small" text type="primary" :icon="Plus" @click="locatorDialogVisible = true">自定义定位器</el-button>
         </div>
         <div v-if="primaryIndex >= 0" class="detail-text">
@@ -239,6 +246,19 @@
             <el-option v-for="p in pages" :key="p.id" :label="p.page_name" :value="p.id" />
           </el-select>
         </el-form-item>
+        <el-form-item label="定位器">
+          <div style="width:100%">
+            <div v-for="(loc, i) in createForm.locators" :key="i" style="display:flex; gap:6px; margin-bottom:6px">
+              <el-select v-model="loc.type" style="width:120px" size="small">
+                <el-option v-for="t in ['id', 'css', 'data-testid', 'text', 'xpath']" :key="t" :label="t" :value="t" />
+              </el-select>
+              <el-input v-model="loc.value" placeholder="定位表达式" size="small" style="flex:1" />
+              <el-input-number v-model="loc.score" :min="0" :max="150" size="small" style="width:100px" />
+              <el-button size="small" type="danger" text @click="createForm.locators.splice(i, 1)">删除</el-button>
+            </div>
+            <el-button size="small" text type="primary" @click="createForm.locators.push({ type: 'css', value: '', score: 50 })">+ 添加定位器</el-button>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
@@ -250,6 +270,7 @@
     <el-dialog v-model="recycleDialogVisible" title="回收站（30天内可恢复）" width="600px">
       <el-table :data="recycleItems" v-loading="recycleLoading" size="small">
         <el-table-column prop="element_name" label="名称" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="page_name" label="所属页面" width="140" show-overflow-tooltip />
         <el-table-column prop="element_type" label="类型" width="90" />
         <el-table-column label="回收时间" width="160">
           <template #default="{ row }">{{ formatTime(row.recycled_at || row.updated_at) }}</template>
@@ -325,7 +346,7 @@ const verifyResult = ref(null)
 const locatorDialogVisible = ref(false)
 const newLocator = ref({ type: 'css', value: '', score: 50 })
 const createDialogVisible = ref(false)
-const createForm = ref({ name: '', element_type: 'button', element_text: '', scope: 'page', page_id: null })
+const createForm = ref({ name: '', element_type: 'button', element_text: '', scope: 'page', page_id: null, locators: [] })
 const recycleDialogVisible = ref(false)
 const recycleLoading = ref(false)
 const recycleItems = ref([])
@@ -350,18 +371,17 @@ const primaryLocator = (row) => {
   return locs[0] || null
 }
 
-const drawerLocators = computed(() => extractLocators(detailRow.value))
+// 抽屉定位器：按 score 倒序展示（★首选=第一行）；↑↓ 用原序 index 换算提交
+const drawerLocators = computed(() =>
+  extractLocators(detailRow.value).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+)
 
-// 首选 = score 最高那条（按数组原序展示行，★ 可能不在第一行，用户调序后归位）
-const primaryIndex = computed(() => {
-  const locs = drawerLocators.value
-  if (!locs.length) return -1
-  let best = 0
-  locs.forEach((l, i) => {
-    if ((l.score ?? 0) > (locs[best].score ?? 0)) best = i
-  })
-  return best
-})
+// score 倒序视图 index → 数组原序 index（后端按原序交换）
+const originalIndex = (sortedIdx) => {
+  const raw = extractLocators(detailRow.value)
+  const target = drawerLocators.value[sortedIdx]
+  return raw.indexOf(target)
+}
 
 const statusTag = (status) => {
   if (status === 'active' || status === 'verified') return 'success'
@@ -389,7 +409,8 @@ const formatTime = (timeStr) => {
 // ---- 数据加载 ----
 const loadPages = async () => {
   try {
-    const response = await elementAPI.listPages(projectId.value)
+    // 页面树用嵌套接口（按 parent_id 组装，子级缩进展示）
+    const response = await elementAPI.getPageTree(projectId.value)
     pages.value = (response && response.data) || response || []
   } catch (e) {
     console.error('加载页面树失败:', e)
@@ -645,20 +666,15 @@ const openDetail = async (row) => {
   }
 }
 
-const reorder = async (index, direction) => {
+const reorder = async (sortedIdx, direction) => {
   const el = detailRow.value
   if (!el) return
+  // score 倒序视图 index → 数组原序 index（后端按原序交换），以后端为准重拉
+  const rawIdx = originalIndex(sortedIdx)
+  if (rawIdx < 0) return
   try {
-    await elementAPI.reorderLocator(el.id, index, direction)
-    // 本地交换后刷新抽屉
-    const locs = extractLocators(el).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    if (direction === 'up' && index > 0) {
-      [locs[index - 1], locs[index]] = [locs[index], locs[index - 1]]
-    } else if (direction === 'down' && index < locs.length - 1) {
-      [locs[index + 1], locs[index]] = [locs[index], locs[index + 1]]
-    }
-    el.locator_strategies = { strategies: locs }
-    loadElements()
+    await elementAPI.reorderLocator(el.id, rawIdx, direction)
+    await reloadElement(el.id)
   } catch (e) {
     ElMessage.error('调序失败: ' + (e.message || e))
   }
@@ -675,17 +691,33 @@ const submitLocator = async () => {
     ElMessage.success('定位器已添加')
     locatorDialogVisible.value = false
     newLocator.value = { type: 'css', value: '', score: 50 }
-    // 后端返回的 locators 可能未含新增项，重新拉该元素列表并保持抽屉打开
+    await reloadElement(el.id)
+  } catch (e) {
+    ElMessage.error('添加定位器失败: ' + (e.message || e))
+  }
+}
+
+// 按 id 重查单个元素更新抽屉（分页信封与平铺两形态兼容；修添加定位器后不刷新）
+const reloadElement = async (elId) => {
+  try {
     const response = await elementAPI.listElementsAsset(projectId.value, {
       scope: treeFilter.value.mode === 'page' ? undefined : (scopeFilter.value || undefined),
       pageId: treeFilter.value.mode === 'page' ? treeFilter.value.pageId : undefined,
       keyword: keyword.value || undefined,
+      page: 1, pageSize: 100,
     })
-    elements.value = (response && response.data) || response || []
-    const fresh = elements.value.find(e => e.id === el.id)
-    if (fresh) detailRow.value = fresh
-  } catch (e) {
-    ElMessage.error('添加定位器失败: ' + (e.message || e))
+    const data = (response && response.data) || {}
+    const items = data.items || (Array.isArray(data) ? data : [])
+    elements.value = items
+    const fresh = items.find((e) => e.id === elId)
+    if (fresh) {
+      detailRow.value = fresh
+    } else {
+      ElMessage.warning('已保存，列表分页未包含该元素，请刷新查看')
+      loadElements()
+    }
+  } catch {
+    loadElements()
   }
 }
 
@@ -784,6 +816,10 @@ const submitCreate = async () => {
     ElMessage.warning('页面级元素需选择所属页面')
     return
   }
+  if ((form.locators || []).some((l) => (l.value || '').trim() && !l.type)) {
+    ElMessage.warning('定位器需选择类型')
+    return
+  }
   try {
     await elementAPI.createElementAsset({
       project_id: projectId.value,
@@ -792,10 +828,13 @@ const submitCreate = async () => {
       element_text: form.element_text || undefined,
       scope: form.scope,
       page_id: form.scope === 'page' ? form.page_id : undefined,
-      locators: [],
+      locators: (form.locators || [])
+        .filter((l) => (l.value || '').trim())
+        .map((l) => ({ type: l.type, value: l.value.trim(), score: l.score, source: 'manual' })),
     })
     ElMessage.success('元素已创建')
     createDialogVisible.value = false
+    createForm.value = { name: '', element_type: 'button', element_text: '', scope: 'page', page_id: null, locators: [] }
     loadElements()
     loadPages()
   } catch (e) {

@@ -140,11 +140,11 @@ export const elementAPI = {
     return response.data
   },
   async exportElements(projectId) {
-    const response = await axios.get('/elements-export', { params: { project_id: projectId } })
+    const response = await axios.get('/elements/elements-export', { params: { project_id: projectId } })
     return response.data
   },
   async importElementsAsset(projectId, payload) {
-    const response = await axios.post('/elements-import', { project_id: projectId, payload })
+    const response = await axios.post('/elements/elements-import', { project_id: projectId, payload })
     return response.data
   },
 
