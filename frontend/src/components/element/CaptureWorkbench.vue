@@ -122,6 +122,17 @@
               </div>
             </template>
 
+            <!-- 抓取进度直播 -->
+            <div v-if="liveMessages.length" class="wb-live">
+              <el-progress v-if="captureProgress > 0 && captureProgress < 1" :percentage="Math.round(captureProgress * 100)" :stroke-width="6" style="margin-bottom: 6px" />
+              <div
+                v-for="(m, i) in liveMessages.slice(-8)"
+                :key="i"
+                class="wb-live-line"
+                :class="'wb-live-' + m.type"
+              >{{ m.time }} {{ m.content }}</div>
+            </div>
+
             <el-empty v-if="!stagingState || stagingState.total_elements === 0" description="尚未抓取，点击左侧「开始抓取元素」" :image-size="60" />
             <div v-else class="wb-elements">
               <div
@@ -300,6 +311,25 @@ let pollTimer = null
 const screenshotSrc = ref('')
 const refreshingShot = ref(false)
 const capturing = ref(false)
+const liveMessages = ref([])
+const captureProgress = ref(0)
+
+const closeLive = () => { try { liveConn?.close() } catch {} liveConn = null }
+let liveConn = null
+
+const subscribeCaptureSSE = (sid) => {
+  closeLive()
+  liveConn = elementAPI.createSSEConnection(sid)
+  liveConn.onmessage = (event) => {
+    try {
+      const d = JSON.parse(event.data)
+      liveMessages.value.push({ time: new Date(d.timestamp).toLocaleTimeString('zh-CN'), content: d.content, type: d.type })
+      captureProgress.value = d.progress || 0
+      if (d.type === 'error') ElMessage.error(d.content || '抓取失败')
+    } catch {}
+  }
+  liveConn.onerror = () => { try { liveConn?.close() } catch {} liveConn = null }
+}
 const pickMode = ref(false)
 // 抓取过滤：抓菜单栏（默认关=排除左侧菜单）、列表行数（空=全部，填 N=td/th 只抓最上 N 行）
 const pickMenu = ref(false)
@@ -467,6 +497,7 @@ const refreshScreenshot = async () => {
 // ---- ready：抓取 ----
 const captureNow = async () => {
   capturing.value = true
+  subscribeCaptureSSE(browserSessionId.value)
   try {
     const r = await elementAPI.captureBrowserPage(browserSessionId.value, {
       exclude_menu: !pickMenu.value,
@@ -480,6 +511,7 @@ const captureNow = async () => {
   } catch (err) {
     ElMessage.error('抓取失败: ' + (err.response?.data?.detail || err.message))
   } finally {
+    closeLive()
     capturing.value = false
   }
 }
@@ -813,6 +845,21 @@ defineExpose({ phase, start })
   font-size: 12px;
   color: var(--mt-text-secondary, #909399);
 }
+.wb-live {
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--el-fill-color-lighter, #f5f7fa);
+  border-radius: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.wb-live-line {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--mt-text-secondary, #606266);
+}
+.wb-live-error { color: var(--el-color-danger); }
+.wb-live-success { color: var(--el-color-success); }
 .wb-elements {
   max-height: 360px;
   overflow-y: auto;
