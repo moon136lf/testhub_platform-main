@@ -96,15 +96,22 @@ class TestStep2ToAssertions:
         )
 
     def test_parses_assertions(self):
-        gw = FakeGateway('[{"step":1,"assertion_type":"status_changed","target":"页面","expected":"首页","is_valid":true}]')
+        # "跳转首页" 命中确定性规则(expect_url)，不调 LLM
+        gw = FakeGateway('[]')
         asserts = asyncio_run(step2_to_assertions(self._case(), gw))
-        assert asserts[0].assertion_type == "status_changed"
+        assert asserts[0].assertion_type == "expect_url"
         assert asserts[0].is_valid is True
 
     def test_tautological_assertion_marked_invalid(self):
+        # 规则推断不出的行走 LLM 兜底，永真断言黑名单仍生效
+        case = NormalizedCase(
+            case_id="c1", title="登录",
+            steps=[{"step": 1, "action": "点击登录", "expected": "触发某种效果"}],
+            expected_result="成功进入首页",
+        )
         gw = FakeGateway('[{"step":1,"assertion_type":"row_visible","target":"按钮","expected":"可见","is_valid":true}]')
         # row_visible of a button = tautological per blacklist -> forced invalid
-        asserts = asyncio_run(step2_to_assertions(self._case(), gw))
+        asserts = asyncio_run(step2_to_assertions(case, gw))
         assert asserts[0].is_valid is False
 
 

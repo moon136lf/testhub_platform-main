@@ -131,20 +131,80 @@ def _fmt_step_expected(steps: List[Dict]) -> str:
     return "\n".join(f"{s.get('step')}. {s.get('expected','')}" for s in steps)
 
 
+ASSERTION_RULES_DOC = """预期结果→断言类型模板库（方案V1阶段6）：
+- 显示/输入了X 且测试数据=X → expect_value
+- 进入/跳转/URL → expect_url（从 value URL 提取 path）
+- 密文/密码 → expect_attribute(type==password)
+- 成功/欢迎/提示 + 点击 → expect_toast
+- 其他含引号或"包含"的明确文案 → expect_text
+推断不出 → None（走 LLM 兜底）"""
+
+
+def infer_assertion_rule(op: str, target: str, value: str, expected_text: str, action: str):
+    """确定性断言推断。返回 {assertion_type, expected, target} 或 None。"""
+    if not expected_text:
+        return None
+    t = expected_text
+
+    if "密文" in t or ("密码" in t and "显示" in t):
+        return {"assertion_type": "expect_attribute", "expected": "password", "target": target}
+
+    if action == "navigate" or any(k in t for k in ("进入", "跳转", "URL", "地址")):
+        # 从测试数据 URL 提取 path 尾段作期望
+        path = ""
+        if value and value.startswith("http"):
+            path = value.rstrip("/").rsplit("/", 1)[-1] or value
+        exp = path or t
+        return {"assertion_type": "expect_url", "expected": exp, "target": ""}
+
+    if value and value in t and ("显示" in t or "输入" in t):
+        return {"assertion_type": "expect_value", "expected": value, "target": target}
+
+    if action == "click" and any(k in t for k in ("成功", "欢迎", "提示")):
+        return {"assertion_type": "expect_toast", "expected": t, "target": ""}
+
+    if "包含" in t or "显示" in t:
+        # 提取引号内文案，否则整句
+        m = re.search(r"[“\"'](.+?)[”\"']", t)
+        return {"assertion_type": "expect_text", "expected": m.group(1) if m else t, "target": target}
+
+    return None
+
+
 def _is_tautological(a: dict) -> bool:
     target = (a.get("target") or "") + (a.get("expected") or "")
     return any(kw in target for kw in TAUTOLOGICAL_KEYWORDS)
 
 
 async def step2_to_assertions(case: NormalizedCase, gateway: LLMGatewayProto) -> List[AssertionPlan]:
-    """Step2: 预期 → 断言计划 (LLM), 后置永真断言校验。"""
-    prompt = STEP2_PROMPT.format(
-        expected=case.expected_result,
-        step_expected=_fmt_step_expected(case.steps),
-    )
-    resp = await gateway.chat([{"role": "user", "content": prompt}])
-    items = parse_llm_json(resp["content"])
+    """Step2: 预期 → 断言计划。规则模板库前置，未命中行走 LLM 兜底，后置永真断言校验。"""
     plans = []
+    unmatched = []
+    for s in case.steps:
+        action = s.get("action", "")
+        hit = infer_assertion_rule(
+            action, s.get("action", ""), s.get("value", ""),
+            (s.get("expected") or "").strip(), action)
+        if hit:
+            plans.append(AssertionPlan(
+                step=int(s.get("step", 0)),
+                assertion_type=hit["assertion_type"],
+                target=hit.get("target") or None,
+                expected=hit.get("expected"),
+                is_valid=True,
+            ))
+        else:
+            unmatched.append(s)
+
+    if unmatched:
+        prompt = STEP2_PROMPT.format(
+            expected=case.expected_result,
+            step_expected="\n".join(f"{s.get('step')}. {s.get('expected','')}" for s in unmatched),
+        )
+        resp = await gateway.chat([{"role": "user", "content": prompt}])
+        items = parse_llm_json(resp["content"])
+    else:
+        items = []
     for it in items:
         atype = it.get("assertion_type")
         if atype not in VALID_ASSERTION_TYPES:
@@ -161,6 +221,7 @@ async def step2_to_assertions(case: NormalizedCase, gateway: LLMGatewayProto) ->
             expected=it.get("expected"),
             is_valid=is_valid,
         ))
+    plans.sort(key=lambda p: p.step)
     return plans
 
 
