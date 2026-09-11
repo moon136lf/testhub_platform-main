@@ -222,8 +222,8 @@ async def step3_match_locators(
     ai_used = False
     for a in actions:
         picked = None
-        # intent 动作归一化为元素类型意图（fill/check→input），供评分类型加分与候选过滤
-        intent = {"fill": "input", "check": "input"}.get(a.action, a.action)
+        # intent 动作归一化为元素类型意图（fill→input/check→click），供评分类型加分与候选过滤
+        intent = {"fill": "input", "check": "click"}.get(a.action, a.action)
         cands = await lookup.find_candidates(project_id, a.target, intent_action=intent) if a.target else []
         top = cands[0] if cands and cands[0].get("match_level") in ("L1", "L2") else None
         if top:
