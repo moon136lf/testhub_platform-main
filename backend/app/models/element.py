@@ -271,3 +271,17 @@ class SelfHealCache(Base):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
         }
+
+
+class ElementSynonym(Base):
+    """元素同义词（方案V1）：用例目标词→元素 的人工绑定/自动回写。"""
+    __tablename__ = "element_synonyms"
+    __table_args__ = (
+        UniqueConstraint("element_id", "synonym_text", name="uq_synonym_element_text"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    element_id = Column(UUID(as_uuid=True), ForeignKey("element_repository.id", ondelete="CASCADE"), nullable=False, index=True)
+    synonym_text = Column(String(200), nullable=False, comment="用例目标词原文")
+    source = Column(String(20), nullable=False, default="manual_binding", comment="manual_binding/ai_l2_hit")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

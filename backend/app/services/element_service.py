@@ -5,7 +5,7 @@ Element Service - Business Logic
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy import func
-from app.models.element import PageRepository, ElementRepository
+from app.models.element import PageRepository, ElementRepository, ElementSynonym
 from typing import List, Dict, Optional
 import uuid
 import re
@@ -150,6 +150,29 @@ class ElementService:
         """多命中取 score 最高的（定位质量优先）。"""
         return max(candidates, key=lambda e: (e.confidence or 0))
 
+    async def write_synonym(self, element_id: str, text: str, source: str = "manual_binding") -> bool:
+        """回写同义词（方案V1）：同 element+text（归一化比对）已存在则不重复插入。"""
+        if not element_id or not text or not normalize_text(text):
+            return False
+        norm = normalize_text(text)
+        result = await self.db.execute(
+            select(ElementSynonym).where(ElementSynonym.element_id == element_id)
+        )
+        try:
+            rows = result.scalars().all()
+        except Exception:
+            rows = []
+        if not isinstance(rows, list):
+            rows = [rows] if rows is not None else []
+        for r in rows:
+            if normalize_text(getattr(r, "synonym_text", "")) == norm:
+                return True
+        self.db.add(ElementSynonym(
+            element_id=element_id, synonym_text=text.strip()[:200], source=source,
+        ))
+        await self.db.flush()
+        return True
+
     MATCH_THRESHOLD = 0.75
     L3_MAX_CANDIDATES = 20
 
@@ -163,6 +186,25 @@ class ElementService:
             pid = uuid.UUID(project_id)
         except (ValueError, TypeError):
             return []
+        # synonym 命中优先（Katalon 同义词机制）：归一化相等的 synonym → score=0.9
+        syn_scores = {}
+        try:
+            from app.models.element import ElementSynonym
+            syn_result = await self.db.execute(
+                select(ElementSynonym).where(ElementSynonym.synonym_text == target)
+            )
+            try:
+                syn_rows = syn_result.scalars().all()
+            except Exception:
+                syn_rows = []
+            if isinstance(syn_rows, list):
+                for s in syn_rows:
+                    if normalize_text(getattr(s, "synonym_text", "")) == normalize_text(target):
+                        eid = str(getattr(s, "element_id", ""))
+                        if eid:
+                            syn_scores[eid] = 0.9
+        except Exception:
+            syn_scores = {}
         result = await self.db.execute(
             select(ElementRepository).where(
                 ElementRepository.project_id == pid,
@@ -183,9 +225,12 @@ class ElementService:
                 "locators": getattr(e, "locator_strategies", None) or {},
             }
             score = score_element(target, intent_action, elem_dict)
+            eid = str(getattr(e, "element_id", "") or getattr(e, "id", ""))
+            if eid in syn_scores:
+                score = max(score, syn_scores[eid])
             level = "L1" if score >= 1.0 else ("L2" if score >= self.MATCH_THRESHOLD else "low")
             cands.append({
-                "element_id": str(getattr(e, "element_id", "") or getattr(e, "id", "")),
+                "element_id": eid,
                 "element_name": elem_dict["element_name"],
                 "locator": self._best_locator(elem_dict["locators"]),
                 "confidence": getattr(e, "confidence", 0) or 0,
