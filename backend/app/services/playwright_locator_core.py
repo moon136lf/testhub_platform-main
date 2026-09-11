@@ -335,7 +335,7 @@ async def scan_interactive_elements(page, include_text: bool = False, include_di
     Args:
         page: Playwright Page 对象
         include_text: 同时扫描文字/不可点击元素（span/p/标题等），非空 inner_text 才保留
-        include_div_text: 扫描 div 叶子节点与无 href 链接（展示文本，需 include_text=True 才生效）
+        include_div_text: 扫描 div 叶子节点与无 href 链接（展示文本，独立参数，可单独开启）
 
     Returns:
         可见的元素 Locator 列表（基于坐标去重，交互元素优先于文本元素）
@@ -402,8 +402,8 @@ async def scan_interactive_elements(page, include_text: bool = False, include_di
     await scan_selectors(INTERACTIVE_SELECTORS, require_text=False)
     if include_text:
         await scan_selectors(TEXT_SELECTORS, require_text=True)
-        if include_div_text:
-            await scan_div_text_selectors()
+    if include_div_text:
+        await scan_div_text_selectors()
 
     return elements
 
