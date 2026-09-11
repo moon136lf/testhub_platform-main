@@ -47,7 +47,9 @@
       </el-form>
 
       <!-- 列表 -->
-      <el-table :data="batches" v-loading="loading" stripe>
+      <el-table :data="pagedBatches" v-loading="loading" stripe>
+        <el-table-column type="index" label="序号" width="70" align="center"
+          :index="(i) => (currentPage - 1) * pageSize + i + 1" />
         <el-table-column prop="batch_name" label="记录名称" min-width="280" show-overflow-tooltip />
         <el-table-column prop="batch_type" label="类型" width="150">
           <template #default="{ row }">
@@ -103,7 +105,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, View, Upload } from '@element-plus/icons-vue'
@@ -136,6 +138,9 @@ const formatTime = (timeStr) => {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
   })
 }
+
+// 当前页数据（后端分页，前端只做序号偏移计算）
+const pagedBatches = computed(() => batches.value)
 
 const fetchBatches = async () => {
   loading.value = true
