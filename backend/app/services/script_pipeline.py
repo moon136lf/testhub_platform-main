@@ -237,6 +237,7 @@ class ActionWithLocator:
     element_id: Optional[str] = None
     element_name: Optional[str] = None
     match_score: Optional[float] = None
+    match_level: str = ""  # L1/L2/low（绑定事件与溯源透传）
 
 
 class CandidatesLookupProto(Protocol):
@@ -307,6 +308,7 @@ async def step3_match_locators(
             element_id=bound.get("element_id"),
             element_name=bound.get("element_name"),
             match_score=bound.get("score"),
+            match_level=bound.get("match_level", ""),
         ))
     total = len(results)
     if matched == 0:

@@ -72,7 +72,7 @@ class ScriptConvertService:
         for w in with_loc:
             await self._emit_step_binding(
                 sse, w.step, w.target or "",
-                getattr(w, "match_level", "") or "",
+                w.match_level or "",
                 w.element_name or "", w.locator or "", w.match_score,
                 matched=(w.locator_status == "matched"))
         matched = sum(1 for w in with_loc if w.locator_status == "matched")

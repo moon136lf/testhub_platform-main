@@ -109,7 +109,9 @@ async def test_convert_one_emits_step_bindings_and_summary():
     assert types.count("step_binding") == 2
     bindings = [m for m in sse.messages if m["type"] == "step_binding"]
     assert bindings[0]["data"]["matched"] is True
+    assert bindings[0]["data"]["level"] == "L1"  # match_level 透传修复
     assert bindings[1]["data"]["matched"] is False
+    assert bindings[1]["data"]["level"] == ""
     summary = [m for m in sse.messages if m["type"] == "summary"]
     assert len(summary) == 1
     assert summary[0]["data"] == {"total": 2, "bound": 1, "pending": 1}
