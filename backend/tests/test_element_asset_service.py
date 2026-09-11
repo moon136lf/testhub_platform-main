@@ -370,7 +370,8 @@ class TestPageTree:
 
         svc = ElementAssetService(db)
         await svc.move_page(str(p1.id), "down")
-        assert p1.sort_order == 2 and p2.sort_order == 1
+        # 重编号语义：交换后整组按位置 0..n-1 重排（兼容历史 sort_order 全 0 的数据）
+        assert p1.sort_order == 1 and p2.sort_order == 0
 
     @pytest.mark.asyncio
     async def test_move_page_at_boundary_noop(self):

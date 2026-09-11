@@ -189,7 +189,10 @@ class ElementAssetService:
         j = idx - 1 if direction == "up" else idx + 1
         if j < 0 or j >= len(siblings):
             return  # 已到边界，静默
-        siblings[idx].sort_order, siblings[j].sort_order = siblings[j].sort_order, siblings[idx].sort_order
+        # 交换后整组重排序号——历史数据 sort_order 全 0 时 swap 是 no-op，必须重编号
+        siblings[idx], siblings[j] = siblings[j], siblings[idx]
+        for pos, s in enumerate(siblings):
+            s.sort_order = pos
         await self.db.commit()
 
     async def delete_page(self, page_id: str, move_to_page_id: Optional[str] = None,
