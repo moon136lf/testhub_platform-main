@@ -17,7 +17,7 @@ class TestSet(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(UUID(as_uuid=True), ForeignKey("project.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(100), nullable=False)
-    source = Column(String(20), nullable=False, default="manual")  # manual/ai_suggest/convert_page
+    source = Column(String(20), nullable=False, default="manual")  # manual/ai_suggest/convert_page/ai_regression/manual_regression
     case_ids = Column(JSONB, nullable=False, default=list)
     description = Column(String(500))
     last_run_at = Column(DateTime(timezone=True))

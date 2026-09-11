@@ -3,6 +3,7 @@
 每阶段输入结构 -> 输出结构, LLM 通过注入的 gateway 调用, 可 mock。
 """
 import json
+import re
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Protocol
 from app.core.json_utils import parse_llm_json
@@ -130,20 +131,80 @@ def _fmt_step_expected(steps: List[Dict]) -> str:
     return "\n".join(f"{s.get('step')}. {s.get('expected','')}" for s in steps)
 
 
+ASSERTION_RULES_DOC = """预期结果→断言类型模板库（方案V1阶段6）：
+- 显示/输入了X 且测试数据=X → expect_value
+- 进入/跳转/URL → expect_url（从 value URL 提取 path）
+- 密文/密码 → expect_attribute(type==password)
+- 成功/欢迎/提示 + 点击 → expect_toast
+- 其他含引号或"包含"的明确文案 → expect_text
+推断不出 → None（走 LLM 兜底）"""
+
+
+def infer_assertion_rule(target: Optional[str], value: str, expected_text: str, action: str):
+    """确定性断言推断。返回 {assertion_type, expected, target} 或 None。"""
+    if not expected_text:
+        return None
+    t = expected_text
+
+    if "密文" in t or ("密码" in t and "显示" in t):
+        return {"assertion_type": "expect_attribute", "expected": "password", "target": target}
+
+    if action == "navigate" or any(k in t for k in ("进入", "跳转", "URL", "地址")):
+        # 只有 value 是合法 URL 才生成 URL 断言，否则 None 走 LLM 兜底
+        if not (value and value.startswith("http")):
+            return None
+        # 从测试数据 URL 提取 path 尾段作期望
+        path = value.rstrip("/").rsplit("/", 1)[-1] or value
+        return {"assertion_type": "expect_url", "expected": path, "target": ""}
+
+    if value and value in t and ("显示" in t or "输入" in t):
+        return {"assertion_type": "expect_value", "expected": value, "target": target}
+
+    if action == "click" and any(k in t for k in ("成功", "欢迎", "提示")):
+        return {"assertion_type": "expect_toast", "expected": t, "target": ""}
+
+    if "包含" in t or "显示" in t:
+        # 提取引号内文案，否则整句
+        m = re.search(r"[“\"'](.+?)[”\"']", t)
+        return {"assertion_type": "expect_text", "expected": m.group(1) if m else t, "target": target}
+
+    return None
+
+
 def _is_tautological(a: dict) -> bool:
     target = (a.get("target") or "") + (a.get("expected") or "")
     return any(kw in target for kw in TAUTOLOGICAL_KEYWORDS)
 
 
 async def step2_to_assertions(case: NormalizedCase, gateway: LLMGatewayProto) -> List[AssertionPlan]:
-    """Step2: 预期 → 断言计划 (LLM), 后置永真断言校验。"""
-    prompt = STEP2_PROMPT.format(
-        expected=case.expected_result,
-        step_expected=_fmt_step_expected(case.steps),
-    )
-    resp = await gateway.chat([{"role": "user", "content": prompt}])
-    items = parse_llm_json(resp["content"])
+    """Step2: 预期 → 断言计划。规则模板库前置，未命中行走 LLM 兜底，后置永真断言校验。"""
     plans = []
+    unmatched = []
+    for s in case.steps:
+        action = s.get("action", "")
+        hit = infer_assertion_rule(
+            s.get("target") or None, s.get("value", ""),
+            (s.get("expected") or "").strip(), action)
+        if hit:
+            plans.append(AssertionPlan(
+                step=int(s.get("step", 0)),
+                assertion_type=hit["assertion_type"],
+                target=hit.get("target") or None,
+                expected=hit.get("expected"),
+                is_valid=True,
+            ))
+        else:
+            unmatched.append(s)
+
+    if unmatched:
+        prompt = STEP2_PROMPT.format(
+            expected=case.expected_result,
+            step_expected="\n".join(f"{s.get('step')}. {s.get('expected','')}" for s in unmatched),
+        )
+        resp = await gateway.chat([{"role": "user", "content": prompt}])
+        items = parse_llm_json(resp["content"])
+    else:
+        items = []
     for it in items:
         atype = it.get("assertion_type")
         if atype not in VALID_ASSERTION_TYPES:
@@ -160,12 +221,8 @@ async def step2_to_assertions(case: NormalizedCase, gateway: LLMGatewayProto) ->
             expected=it.get("expected"),
             is_valid=is_valid,
         ))
+    plans.sort(key=lambda p: p.step)
     return plans
-
-
-class ElementLookupProto(Protocol):
-    """元素库协议: find(project_id, target) -> locator 字符串或 None。"""
-    async def find(self, project_id: str, target: str) -> Optional[str]: ...
 
 
 @dataclass
@@ -177,45 +234,81 @@ class ActionWithLocator:
     locator: Optional[str] = None
     locator_status: str = "none_draft"  # matched / pending_confirm / none_draft
     locator_source: str = "none_draft"  # element_library / ai_generated / mixed / none_draft
+    element_id: Optional[str] = None
+    element_name: Optional[str] = None
+    match_score: Optional[float] = None
+    match_level: str = ""  # L1/L2/low（绑定事件与溯源透传）
 
 
-STEP3_AI_PROMPT = """你是定位器生成器。为 UI 元素生成 Playwright 定位器, 优先 get_by_role > get_by_text > get_by_label > get_by_placeholder > css。
-只输出一个定位器字符串(如 page.get_by_role("button", name="登录")), 不要解释。
-元素描述: {target}"""
+class CandidatesLookupProto(Protocol):
+    """评分管线协议: find_candidates(project_id, target, intent_action, page_id) -> List[Dict]。"""
+    async def find_candidates(self, project_id: str, target: str,
+                              intent_action: Optional[str] = None,
+                              page_id: Optional[str] = None) -> List[Dict]: ...
 
 
-async def _ai_generate_locator(target: str, gateway: LLMGatewayProto) -> str:
-    resp = await gateway.chat([{"role": "user", "content": STEP3_AI_PROMPT.format(target=target)}])
-    return resp["content"].strip()
+STEP3_PICK_PROMPT = """你是元素选择器。从候选元素中为用例步骤目标选出最匹配的一个，只输出 JSON。
+目标: {target}
+候选(编号|别名|定位|类型):
+{candidates}
+输出格式: {{"pick": 编号}}，都不合适则 {{"pick": null}}。"""
+
+
+async def _ai_pick_element(target: str, candidates: List[Dict], gateway) -> Optional[Dict]:
+    """Midscene 模式：LLM 只从候选中选，不生成定位器。"""
+    lines = "\n".join(
+        f"{i}|{c.get('element_name','')}|{c.get('locator','')}|{c.get('match_level','')}"
+        for i, c in enumerate(candidates))
+    resp = await gateway.chat([{"role": "user", "content": STEP3_PICK_PROMPT.format(target=target, candidates=lines)}])
+    import json as _json
+    try:
+        m = re.search(r"\{[^}]*\}", resp["content"])
+        pick = _json.loads(m.group(0)).get("pick") if m else None
+        if isinstance(pick, int) and 0 <= pick < len(candidates):
+            return candidates[pick]
+    except (ValueError, AttributeError):
+        pass
+    return None
 
 
 async def step3_match_locators(
     actions: List[ActionIntent],
     project_id: str,
-    lookup: ElementLookupProto,
+    lookup: CandidatesLookupProto,
     ai_optimize: bool,
     gateway: Optional[LLMGatewayProto],
 ) -> List[ActionWithLocator]:
-    """Step3: 动作意图 + 元素库 → 绑 locator (TRANS-01)。命中用库, 未命中 AI 生成或 draft。"""
+    """Step3 方案V1：L1/L2 评分命中→绑定；未命中→L3 候选单选（可关）→draft。"""
     results: List[ActionWithLocator] = []
     matched = 0
     ai_used = False
     for a in actions:
-        loc = await lookup.find(project_id, a.target) if a.target else None
-        if loc:
-            status = "matched"
+        picked = None
+        # intent 动作归一化为元素类型意图（fill→input/check→click），供评分类型加分与候选过滤
+        intent = {"fill": "input", "check": "click"}.get(a.action, a.action)
+        cands = await lookup.find_candidates(project_id, a.target, intent_action=intent) if a.target else []
+        top = cands[0] if cands and cands[0].get("match_level") in ("L1", "L2") else None
+        if top:
+            status, loc = "matched", top["locator"]
             matched += 1
-        elif ai_optimize and gateway is not None and a.target:
-            loc = await _ai_generate_locator(a.target, gateway)
-            status = "pending_confirm"
-            ai_used = True
-            matched += 1
+        elif ai_optimize and gateway is not None and cands:
+            picked = await _ai_pick_element(a.target, cands, gateway)
+            if picked:
+                status, loc = "pending_confirm", picked["locator"]
+                matched += 1
+                ai_used = True
+            else:
+                status, loc = "none_draft", None
         else:
-            loc = None
-            status = "none_draft"
+            status, loc = "none_draft", None
+        bound = top or picked or {}
         results.append(ActionWithLocator(
             step=a.step, action=a.action, target=a.target, value=a.value,
             locator=loc, locator_status=status,
+            element_id=bound.get("element_id"),
+            element_name=bound.get("element_name"),
+            match_score=bound.get("score"),
+            match_level=bound.get("match_level", ""),
         ))
     total = len(results)
     if matched == 0:
@@ -281,6 +374,9 @@ def _build_step_mapping(actions: List[ActionWithLocator], asserts: List[Assertio
             "impl": impl,
             "status": status,
             "element_name": a.target,
+            "element_id": getattr(a, "element_id", None),
+            "match_level": getattr(a, "match_level", "") or None,
+            "match_score": getattr(a, "match_score", None),
             "page_name": getattr(a, "page_name", None),
             "action": a.action,
             "value": a.value,

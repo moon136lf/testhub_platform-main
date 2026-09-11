@@ -45,7 +45,6 @@
           </template>
           <el-menu-item index="/ai/convert">用例转自动化脚本</el-menu-item>
           <el-menu-item index="/auto/ui">UI自动化测试</el-menu-item>
-          <el-menu-item index="/auto/regression">回归自动化</el-menu-item>
         </el-sub-menu>
 
         <el-menu-item index="/whitescan">

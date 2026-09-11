@@ -98,6 +98,49 @@ class TestDispatch:
                 await dispatch_editor_action(page, {"action": "assert_db", "target": "", "value": "SELECT 1", "expected": "5"}, None)
 
     @pytest.mark.asyncio
+    async def test_assert_url_pass_and_fail(self):
+        """assert_url: expected 为 URL 包含串 (与 step_codegen 生成语义对齐)"""
+        page = MagicMock()
+        page.url = "https://x.com/login?next=1"
+        r = await dispatch_editor_action(
+            page, {"action": "assert_url", "target": "", "value": "", "expected": "/login"}, None)
+        assert r is None
+        with pytest.raises(AssertionError, match="URL"):
+            await dispatch_editor_action(
+                page, {"action": "assert_url", "target": "", "value": "", "expected": "/home"}, None)
+
+    @pytest.mark.asyncio
+    async def test_assert_url_requires_expected(self):
+        with pytest.raises(ValueError, match="expected"):
+            await dispatch_editor_action(
+                MagicMock(), {"action": "assert_url", "target": "", "value": "", "expected": ""}, None)
+
+    @pytest.mark.asyncio
+    async def test_assert_attribute_pass_and_fail(self):
+        """assert_attribute: target 定位元素, value=属性名, expected=期望值"""
+        page = MagicMock()
+        loc = MagicMock()
+        loc.get_attribute = AsyncMock(return_value="password")
+        page.locator.return_value = loc
+        r = await dispatch_editor_action(
+            page, {"action": "assert_attribute", "target": "#pwd", "value": "type",
+                   "expected": "password"}, None)
+        assert r is None
+        page.locator.assert_called_with("#pwd")
+        loc.get_attribute.assert_awaited_with("type")
+        with pytest.raises(AssertionError, match="属性"):
+            await dispatch_editor_action(
+                page, {"action": "assert_attribute", "target": "#pwd", "value": "type",
+                       "expected": "text"}, None)
+
+    @pytest.mark.asyncio
+    async def test_assert_attribute_requires_params(self):
+        with pytest.raises(ValueError, match="target"):
+            await dispatch_editor_action(
+                MagicMock(), {"action": "assert_attribute", "target": "", "value": "",
+                              "expected": "x"}, None)
+
+    @pytest.mark.asyncio
     async def test_unknown_action_raises(self):
         with pytest.raises(ValueError, match="不支持"):
             await dispatch_editor_action(MagicMock(), {"action": "hack", "target": "", "value": ""}, None)

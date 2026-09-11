@@ -135,6 +135,25 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
             from playwright.async_api import expect as expect_mod
         await expect_mod(page.locator(target)).to_be_visible()
         return None
+    if action == "assert_url":
+        # 生成语义对齐 step_codegen: expected 为 URL 包含串
+        expected = step.get("expected", "")
+        if not expected:
+            raise ValueError("assert_url 需要 expected（URL 包含串）")
+        if expected not in (page.url or ""):
+            raise AssertionError(f"URL断言失败: 期望包含「{expected}」实际 {page.url}")
+        return None
+    if action == "assert_attribute":
+        # 生成语义对齐 step_codegen: target=定位符, value=属性名, expected=期望值
+        if not target or not value:
+            raise ValueError("assert_attribute 需要 target 与 value(属性名)")
+        expected = step.get("expected", "")
+        if not expected:
+            raise ValueError("assert_attribute 需要 expected（期望属性值）")
+        actual = await page.locator(target).get_attribute(value)
+        if actual != expected:
+            raise AssertionError(f"属性断言失败: 属性「{value}」期望 {expected} 实际 {actual}")
+        return None
     if action == "assert_db":
         query = db_query or _run_assert_db_query
         actual = await query(value)
@@ -297,7 +316,8 @@ class ScriptExecutor:
         # 阶段3 T0: 编辑器行式步骤（含 seq 键或含 navigate/wait/assert 类动作）走编辑器执行链路
         is_editor_format = any(
             s.get("seq") or s.get("action") in (
-                "navigate", "wait", "assert_text", "assert_visible", "assert_db")
+                "navigate", "wait", "assert_text", "assert_visible", "assert_db",
+                "assert_url", "assert_attribute")
             for s in steps
         )
         await sse.send_message(type="system", stage="execute",

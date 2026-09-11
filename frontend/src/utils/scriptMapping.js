@@ -34,6 +34,12 @@ export const fromPipelineMapping = (m) => {
     value: m.value || '',
     element_name: m.element_name || '',
     expected: (assertExpected && assertValid) ? assertExpected : '',
+    // 方案V1：绑定溯源字段
+    element_id: m.element_id || '',
+    match_level: m.match_level || '',
+    match_score: m.match_score ?? null,
+    case_step_no: m.step || null,
+    case_target_text: m.target || '',   // 用例目标词原文（synonym 回写源）
   }]
 }
 

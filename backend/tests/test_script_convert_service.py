@@ -21,8 +21,12 @@ class FakeGateway:
 
 
 class FakeLookup:
-    async def find(self, project_id, target):
-        return 'page.get_by_label("用户名")' if target == "用户名" else None
+    async def find_candidates(self, project_id, target, intent_action=None, page_id=None):
+        if target != "用户名":
+            return []
+        return [{"element_id": "el-1", "element_name": "用户名",
+                 "locator": 'page.get_by_label("用户名")', "confidence": 5,
+                 "score": 1.0, "match_level": "L1"}]
 
 
 class FakeSSE:

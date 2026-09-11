@@ -29,7 +29,10 @@ def test_task_runs_all_cases_and_writes_assets(monkeypatch):
     gateway.tokens = 150
 
     lookup = MagicMock()
-    lookup.find = AsyncMock(return_value='page.get_by_label("用户名")')
+    lookup.find_candidates = AsyncMock(return_value=[
+        {"element_id": "el-1", "element_name": "用户名",
+         "locator": 'page.get_by_label("用户名")', "confidence": 5,
+         "score": 1.0, "match_level": "L1"}])
 
     db = MagicMock()
     db.add = MagicMock()
@@ -64,7 +67,7 @@ def test_bad_llm_case_does_not_abort_batch(monkeypatch):
     gateway.chat = AsyncMock(return_value={"content": "not valid json", "tokens": 5})
     gateway.tokens = 5
     lookup = MagicMock()
-    lookup.find = AsyncMock(return_value=None)
+    lookup.find_candidates = AsyncMock(return_value=[])
     db = MagicMock()
     db.add = MagicMock()
     db.flush = AsyncMock()

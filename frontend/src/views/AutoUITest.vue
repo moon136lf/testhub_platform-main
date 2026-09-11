@@ -18,6 +18,7 @@
               <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
             </el-select>
             <el-button :icon="Refresh" @click="loadSets">刷新</el-button>
+            <el-button type="warning" :loading="identifying" @click="handleIdentify">AI识别回归</el-button>
           </div>
 
           <div class="sets-layout" v-if="form.projectId">
@@ -28,8 +29,8 @@
                 :class="{ active: currentSet?.id === s.id }" @click="selectSet(s)">
                 <div class="set-item-name">{{ s.name }}</div>
                 <div class="set-item-meta">
-                  <el-tag size="small" :type="s.source === 'convert_page' ? 'success' : 'info'">
-                    {{ s.source === 'convert_page' ? '转换页' : (s.source || 'manual') }}
+                  <el-tag size="small" :type="sourceTagType(s.source)">
+                    {{ sourceLabel(s.source) }}
                   </el-tag>
                   <span class="meta-text">{{ (s.case_ids || []).length }} 用例</span>
                   <span class="meta-text" v-if="s.pass_rate != null">通过率 {{ s.pass_rate }}%</span>
@@ -181,6 +182,15 @@
             </el-table-column>
             <el-table-column prop="run_count" label="运行次数" width="90" />
             <el-table-column prop="locator_source" label="定位来源" width="130" />
+            <el-table-column label="绑定用例" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.bound_case || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="被引用" width="100">
+              <template #default="{ row }">
+                <el-tag v-if="row.test_set_refs" type="warning" size="small">{{ row.test_set_refs }} 个测试集</el-tag>
+                <span v-else>—</span>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="320">
               <template #default="{ row }">
                 <el-button type="primary" link :loading="runningId === row.id" @click="handleRun(row)">运行</el-button>
@@ -230,7 +240,7 @@
 
     <!-- 步骤化编辑弹窗（StepEditor）；key 强制重开时重建组件（重置 rows） -->
     <el-dialog v-model="stepEditorVisible" :title="`编辑脚本：${editingScript?.name || ''}`" width="900px">
-      <StepEditor :key="editingScript?.id || 'none'" :initial-steps="toEditorRows(editingScript?.step_mapping)" @save="handleSaveSteps" />
+      <StepEditor :key="editingScript?.id || 'none'" :initial-steps="toEditorRows(editingScript?.step_mapping)" :project-id="form.projectId" @save="handleSaveSteps" />
     </el-dialog>
 
     <!-- 脚本代码弹窗 -->
@@ -340,6 +350,16 @@ const ERROR_TYPE_MAP = {
 }
 const errorTypeLabel = (t) => ERROR_TYPE_MAP[t] || t || '-'
 const statusTagType = (s) => ({ pending: 'info', running: 'warning', done: 'success' }[s] || 'info')
+
+const SOURCE_LABELS = {
+  manual: '手工',
+  ai_suggest: 'AI建议',
+  convert_page: '转换页',
+  ai_regression: 'AI识别回归',
+  manual_regression: '手工回归',
+}
+const sourceLabel = (s) => SOURCE_LABELS[s] || s || '手工'
+const sourceTagType = (s) => ({ convert_page: 'success', ai_regression: 'warning', manual_regression: 'warning' }[s] || 'info')
 
 // ================= Tab1 测试集 =================
 const sets = ref([])
@@ -662,6 +682,19 @@ const onAiApply = async () => {
 const rerunHint = () => {
   aiDiagVisible.value = false
   ElMessage.info('请到脚本库重跑该脚本验证修复效果')
+}
+
+// ---- AI识别回归（自 Regression.vue 迁移，阶段10）----
+const identifying = ref(false)
+const handleIdentify = async () => {
+  if (!form.projectId) { ElMessage.warning('请先选择项目'); return }
+  identifying.value = true
+  try {
+    const resp = await axios.post('/regression/identify', { project_id: form.projectId })
+    const count = resp.data?.data?.suggested_count ?? resp.data?.data?.count ?? ''
+    ElMessage.success(`识别完成${count !== '' ? `，建议纳入 ${count} 个脚本` : ''}`)
+    loadScripts()
+  } catch (e) { ElMessage.error('识别失败') } finally { identifying.value = false }
 }
 
 onMounted(async () => {

@@ -25,6 +25,27 @@ class ScriptConvertService:
         self.db = db
         self.gateway = gateway
 
+    async def _emit_step_binding(self, sse, step_no, target, level, element_name,
+                                 locator, score, matched):
+        """逐步骤绑定明细事件（type=step_binding，前端按 type 分发）。"""
+        if matched:
+            content = (f"步骤{step_no} 目标[{target}] → {level}命中"
+                       f"[{element_name} {locator} score={score}]")
+        else:
+            content = f"步骤{step_no} 目标[{target}] → 未命中，留空待选择"
+        await sse.send_message(type="step_binding", stage="convert_script",
+                               content=content, progress=0,
+                               data={"step": step_no, "matched": matched,
+                                     "level": level, "element_name": element_name,
+                                     "locator": locator, "score": score})
+
+    async def _emit_summary(self, sse, total, bound, pending):
+        """绑定汇总事件（type=summary）。"""
+        await sse.send_message(
+            type="summary", stage="convert_script",
+            content=f"元素绑定: {bound}/{total}、待选择 {pending}", progress=0,
+            data={"total": total, "bound": bound, "pending": pending})
+
     async def convert_one(self, case: dict, sse, lookup, ai_optimize: bool) -> ScriptAsset:
         """转换单个用例 -> ScriptAsset (不写 DB, 由调用方决定)。"""
         case_id = case.get("id")
@@ -47,7 +68,16 @@ class ScriptConvertService:
 
         with_loc = await step3_match_locators(
             actions, str(case.get("project_id")), lookup, ai_optimize, self.gateway)
+        # 方案V1阶段7: 逐步骤绑定明细直播 + 循环后汇总
+        for w in with_loc:
+            await self._emit_step_binding(
+                sse, w.step, w.target or "",
+                w.match_level or "",
+                w.element_name or "", w.locator or "", w.match_score,
+                matched=(w.locator_status == "matched"))
         matched = sum(1 for w in with_loc if w.locator_status == "matched")
+        pending = len(with_loc) - matched
+        await self._emit_summary(sse, total=len(with_loc), bound=matched, pending=pending)
         await sse.send_message(type="system", stage="convert_script",
                                content=f"匹配元素库: {matched}/{len(with_loc)} 命中",
                                progress=0.7)

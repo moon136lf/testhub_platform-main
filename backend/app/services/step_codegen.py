@@ -12,6 +12,7 @@ import json
 SUPPORTED_ACTIONS = [
     "navigate", "click", "input", "select", "wait",
     "assert_text", "assert_visible", "assert_db",
+    "input_captcha", "assert_url", "assert_attribute",  # 方案V1阶段5
 ]
 
 _HEADER = '''"""{title} — 由步骤化编辑器生成"""
@@ -70,6 +71,37 @@ def _gen_step(step: Dict) -> str:
         if not target:
             raise ValueError("assert_visible 需要 target（元素定位）")
         line = f"    expect({_loc(target)}).to_be_visible()"
+    elif action == "input_captcha":
+        # 辅元素复合操作：target=验证码输入框, extra_target=验证码图片
+        if not target:
+            raise ValueError("input_captcha 需要 target（验证码输入框定位）")
+        extra = step.get("extra_target", "")
+        if not extra:
+            raise ValueError("input_captcha 需要 extra_target（验证码图片定位）")
+        # _recognize_captcha 与 assert_db 同策略——执行器注入，本模块只管生成调用
+        return (
+            f"    _captcha_img = {_loc(extra)}\n"
+            f"    captcha_text = _recognize_captcha(_captcha_img.screenshot())  # 由执行器注入\n"
+            f"    {_loc(target)}.fill(captcha_text)"
+        )
+    elif action == "assert_url":
+        # 非元素断言：expected 为 URL 包含串，内联在 assert_db 行为之外单独生成
+        inline_expected = step.get("expected", "")
+        if not inline_expected:
+            raise ValueError("assert_url 需要 expected（URL 包含串）")
+        return (
+            f"    assert {_escape(inline_expected)} in page.url, "
+            f'"URL 不含 " + {_escape(inline_expected)}'
+        )
+    elif action == "assert_attribute":
+        if not target or not value:
+            raise ValueError("assert_attribute 需要 target 与 value(属性名)")
+        if not inline_expected:
+            raise ValueError("assert_attribute 需要 expected（期望属性值）")
+        return (
+            f"    assert {_loc(target)}.get_attribute({_escape(value)}) == {_escape(inline_expected)}, "
+            f'"属性 " + {_escape(value)} + " 不符"'
+        )
     elif action == "assert_db":
         sql = _escape(value)
         expected = _escape(step.get("expected", ""))

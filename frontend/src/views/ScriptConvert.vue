@@ -133,7 +133,7 @@
 
     <!-- 步骤化编辑弹窗（StepEditor，阶段2核心件）；key 强制重开时重建组件（重置 rows） -->
     <el-dialog v-model="stepEditorVisible" :title="`编辑脚本：${editingScript?.name || ''}`" width="900px">
-      <StepEditor :key="editingScript?.id || 'none'" :initial-steps="toEditorRows(editingScript?.step_mapping)" @save="handleSaveSteps" />
+      <StepEditor :key="editingScript?.id || 'none'" :initial-steps="toEditorRows(editingScript?.step_mapping)" :project-id="form.projectId" @save="handleSaveSteps" />
     </el-dialog>
 
     <!-- 脚本代码弹窗 -->

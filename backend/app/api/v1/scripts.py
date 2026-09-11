@@ -29,6 +29,39 @@ from app.tasks.script_tasks import convert_scripts_task, run_scripts_task
 router = APIRouter()
 
 
+async def _enrich_scripts(db: AsyncSession, scripts) -> list:
+    """阶段10: 脚本列表溯源聚合——bound_case(绑定用例名) + test_set_refs(引用该脚本的测试集数)。
+
+    测试集按 case_ids(JSONB) 关联，脚本经 case_id 溯源到用例，再统计含该 case 的测试集。
+    """
+    if not scripts:
+        return []
+    case_ids = {s.case_id for s in scripts if s.case_id}
+    case_names: dict = {}
+    if case_ids:
+        rows = await db.execute(
+            select(TestCase.id, TestCase.name).where(TestCase.id.in_(case_ids)))
+        case_names = {r[0]: r[1] for r in rows.all()}
+
+    from app.models.test_set import TestSet
+    sets = (await db.execute(
+        select(TestSet.project_id, TestSet.case_ids))).all()
+    # project -> [set(case_ids)]，每个含该用例的测试集各计 1 (真计数, 非去重 0/1)
+    set_cases: dict = {}
+    for pid, cids in sets:
+        set_cases.setdefault(pid, []).append(set(cids or []))
+
+    items = []
+    for s in scripts:
+        d = s.to_dict()
+        d["bound_case"] = case_names.get(s.case_id)
+        ref_sets = set_cases.get(s.project_id, [])
+        d["test_set_refs"] = sum(
+            1 for cids in ref_sets if s.case_id and str(s.case_id) in cids)
+        items.append(d)
+    return items
+
+
 @router.post("/convert")
 async def convert_scripts(request: ConvertRequest, db: AsyncSession = Depends(get_db)):
     """触发批量转脚本 (异步, SSE 文字直播)。"""
@@ -109,7 +142,7 @@ async def list_scripts(
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
         scripts = result.scalars().all()
-        return {"code": 0, "data": [s.to_dict() for s in scripts]}
+        return {"code": 0, "data": await _enrich_scripts(db, scripts)}
     # include_regression=True: 双实体联查 (ScriptAsset LEFT JOIN RegressionSet)
     from app.models.regression import RegressionSet
     stmt = select(ScriptAsset, RegressionSet).outerjoin(

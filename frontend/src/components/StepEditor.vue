@@ -16,11 +16,33 @@
           </el-select>
         </template>
       </el-table-column>
-      <el-table-column label="元素定位 / 参数" min-width="220">
+      <el-table-column label="元素" min-width="220">
         <template #default="{ row }">
-          <el-input v-if="row.action !== 'navigate'" v-model="row.target" size="small"
-            placeholder="元素定位，如 #btn / .title（可从元素管理复制）" />
-          <span v-else class="hint">—</span>
+          <span v-if="row.action === 'navigate'" class="hint">—</span>
+          <template v-else>
+            <!-- 绑定态：显示别名+定位；未绑定：红色待选择 tag；点击均可弹选择器 -->
+            <el-tag v-if="!row.element_id" type="danger" effect="light" style="cursor:pointer"
+              @click="openPicker(row)">待选择</el-tag>
+            <div v-else style="cursor:pointer" @click="openPicker(row)">
+              <div>{{ row.element_name }}</div>
+              <div class="loc-text">{{ row.target }}</div>
+            </div>
+            <!-- 手填兜底：保留直接改定位的能力 -->
+            <el-input v-model="row.target" size="small" style="margin-top:4px"
+              placeholder="手动输入定位（可选覆盖）" />
+          </template>
+        </template>
+      </el-table-column>
+      <el-table-column v-if="hasCaptcha" label="辅元素" min-width="160">
+        <template #default="{ row }">
+          <template v-if="row.action === 'input_captcha'">
+            <el-tag v-if="!row.extra_element_id" type="danger" effect="light" style="cursor:pointer"
+              @click="openPicker(row, true)">待选择</el-tag>
+            <div v-else style="cursor:pointer" @click="openPicker(row, true)">
+              <div>{{ row.extra_element_name || '辅元素' }}</div>
+              <div class="loc-text">{{ row.extra_target }}</div>
+            </div>
+          </template>
         </template>
       </el-table-column>
       <el-table-column label="值 / SQL" min-width="240">
@@ -46,6 +68,8 @@
       </el-table-column>
     </el-table>
 
+    <ElementPickerDialog v-model="pickerVisible" :project-id="projectId" @pick="onPicked" />
+
     <div style="margin-top: 10px; display: flex; gap: 8px">
       <el-button size="small" @click="addRow">+ 添加步骤</el-button>
       <el-button size="small" type="primary" :disabled="!rows.length" @click="$emit('save', serialize())">
@@ -56,11 +80,13 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import ElementPickerDialog from './ElementPickerDialog.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
   initialSteps: { type: Array, default: () => [] },  // 从 script.step_mapping 还原
+  projectId: { type: String, default: '' },          // 元素选择器数据源项目
 })
 const emit = defineEmits(['save'])
 
@@ -69,6 +95,7 @@ const ACTIONS = [
   { value: 'navigate', label: '打开页面' },
   { value: 'click', label: '点击' },
   { value: 'input', label: '输入' },
+  { value: 'input_captcha', label: '输入验证码' },
   { value: 'select', label: '下拉选择' },
   { value: 'wait', label: '等待(秒)' },
   { value: 'assert_text', label: '断言文本' },
@@ -77,6 +104,33 @@ const ACTIONS = [
 ]
 
 const rows = ref([])
+
+// 元素绑定选择器（方案V1阶段9）
+const pickerVisible = ref(false)
+const pickerRow = ref(null)
+const pickerIsExtra = ref(false)
+const hasCaptcha = computed(() => rows.value.some((r) => r.action === 'input_captcha'))
+const openPicker = (row, isExtra = false) => {
+  pickerRow.value = row
+  pickerIsExtra.value = isExtra
+  pickerVisible.value = true
+}
+const onPicked = (el) => {
+  if (!pickerRow.value) return
+  if (pickerIsExtra.value) {
+    Object.assign(pickerRow.value, {
+      extra_element_id: el.element_id,
+      extra_element_name: el.element_name,
+      extra_target: el.locator,
+    })
+  } else {
+    Object.assign(pickerRow.value, {
+      element_id: el.element_id,
+      element_name: el.element_name,
+      target: el.locator,
+    })
+  }
+}
 
 // 还原：initialSteps 兼容 {seq,action,target,value,element_name,expected} 行式结构
 watch(() => props.initialSteps, (v) => {
@@ -87,6 +141,15 @@ watch(() => props.initialSteps, (v) => {
     value: s.value || '',
     element_name: s.element_name || '',
     expected: s.expected || '',
+    // 方案V1绑定溯源字段（保存链路 rows 透传，随 PUT content 带回）
+    element_id: s.element_id || '',
+    match_level: s.match_level || '',
+    match_score: s.match_score ?? null,
+    case_step_no: s.case_step_no || null,
+    case_target_text: s.case_target_text || '',
+    extra_element_id: s.extra_element_id || '',
+    extra_element_name: s.extra_element_name || '',
+    extra_target: s.extra_target || '',
   }))
 }, { immediate: true })
 
@@ -115,5 +178,6 @@ const serialize = () => rows.value.map((r, i) => ({ ...r, seq: i + 1 }))
 </script>
 
 <style scoped>
+.loc-text { color: var(--mt-text-tertiary, #999); font-size: 12px; }
 .hint { color: var(--mt-text-tertiary, #999); }
 </style>
