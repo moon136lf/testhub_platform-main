@@ -44,6 +44,10 @@
         <el-switch v-model="form.include_text" />
         <span class="hint-text">开启后同时抓取页面文字/不可点击元素（span/p/标题等）</span>
       </el-form-item>
+      <el-form-item label="展示文本">
+        <el-switch v-model="form.include_div_text" />
+        <span class="hint-text">抓 div 叶子文本与无 href 链接（统计卡片、面包屑等），默认开</span>
+      </el-form-item>
       <el-form-item label="菜单栏">
         <el-switch v-model="form.exclude_menu" />
         <span class="hint-text">关闭后排除左侧菜单栏元素（每页菜单都会重复入库）</span>
@@ -100,6 +104,7 @@ const form = reactive({
   typeFilter: [],
   debug_mode: false,
   include_text: false,
+  include_div_text: true,
   exclude_menu: false,
   max_list_rows: null
 })
@@ -175,6 +180,7 @@ const handleStart = () => {
     type_filter: form.typeFilter.join(','),
     debug_mode: form.debug_mode,
     include_text: form.include_text,
+    include_div_text: form.include_div_text,
     exclude_menu: form.exclude_menu,
     max_list_rows: form.max_list_rows || null
   })

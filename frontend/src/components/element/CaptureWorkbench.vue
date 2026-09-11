@@ -91,7 +91,7 @@
               <ElementHighlight
                 v-if="screenshotSrc && !pickMode"
                 :screenshot-url="screenshotSrc"
-                :elements="stagingState?.elements || []"
+                :elements="highlightElements"
                 :selected-ids="selectedIds"
                 :hover-id="hoverId"
                 @pick="onHotspotPick"
@@ -312,6 +312,14 @@ const selectedIds = computed(() =>
   (stagingState.value?.elements || []).filter((e) => e.included).map((e) => e.temp_id)
 )
 
+// hotspot 标签与别名框一致：草稿名优先
+const highlightElements = computed(() =>
+  (stagingState.value?.elements || []).map((el) => ({
+    ...el,
+    element_text: el._nameDraft || el.element_text || el.temp_id
+  }))
+)
+
 // staging 列表
 const stagingState = ref(null)
 const pageMode = ref('new')
@@ -471,10 +479,12 @@ const captureNow = async () => {
 const refreshStaging = async () => {
   if (!stagingSessionId.value) { stagingState.value = null; return }
   try {
+    const prev = stagingState.value?.elements || []
+    const prevDrafts = Object.fromEntries(prev.map((e) => [e.temp_id, e._nameDraft]).filter(([, v]) => v !== undefined))
     stagingState.value = await elementAPI.getCaptureState(stagingSessionId.value)
     if (stagingState.value?.elements) {
       stagingState.value.elements.forEach((el) => {
-        el._nameDraft = el.element_name || el.element_text || ''
+        el._nameDraft = el.temp_id in prevDrafts ? prevDrafts[el.temp_id] : (el.element_name || el.element_text || '')
       })
     }
   } catch {
