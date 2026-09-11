@@ -324,14 +324,18 @@ INTERACTIVE_SELECTORS = [
 
 TEXT_SELECTORS = ["span", "p", "h1", "h2", "h3", "h4", "label", "td", "th"]
 
+# 「抓展示文本」扩展选择器：div 叶子节点（统计卡片等布局文本）+ 无 href 的 a（面包屑首页等）
+DIV_TEXT_SELECTORS = ["div", "a:not([href])"]
 
-async def scan_interactive_elements(page, include_text: bool = False) -> List[Any]:
+
+async def scan_interactive_elements(page, include_text: bool = False, include_div_text: bool = False) -> List[Any]:
     """
     扫描页面上的可交互元素
 
     Args:
         page: Playwright Page 对象
         include_text: 同时扫描文字/不可点击元素（span/p/标题等），非空 inner_text 才保留
+        include_div_text: 扫描 div 叶子节点与无 href 链接（展示文本，需 include_text=True 才生效）
 
     Returns:
         可见的元素 Locator 列表（基于坐标去重，交互元素优先于文本元素）
@@ -369,9 +373,37 @@ async def scan_interactive_elements(page, include_text: bool = False) -> List[An
             except Exception:
                 continue
 
+    async def scan_div_text_selectors():
+        """div 叶子 + 无 href a：叶子判定用 children.length，文本非空 ≤100 字"""
+        for selector in DIV_TEXT_SELECTORS:
+            try:
+                found = await page.locator(selector).all()
+                for elem in found:
+                    try:
+                        if not await elem.is_visible():
+                            continue
+                        if int(await elem.evaluate("el => el.children.length")) != 0:
+                            continue
+                        raw = await elem.inner_text()
+                        if not raw.strip() or len(raw.strip()) > 100:
+                            continue
+                        box = await elem.bounding_box()
+                        if box:
+                            coord_key = (int(box["x"]), int(box["y"]))
+                            if coord_key in seen_coords:
+                                continue
+                            seen_coords.add(coord_key)
+                        elements.append(elem)
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+
     await scan_selectors(INTERACTIVE_SELECTORS, require_text=False)
     if include_text:
         await scan_selectors(TEXT_SELECTORS, require_text=True)
+        if include_div_text:
+            await scan_div_text_selectors()
 
     return elements
 

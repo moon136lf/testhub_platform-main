@@ -164,3 +164,110 @@ class TestScanInteractiveElements:
 
         # 无 box 的元素仍被纳入结果（无法去重但保留）
         assert len(result) == 2
+
+    # ---------- include_div_text 扩展：div 叶子 + 无 href 链接 ----------
+
+    @staticmethod
+    def _text_locator_factory(selector, elem, text="首页"):
+        def locator_factory(sel):
+            mock_loc = AsyncMock()
+            if sel == selector:
+                if text is not None:
+                    elem.inner_text = AsyncMock(return_value=text)
+                mock_loc.all = AsyncMock(return_value=[elem])
+            else:
+                mock_loc.all = AsyncMock(return_value=[])
+            return mock_loc
+        return locator_factory
+
+    @pytest.mark.asyncio
+    async def test_div_text_captures_leaf_div(self):
+        """include_div_text=True 时抓叶子 div"""
+        from unittest.mock import patch
+        elem = _make_elem(visible=True, box={"x": 100, "y": 50, "width": 60, "height": 20})
+        elem.evaluate = AsyncMock(return_value=0)
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=self._text_locator_factory("div", elem))
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", []), \
+             patch("app.services.playwright_locator_core.TEXT_SELECTORS", []):
+            result = await scan_interactive_elements(page, include_text=True, include_div_text=True)
+        assert len(result) == 1
+        assert result[0] is elem
+
+    @pytest.mark.asyncio
+    async def test_div_text_skips_non_leaf_div(self):
+        """非叶子 div（有子元素）不抓"""
+        from unittest.mock import patch
+        elem = _make_elem(visible=True, box={"x": 100, "y": 50, "width": 60, "height": 20})
+        elem.evaluate = AsyncMock(return_value=3)
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=self._text_locator_factory("div", elem))
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", []), \
+             patch("app.services.playwright_locator_core.TEXT_SELECTORS", []):
+            result = await scan_interactive_elements(page, include_text=True, include_div_text=True)
+        assert len(result) == 0
+
+    @pytest.mark.asyncio
+    async def test_div_text_off_by_default(self):
+        """include_div_text 缺省（False）不抓 div 叶子"""
+        from unittest.mock import patch
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=self._text_locator_factory("div", _make_elem()))
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", []), \
+             patch("app.services.playwright_locator_core.TEXT_SELECTORS", []):
+            result = await scan_interactive_elements(page, include_text=True)
+        assert len(result) == 0
+
+    @pytest.mark.asyncio
+    async def test_a_without_href_captured_in_div_round(self):
+        """无 href 的 a（面包屑首页）在 div 轮被抓到"""
+        from unittest.mock import patch
+        elem = _make_elem(visible=True, box={"x": 100, "y": 50, "width": 60, "height": 20})
+        elem.evaluate = AsyncMock(return_value=0)
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=self._text_locator_factory("a:not([href])", elem))
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", []), \
+             patch("app.services.playwright_locator_core.TEXT_SELECTORS", []):
+            result = await scan_interactive_elements(page, include_text=True, include_div_text=True)
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_div_text_dedupes_with_seen_coords(self):
+        """div 轮与已有元素同坐标时不重复（seen_coords 复用）"""
+        from unittest.mock import patch
+        span_elem = _make_elem(visible=True, box={"x": 10, "y": 20, "width": 80, "height": 30})
+        span_elem.inner_text = AsyncMock(return_value="统计")
+        div_elem = _make_elem(visible=True, box={"x": 10, "y": 20, "width": 80, "height": 30})
+        div_elem.evaluate = AsyncMock(return_value=0)
+        div_elem.inner_text = AsyncMock(return_value="统计")
+
+        def locator_factory(selector):
+            mock_loc = AsyncMock()
+            if selector == "span":
+                mock_loc.all = AsyncMock(return_value=[span_elem])
+            elif selector == "div":
+                mock_loc.all = AsyncMock(return_value=[div_elem])
+            else:
+                mock_loc.all = AsyncMock(return_value=[])
+            return mock_loc
+
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=locator_factory)
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", []), \
+             patch("app.services.playwright_locator_core.TEXT_SELECTORS", ["span"]):
+            result = await scan_interactive_elements(page, include_text=True, include_div_text=True)
+        assert len(result) == 1
+        assert result[0] is span_elem
+
+    @pytest.mark.asyncio
+    async def test_div_text_skips_long_text(self):
+        """inner_text 超 100 字的 div 叶子不抓"""
+        from unittest.mock import patch
+        elem = _make_elem(visible=True, box={"x": 100, "y": 50, "width": 60, "height": 20})
+        elem.evaluate = AsyncMock(return_value=0)
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=self._text_locator_factory("div", elem, text="长" * 101))
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", []), \
+             patch("app.services.playwright_locator_core.TEXT_SELECTORS", []):
+            result = await scan_interactive_elements(page, include_text=True, include_div_text=True)
+        assert len(result) == 0
