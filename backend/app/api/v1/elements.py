@@ -531,6 +531,7 @@ async def add_capture_batch(session_id: str, request: CaptureBatchAddRequest):
             "width": coords.get("width"),
             "height": coords.get("height"),
             "attributes": d.get("attributes"),
+            "_viewport_box": d.get("_viewport_box"),
         })
     try:
         result = await CaptureSessionService.add_batch(
@@ -744,6 +745,14 @@ async def _verify_elements(page, raw_elements) -> list:
         if not verified_locators:
             continue
         semantic = await extract_semantic_info(page, elem)
+        # 会话截图是视口截图 → 高亮框须用视口坐标（bounding_box）；
+        # 文档坐标（semantic.coords，rect+scroll）供入库/转脚本，二者分开存
+        try:
+            vb = await elem.bounding_box()
+            viewport_box = {"x": int(vb["x"]), "y": int(vb["y"]),
+                            "width": int(vb["width"]), "height": int(vb["height"])}
+        except Exception:
+            viewport_box = None
         attributes = {
             "id": await elem.get_attribute("id"),
             "class": await elem.get_attribute("class"),
@@ -766,6 +775,7 @@ async def _verify_elements(page, raw_elements) -> list:
             "width": semantic["coords"]["width"],
             "height": semantic["coords"]["height"],
             "attributes": attributes,
+            "_viewport_box": viewport_box,
         })
     return verified_elements
 
