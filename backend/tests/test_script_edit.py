@@ -9,6 +9,8 @@ from app.services.script_edit_service import ScriptEditService
 def _db():
     db = MagicMock()
     db.commit = AsyncMock()
+    db.execute = AsyncMock()
+    db.add_all = MagicMock()
     return db
 
 
