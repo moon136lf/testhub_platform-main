@@ -46,6 +46,7 @@ from app.schemas.element_schema import (
     CaptureElementOpRequest,
     CaptureAllOpRequest,
     CaptureElementDeleteRequest,
+    CaptureRenameRequest,
     CaptureBatchDeleteRequest,
     CaptureStateResponse,
     CaptureImportRequest,
@@ -546,6 +547,14 @@ async def delete_capture_element(session_id: str, request: CaptureElementDeleteR
     if not await CaptureSessionService.delete_element(session_id, request.temp_id):
         raise HTTPException(status_code=404, detail="Element not found in session")
     return {"deleted": request.temp_id}
+
+@router.post("/capture/sessions/{session_id}/elements/rename")
+async def rename_capture_element(session_id: str, request: CaptureRenameRequest):
+    if not await CaptureSessionService.rename_element(
+        session_id, request.temp_id, request.element_name
+    ):
+        raise HTTPException(status_code=404, detail="Element not found in session")
+    return {"temp_id": request.temp_id, "element_name": request.element_name}
 
 @router.delete("/capture/sessions/{session_id}/batches")
 async def delete_capture_batch(session_id: str, request: CaptureBatchDeleteRequest):

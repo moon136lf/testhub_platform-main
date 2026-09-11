@@ -134,3 +134,32 @@ async def test_delete_session(patch_redis):
     assert await CaptureSessionService.delete(sid)
     assert await CaptureSessionService.get(sid) is None
     assert not await CaptureSessionService.delete(sid)
+
+
+@pytest.mark.asyncio
+async def test_rename_element(patch_redis):
+    s = await CaptureSessionService.create("p")
+    sid = s["session_id"]
+    await CaptureSessionService.add_batch(sid, "u", "", [
+        {"temp_id": "t1", "element_type": "link", "element_text": "首页",
+         "locator_strategies": {"strategies": []}, "semantic_info": {}}])
+    # 正常改名
+    assert await CaptureSessionService.rename_element(sid, "t1", "面包屑首页") is True
+    state = await CaptureSessionService.get(sid)
+    assert state["elements"]["t1"]["element_name"] == "面包屑首页"
+    # 元素不存在 → False
+    assert await CaptureSessionService.rename_element(sid, "nope", "x") is False
+    # 会话不存在 → False
+    assert await CaptureSessionService.rename_element("cap_missing", "t1", "x") is False
+
+
+@pytest.mark.asyncio
+async def test_rename_element_truncates_to_100(patch_redis):
+    s = await CaptureSessionService.create("p")
+    sid = s["session_id"]
+    await CaptureSessionService.add_batch(sid, "u", "", [
+        {"temp_id": "t1", "element_type": "button", "element_text": "",
+         "locator_strategies": {"strategies": []}, "semantic_info": {}}])
+    await CaptureSessionService.rename_element(sid, "t1", "长" * 150)
+    state = await CaptureSessionService.get(sid)
+    assert len(state["elements"]["t1"]["element_name"]) == 100

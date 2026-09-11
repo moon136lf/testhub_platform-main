@@ -263,6 +263,13 @@ class CaptureElementDeleteRequest(BaseModel):
     temp_id: str = Field(..., description="元素临时 ID")
 
 
+class CaptureRenameRequest(BaseModel):
+    """元素别名重命名（会话式抓取列表内联编辑）"""
+
+    temp_id: str = Field(..., description="元素临时 ID")
+    element_name: str = Field(..., min_length=1, max_length=200, description="新别名（服务端截断 100 字）")
+
+
 class CaptureBatchDeleteRequest(BaseModel):
     """删除整个批次"""
 

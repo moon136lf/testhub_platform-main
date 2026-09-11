@@ -389,3 +389,18 @@ def test_awaiting_login_state_machine(client, mgr):
     assert r.status_code == 200
     assert r.json()["data"]["state"] == "ready"
     assert real_sess.state == "ready"
+
+
+def test_rename_endpoint(client):
+    """rename 端点：成功 200 / 元素不存在 404"""
+    with patch("app.api.v1.elements.CaptureSessionService") as mock_svc:
+        mock_svc.rename_element = AsyncMock(return_value=True)
+        r = client.post("/api/v1/elements/capture/sessions/cap_x/elements/rename",
+                        json={"temp_id": "t1", "element_name": "登录按钮"})
+        assert r.status_code == 200
+        assert r.json() == {"temp_id": "t1", "element_name": "登录按钮"}
+
+        mock_svc.rename_element = AsyncMock(return_value=False)
+        r = client.post("/api/v1/elements/capture/sessions/cap_x/elements/rename",
+                        json={"temp_id": "nope", "element_name": "x"})
+        assert r.status_code == 404

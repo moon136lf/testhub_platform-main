@@ -160,6 +160,16 @@ class CaptureSessionService:
         return True
 
     @staticmethod
+    async def rename_element(session_id: str, temp_id: str, element_name: str) -> bool:
+        """改元素别名（写 element_name，截断 100 字；入库时走 batch_import 的 user_name 分支）"""
+        state = await CaptureSessionService._load(session_id)
+        if state is None or temp_id not in state["elements"]:
+            return False
+        state["elements"][temp_id]["element_name"] = (element_name or "").strip()[:100]
+        await CaptureSessionService._save(session_id, state)
+        return True
+
+    @staticmethod
     async def get_selected_elements(session_id: str) -> Optional[Dict[str, Any]]:
         """取所有 included=True 的元素（入库用），返回 {project_id, elements: [...], batches}"""
         state = await CaptureSessionService._load(session_id)
