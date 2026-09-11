@@ -23,6 +23,19 @@ def _mk_elem(name="账号输入框", text="请输入账号", tag="input"):
     return e
 
 
+def test_normalize_curly_quotes():
+    assert normalize_text("“获取验证码”") == "获取验证码"
+    assert normalize_text("‘账号’") == "账号"
+
+
+def test_score_empty_normalized_target():
+    # 纯标点/弯引号 target 归一化后为空串 → 0 分，不参与命中
+    e = {"element_name": "获取验证码", "element_text": "获取验证码", "tag": "button",
+         "locators": {"strategies": []}}
+    assert score_element("”", "click", e) == 0.0
+    assert score_element("。！？", "click", e) == 0.0
+
+
 def test_score_exact_alias():
     e = {"element_name": "账号输入框", "element_text": "请输入账号", "tag": "input",
          "locators": {"strategies": [{"type": "css", "value": "#zh", "confidence": 5}]}}

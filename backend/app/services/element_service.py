@@ -40,7 +40,7 @@ def normalize_text(s):
             ch = chr(code - 0xFEE0)
         out.append(ch)
     s = "".join(out)
-    s = re.sub(r"[\s。，！？；：""''\(\)（）【】《》、,.!?;:'\"()\[\]{}]+", "", s)
+    s = re.sub(r"[\s。，！？；：""''“”‘’\(\)（）【】《》、,.!?;:'\"()\[\]{}]+", "", s)
     return s.lower().strip()
 
 
@@ -58,6 +58,8 @@ def score_element(target, intent_action, elem):
     """加权评分（方案V1）：别名bigram 0.4 + text包含 0.3 + 类型一致 0.2。
     归一化精确相等=1.0；其余封顶0.99。"""
     t = normalize_text(target)
+    if not t:
+        return 0.0  # 纯标点/空白 target 归一化后为空 → 不命中
     name = normalize_text(elem.get("element_name"))
     text = normalize_text(elem.get("element_text"))
     if t and (t == name or (text and t == text)):
