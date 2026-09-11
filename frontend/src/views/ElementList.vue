@@ -267,7 +267,7 @@
     </el-dialog>
 
     <!-- 回收站弹窗 -->
-    <el-dialog v-model="recycleDialogVisible" title="回收站（30天内可恢复）" width="600px">
+    <el-dialog v-model="recycleDialogVisible" title="回收站（30天内可恢复）" width="860px">
       <el-table :data="recycleItems" v-loading="recycleLoading" size="small">
         <el-table-column prop="element_name" label="名称" min-width="160" show-overflow-tooltip />
         <el-table-column prop="page_name" label="所属页面" width="140" show-overflow-tooltip />

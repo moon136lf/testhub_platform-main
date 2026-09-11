@@ -137,7 +137,10 @@ class ElementAssetService:
             select(ElementRepository).where(
                 ElementRepository.project_id == uid,
                 ElementRepository.status == "deleted",
-            ).order_by(ElementRepository.recycled_at.desc().nullslast())
+            ).order_by(
+                ElementRepository.recycled_at.desc().nullslast(),
+                ElementRepository.updated_at.desc().nullslast(),  # 旧数据 recycled_at 为空，用更新时间兜底
+            )
         )
         return result.scalars().all()
 

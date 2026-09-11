@@ -1246,7 +1246,12 @@ async def verify_element_locator(element_id: str, request: LocatorVerifyRequest,
     page = None
     try:
         await _bridge.run(pw.start(headless=True))
-        target_url = env.url.rstrip("/") + (page_row.page_url or "")
+        page_url = (page_row.page_url or "").strip()
+        # page_url 存的是绝对 URL 时直接用；相对路径才拼环境 URL（环境 URL 误填成完整地址曾拼出双 host）
+        if page_url.startswith("http://") or page_url.startswith("https://"):
+            target_url = page_url
+        else:
+            target_url = env.url.rstrip("/") + page_url
         page = await _bridge.run(pw.browser.new_page())
         await _bridge.run(page.goto(target_url, timeout=30000, wait_until="networkidle"))
         result = await _bridge.run(verify_locator_on_page(
