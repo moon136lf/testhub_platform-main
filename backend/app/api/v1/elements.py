@@ -793,15 +793,47 @@ async def capture_browser_page(
     if page is None:
         raise HTTPException(status_code=404, detail="Browser released — open session first")
 
-    # Playwright 对象绑定在 bridge loop（Proactor），所有调用须投递过去
-    raw_elements = await _bridge.run(scan_interactive_elements(
-        page, include_text=True, include_div_text=include_div_text))
-    # 先验证提取为 dict（_apply_filters 消费 dict 形态的 position_x/element_type）
-    elements = await _bridge.run(_verify_elements(page, raw_elements))
-    from app.tasks.element_tasks import _apply_filters
-    elements = _apply_filters(elements, text_filter="", type_filter="", debug_mode=False,
-                              exclude_menu=exclude_menu, max_list_rows=max_list_rows,
-                              viewport_width=1920)
+    # SSE 直播（进程内写 Redis List，前端经 /api/sse/element-fetch/{sid} 订阅）；
+    # 任何发送失败都不影响抓取主流程
+    from app.core.sse import SSEStream
+    try:
+        sse = SSEStream(sid)
+    except Exception:
+        sse = None
+
+    async def _emit(**kwargs):
+        if sse is None:
+            return
+        try:
+            await sse.send_message(**kwargs)
+        except Exception:
+            pass
+
+    async def _scan_progress(selector, total):
+        await _emit(type="system", stage="scan",
+                    content=f"已扫描 {selector}，累计发现 {total} 个元素",
+                    progress=min(0.7, 0.1 + total * 0.01))
+
+    await _emit(type="system", stage="scan", content="正在扫描页面元素...", progress=0.05)
+
+    try:
+        # Playwright 对象绑定在 bridge loop（Proactor），所有调用须投递过去
+        raw_elements = await _bridge.run(scan_interactive_elements(
+            page, include_text=True, include_div_text=include_div_text,
+            on_progress=_scan_progress))
+        # 先验证提取为 dict（_apply_filters 消费 dict 形态的 position_x/element_type）
+        elements = await _bridge.run(_verify_elements(page, raw_elements))
+        from app.tasks.element_tasks import _apply_filters
+        elements = _apply_filters(elements, text_filter="", type_filter="", debug_mode=False,
+                                  exclude_menu=exclude_menu, max_list_rows=max_list_rows,
+                                  viewport_width=1920)
+        await _emit(type="system", stage="filter",
+                    content=f"过滤后保留 {len(elements)} 个元素", progress=0.8)
+    except HTTPException:
+        raise
+    except Exception as e:
+        await _emit(type="error", stage="error", content=f"抓取失败: {str(e)[:200]}", progress=0)
+        raise
 
     # 截图上传 MinIO → 批次截图 URL
     screenshot_url = ""
@@ -812,6 +844,8 @@ async def capture_browser_page(
         screenshot_url = await storage_client.upload_bytes(png, key)
     except Exception:
         screenshot_url = ""
+
+    await _emit(type="system", stage="staging", content="正在写入暂存列表...", progress=0.9)
 
     # staging 会话懒创建（复用 P3 redis staging）
     staging_id = getattr(sess, "staging_id", None)
@@ -825,6 +859,10 @@ async def capture_browser_page(
         sess.staging_id = staging_id
 
     result = await CaptureSessionService.add_batch(staging_id, page.url, screenshot_url, elements)
+    await _emit(type="success", stage="done",
+                content=f"抓取完成：本批 {len(elements)} 个元素", progress=1.0,
+                data={"total_count": len(elements), "batch_idx": result["batch_idx"],
+                      "batch_count": result["batch_count"], "staging_session_id": staging_id})
     return {
         "code": 0,
         "data": {

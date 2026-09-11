@@ -404,3 +404,36 @@ def test_rename_endpoint(client):
         r = client.post("/api/v1/elements/capture/sessions/cap_x/elements/rename",
                         json={"temp_id": "nope", "element_name": "x"})
         assert r.status_code == 404
+
+
+def test_capture_emits_sse_messages(client, mgr):
+    """capture 端点应发 SSE 直播消息（开始/按轮计数/完成 progress=1.0）"""
+    page = _fake_page(url="http://x/admin")
+    sess = _fake_session(state="ready", page=page)
+    sess.staging_id = None
+    mgr.get_page.return_value = page
+    mgr.get_session.return_value = sess
+
+    async def fake_scan(page, include_text=False, include_div_text=True, on_progress=None):
+        if on_progress:
+            await on_progress("button", 2)
+        return []
+
+    with patch("app.api.v1.elements.scan_interactive_elements", new=fake_scan),          patch("app.api.v1.elements._verify_elements", new=AsyncMock(return_value=[
+             {"temp_id": "t1", "element_type": "button", "element_text": "x",
+              "locator_strategies": {"strategies": []},
+              "semantic_info": {"coords": {"x": 1, "y": 2, "width": 3, "height": 4}},
+              "position_x": 1, "position_y": 2, "width": 3, "height": 4,
+              "attributes": None, "_viewport_box": None}])),          patch("app.core.storage.storage_client.upload_bytes", new=AsyncMock(return_value="http://minio/s.png")),          patch("app.services.capture_session_service.CaptureSessionService.get", new=AsyncMock(return_value=None)),          patch("app.services.capture_session_service.CaptureSessionService.create",
+               new=AsyncMock(return_value={"session_id": "cap_x", "project_id": PID})),          patch("app.services.capture_session_service.CaptureSessionService.add_batch",
+               new=AsyncMock(return_value={"batch_idx": 0, "batch_count": 1, "added": 1, "total_elements": 1})),          patch("app.core.sse.SSEStream") as mock_sse_cls:
+        mock_sse = mock_sse_cls.return_value
+        mock_sse.send_message = AsyncMock()
+        r = client.post(f"/api/v1/elements/capture/browser/{SID}/capture")
+    assert r.status_code == 200, r.text
+    calls = mock_sse.send_message.await_args_list
+    types = [(c.kwargs.get("type"), c.kwargs.get("progress")) for c in calls]
+    assert types[0][0] == "system"          # 首条开始消息
+    assert ("success", 1.0) in types        # 完成消息
+    contents = [c.kwargs.get("content") for c in calls]
+    assert any("2 个元素" in c for c in contents)  # 按轮计数
