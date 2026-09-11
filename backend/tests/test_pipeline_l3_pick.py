@@ -42,6 +42,30 @@ async def test_step3_l2_hit_binds_element():
     assert r.match_score == 0.82
 
 
+def _make_action(**kw):
+    base = dict(step=1, action="fill", target="账号输入框", value="x",
+                locator="#zh", locator_status="matched", locator_source="element_library",
+                element_id="el-1", element_name="请输入账号", match_score=0.82, match_level="L2")
+    base.update(kw)
+    return ActionWithLocator(**base)
+
+
+def test_step_mapping_carries_binding_fields():
+    """step_mapping 落库须透传 element_id/match_level/match_score（前端绑定态数据源）。"""
+    from app.services.script_pipeline import _build_step_mapping
+    from app.services.script_pipeline import AssertionPlan
+
+    m = _build_step_mapping(
+        [_make_action()],
+        [AssertionPlan(step=1, assertion_type="visible", target="账号输入框", expected=None, is_valid=True)],
+        "#zh")
+    row = m[0]
+    assert row["element_id"] == "el-1"
+    assert row["match_level"] == "L2"
+    assert row["match_score"] == 0.82
+    assert row["element_name"] == "账号输入框"
+
+
 @pytest.mark.asyncio
 async def test_step3_miss_stays_draft_no_ai():
     results = await step3_match_locators(
