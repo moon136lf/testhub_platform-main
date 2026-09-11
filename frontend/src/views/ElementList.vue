@@ -802,6 +802,7 @@ const showCreateDialog = () => {
     element_text: '',
     scope: treeFilter.value.mode === 'global' ? 'global' : 'page',
     page_id: treeFilter.value.mode === 'page' ? treeFilter.value.pageId : (pages.value[0]?.id || null),
+    locators: [],  // 重置定位器行（showCreateDialog 复用对象缺失此键 → push 报错）
   }
   createDialogVisible.value = true
 }
