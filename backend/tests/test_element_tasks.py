@@ -44,7 +44,7 @@ def mock_deps():
     # Mock scan / generate / verify / extract
     mock_elem = MagicMock()
 
-    async def fake_scan(page, include_text: bool = False):
+    async def fake_scan(page, include_text: bool = False, include_div_text: bool = True):
         return [mock_elem, mock_elem]  # 2 个元素
 
     async def fake_generate(page, elem):

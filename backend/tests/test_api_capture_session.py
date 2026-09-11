@@ -167,6 +167,27 @@ def test_capture_adds_to_staging(client, mgr):
     assert add_batch.call_args.args[2] == "http://minio/s.png"
 
 
+def test_capture_passes_include_div_text(client, mgr):
+    """capture 端点应把 include_div_text query 透传给 scan_interactive_elements"""
+    page = _fake_page(url="http://x/admin")
+    sess = _fake_session(state="ready", page=page)
+    sess.staging_id = None
+    mgr.get_page.return_value = page
+    mgr.get_session.return_value = sess
+    with patch("app.api.v1.elements.scan_interactive_elements", new=AsyncMock(return_value=[])) as mock_scan, \
+         patch("app.api.v1.elements._verify_elements", new=AsyncMock(return_value=[])), \
+         patch("app.core.storage.storage_client.upload_bytes", new=AsyncMock(return_value="http://minio/s.png")), \
+         patch("app.services.capture_session_service.CaptureSessionService.get", new=AsyncMock(return_value=None)), \
+         patch("app.services.capture_session_service.CaptureSessionService.create",
+               new=AsyncMock(return_value={"session_id": "cap_x", "project_id": PID})), \
+         patch("app.services.capture_session_service.CaptureSessionService.add_batch",
+               new=AsyncMock(return_value={"batch_idx": 0, "batch_count": 1, "added": 0, "total_elements": 0})):
+        r = client.post(
+            f"/api/v1/elements/capture/browser/{SID}/capture?include_div_text=false")
+    assert r.status_code == 200, r.text
+    assert mock_scan.call_args.kwargs.get("include_div_text") is False
+
+
 def test_capture_reuses_existing_staging(client, mgr):
     page = _fake_page(url="http://x/admin")
     sess = _fake_session(state="ready", page=page)

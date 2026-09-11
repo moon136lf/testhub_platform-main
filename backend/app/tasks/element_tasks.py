@@ -88,6 +88,7 @@ def fetch_elements_task(
     type_filter: Optional[str] = "",
     debug_mode: bool = False,
     include_text: bool = False,
+    include_div_text: bool = True,
     exclude_menu: bool = False,
     max_list_rows: Optional[int] = None,
 ):
@@ -107,7 +108,7 @@ def fetch_elements_task(
     return asyncio.run(_fetch_elements_async(
         session_id, project_id, url, username, password,
         text_filter, type_filter, debug_mode, include_text,
-        exclude_menu, max_list_rows
+        include_div_text, exclude_menu, max_list_rows
     ))
 
 
@@ -121,6 +122,7 @@ async def _fetch_elements_async(
     type_filter: Optional[str] = "",
     debug_mode: bool = False,
     include_text: bool = False,
+    include_div_text: bool = True,
     exclude_menu: bool = False,
     max_list_rows: Optional[int] = None,
 ):
@@ -167,7 +169,8 @@ async def _fetch_elements_async(
             content="正在扫描页面元素...",
             progress=0.35,
         )
-        raw_elements = await scan_interactive_elements(page, include_text=include_text)
+        raw_elements = await scan_interactive_elements(
+            page, include_text=include_text, include_div_text=include_div_text)
         raw_elements = _apply_filters(raw_elements, text_filter, type_filter, debug_mode,
                                       exclude_menu=exclude_menu, max_list_rows=max_list_rows)
 

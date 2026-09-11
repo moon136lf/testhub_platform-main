@@ -137,6 +137,7 @@ async def fetch_elements(
         type_filter=request.type_filter,
         debug_mode=request.debug_mode,
         include_text=request.include_text,
+        include_div_text=request.include_div_text,
         exclude_menu=request.exclude_menu,
         max_list_rows=request.max_list_rows,
     )
@@ -752,6 +753,7 @@ async def capture_browser_page(
     sid: str,
     exclude_menu: bool = Query(False, description="排除左侧菜单栏元素"),
     max_list_rows: Optional[int] = Query(None, ge=1, le=50, description="表格单元格只保留最上 N 行"),
+    include_div_text: bool = Query(True, description="抓展示文本（div叶子+无href链接）"),
 ):
     """抓当前页元素 → 复用 P3 staging（CaptureSessionService）追加批次。"""
     sess = _browser_sess_or_404(sid)
@@ -760,7 +762,8 @@ async def capture_browser_page(
         raise HTTPException(status_code=404, detail="Browser released — open session first")
 
     # Playwright 对象绑定在 bridge loop（Proactor），所有调用须投递过去
-    raw_elements = await _bridge.run(scan_interactive_elements(page, include_text=True))
+    raw_elements = await _bridge.run(scan_interactive_elements(
+        page, include_text=True, include_div_text=include_div_text))
     # 先验证提取为 dict（_apply_filters 消费 dict 形态的 position_x/element_type）
     elements = await _bridge.run(_verify_elements(page, raw_elements))
     from app.tasks.element_tasks import _apply_filters
