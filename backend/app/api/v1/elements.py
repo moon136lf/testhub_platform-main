@@ -270,7 +270,7 @@ async def list_pages(
     result = await db.execute(
         select(PageRepository)
         .where(PageRepository.project_id == project_uuid)
-        .order_by(PageRepository.last_fetch_at.desc().nullslast())
+        .order_by(PageRepository.sort_order, PageRepository.created_at)
     )
     pages = result.scalars().all()
 
@@ -282,7 +282,7 @@ async def get_page_tree(
     project_id: str = Query(..., description="项目 ID"),
     db: AsyncSession = Depends(get_db),
 ):
-    """页面树（按 parent_id 组装，根=parent_id IS NULL，按 last_fetch_at 倒序）"""
+    """页面树（按 parent_id 组装，根=parent_id IS NULL，同级按 sort_order）"""
     try:
         project_uuid = uuid.UUID(project_id)
     except ValueError:
@@ -291,7 +291,7 @@ async def get_page_tree(
     result = await db.execute(
         select(PageRepository)
         .where(PageRepository.project_id == project_uuid)
-        .order_by(PageRepository.last_fetch_at.desc().nullslast())
+        .order_by(PageRepository.sort_order, PageRepository.created_at)
     )
     pages = result.scalars().all()
 
@@ -300,6 +300,19 @@ async def get_page_tree(
         d = p.to_dict()
         d["children"] = []
         nodes[p.id] = d
+
+    # element_count 实时化（冗余字段只增不减，回收/删除路径不维护 → 徽标漂移）
+    from sqlalchemy import func as _func
+    counts = await db.execute(
+        select(ElementRepository.page_id, _func.count(ElementRepository.id))
+        .where(ElementRepository.project_id == project_uuid,
+               ElementRepository.status == "active",
+               ElementRepository.page_id.isnot(None))
+        .group_by(ElementRepository.page_id)
+    )
+    count_map = {pid: n for pid, n in counts.all()}
+    for p in pages:
+        nodes[p.id]["element_count"] = count_map.get(p.id, 0)
 
     roots = []
     for p in pages:
@@ -1032,9 +1045,10 @@ async def restore_element(element_id: str, db: AsyncSession = Depends(get_db)):
 
 @asset_router.get("/recycle-bin")
 async def recycle_bin(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
-    """回收站列表。"""
-    els = await ElementAssetService(db).list_recycled(project_id)
-    return {"code": 0, "data": [e.to_dict() for e in els]}
+    """回收站列表（附所属页面名）。"""
+    svc = ElementAssetService(db)
+    els = await svc.list_recycled(project_id)
+    return {"code": 0, "data": await svc.attach_page_names(els)}
 
 
 # ---------------- 页面树（层级 + 编辑 + 上下移 + 守护删除） ----------------

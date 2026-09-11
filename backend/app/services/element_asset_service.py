@@ -130,14 +130,14 @@ class ElementAssetService:
         await self.db.commit()
 
     async def list_recycled(self, project_id: str) -> List:
-        """回收站列表（30天内；清理任务后置）。"""
+        """回收站列表（30天内；按回收时间倒序）。"""
         from app.models.element import ElementRepository
         uid = _to_uuid(project_id) or project_id
         result = await self.db.execute(
             select(ElementRepository).where(
                 ElementRepository.project_id == uid,
                 ElementRepository.status == "deleted",
-            )
+            ).order_by(ElementRepository.recycled_at.desc().nullslast())
         )
         return result.scalars().all()
 
