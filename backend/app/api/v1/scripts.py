@@ -46,17 +46,18 @@ async def _enrich_scripts(db: AsyncSession, scripts) -> list:
     from app.models.test_set import TestSet
     sets = (await db.execute(
         select(TestSet.project_id, TestSet.case_ids))).all()
-    # project -> set(case_ids)，用于统计引用
+    # project -> [set(case_ids)]，每个含该用例的测试集各计 1 (真计数, 非去重 0/1)
     set_cases: dict = {}
     for pid, cids in sets:
-        set_cases.setdefault(pid, set()).update(cids or [])
+        set_cases.setdefault(pid, []).append(set(cids or []))
 
     items = []
     for s in scripts:
         d = s.to_dict()
         d["bound_case"] = case_names.get(s.case_id)
-        refs = set_cases.get(s.project_id, set())
-        d["test_set_refs"] = 1 if s.case_id and str(s.case_id) in refs else 0
+        ref_sets = set_cases.get(s.project_id, [])
+        d["test_set_refs"] = sum(
+            1 for cids in ref_sets if s.case_id and str(s.case_id) in cids)
         items.append(d)
     return items
 

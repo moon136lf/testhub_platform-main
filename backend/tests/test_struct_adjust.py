@@ -1,6 +1,8 @@
 """结构调整测试（方案V1 阶段10）：source枚举/软删端点/bug清单。"""
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -75,6 +77,32 @@ class TestScriptListEnrich:
         from app.api.v1.scripts import _enrich_scripts
         out = await _enrich_scripts(MagicMock(), [])
         assert out == []
+
+    @pytest.mark.asyncio
+    async def test_enrich_test_set_refs_counts_each_set(self):
+        """test_set_refs 真计数：用例被 N 个测试集含 → 计 N（修复恒为 1）。"""
+        from app.api.v1.scripts import _enrich_scripts
+        cid = uuid4()
+        pid = uuid4()
+        s = MagicMock()
+        s.case_id = cid
+        s.project_id = pid
+        s.to_dict = MagicMock(return_value={})
+
+        class FakeResult:
+            def __init__(self, rows):
+                self._rows = rows
+            def all(self):
+                return self._rows
+
+        db = MagicMock()
+        # 1st execute: case names; 2nd: test sets (两个集合均含该用例)
+        db.execute = AsyncMock(side_effect=[
+            FakeResult([(cid, "登录用例")]),
+            FakeResult([(pid, [str(cid)]), (pid, [str(uuid4()), str(cid)])]),
+        ])
+        out = await _enrich_scripts(db, [s])
+        assert out[0]["test_set_refs"] == 2
 
 
 class TestBugListEndpoint:
