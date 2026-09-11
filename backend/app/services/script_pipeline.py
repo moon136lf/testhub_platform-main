@@ -3,6 +3,7 @@
 每阶段输入结构 -> 输出结构, LLM 通过注入的 gateway 调用, 可 mock。
 """
 import json
+import re
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Protocol
 from app.core.json_utils import parse_llm_json
@@ -163,11 +164,6 @@ async def step2_to_assertions(case: NormalizedCase, gateway: LLMGatewayProto) ->
     return plans
 
 
-class ElementLookupProto(Protocol):
-    """元素库协议: find(project_id, target) -> locator 字符串或 None。"""
-    async def find(self, project_id: str, target: str) -> Optional[str]: ...
-
-
 @dataclass
 class ActionWithLocator:
     step: int
@@ -177,45 +173,79 @@ class ActionWithLocator:
     locator: Optional[str] = None
     locator_status: str = "none_draft"  # matched / pending_confirm / none_draft
     locator_source: str = "none_draft"  # element_library / ai_generated / mixed / none_draft
+    element_id: Optional[str] = None
+    element_name: Optional[str] = None
+    match_score: Optional[float] = None
 
 
-STEP3_AI_PROMPT = """你是定位器生成器。为 UI 元素生成 Playwright 定位器, 优先 get_by_role > get_by_text > get_by_label > get_by_placeholder > css。
-只输出一个定位器字符串(如 page.get_by_role("button", name="登录")), 不要解释。
-元素描述: {target}"""
+class CandidatesLookupProto(Protocol):
+    """评分管线协议: find_candidates(project_id, target, intent_action, page_id) -> List[Dict]。"""
+    async def find_candidates(self, project_id: str, target: str,
+                              intent_action: Optional[str] = None,
+                              page_id: Optional[str] = None) -> List[Dict]: ...
 
 
-async def _ai_generate_locator(target: str, gateway: LLMGatewayProto) -> str:
-    resp = await gateway.chat([{"role": "user", "content": STEP3_AI_PROMPT.format(target=target)}])
-    return resp["content"].strip()
+STEP3_PICK_PROMPT = """你是元素选择器。从候选元素中为用例步骤目标选出最匹配的一个，只输出 JSON。
+目标: {target}
+候选(编号|别名|定位|类型):
+{candidates}
+输出格式: {{"pick": 编号}}，都不合适则 {{"pick": null}}。"""
+
+
+async def _ai_pick_element(target: str, candidates: List[Dict], gateway) -> Optional[Dict]:
+    """Midscene 模式：LLM 只从候选中选，不生成定位器。"""
+    lines = "\n".join(
+        f"{i}|{c.get('element_name','')}|{c.get('locator','')}|{c.get('match_level','')}"
+        for i, c in enumerate(candidates))
+    resp = await gateway.chat([{"role": "user", "content": STEP3_PICK_PROMPT.format(target=target, candidates=lines)}])
+    import json as _json
+    try:
+        m = re.search(r"\{[^}]*\}", resp["content"])
+        pick = _json.loads(m.group(0)).get("pick") if m else None
+        if isinstance(pick, int) and 0 <= pick < len(candidates):
+            return candidates[pick]
+    except (ValueError, AttributeError):
+        pass
+    return None
 
 
 async def step3_match_locators(
     actions: List[ActionIntent],
     project_id: str,
-    lookup: ElementLookupProto,
+    lookup: CandidatesLookupProto,
     ai_optimize: bool,
     gateway: Optional[LLMGatewayProto],
 ) -> List[ActionWithLocator]:
-    """Step3: 动作意图 + 元素库 → 绑 locator (TRANS-01)。命中用库, 未命中 AI 生成或 draft。"""
+    """Step3 方案V1：L1/L2 评分命中→绑定；未命中→L3 候选单选（可关）→draft。"""
     results: List[ActionWithLocator] = []
     matched = 0
     ai_used = False
     for a in actions:
-        loc = await lookup.find(project_id, a.target) if a.target else None
-        if loc:
-            status = "matched"
+        picked = None
+        # intent 动作归一化为元素类型意图（fill/check→input），供评分类型加分与候选过滤
+        intent = {"fill": "input", "check": "input"}.get(a.action, a.action)
+        cands = await lookup.find_candidates(project_id, a.target, intent_action=intent) if a.target else []
+        top = cands[0] if cands and cands[0].get("match_level") in ("L1", "L2") else None
+        if top:
+            status, loc = "matched", top["locator"]
             matched += 1
-        elif ai_optimize and gateway is not None and a.target:
-            loc = await _ai_generate_locator(a.target, gateway)
-            status = "pending_confirm"
-            ai_used = True
-            matched += 1
+        elif ai_optimize and gateway is not None and cands:
+            picked = await _ai_pick_element(a.target, cands, gateway)
+            if picked:
+                status, loc = "pending_confirm", picked["locator"]
+                matched += 1
+                ai_used = True
+            else:
+                status, loc = "none_draft", None
         else:
-            loc = None
-            status = "none_draft"
+            status, loc = "none_draft", None
+        bound = top or picked or {}
         results.append(ActionWithLocator(
             step=a.step, action=a.action, target=a.target, value=a.value,
             locator=loc, locator_status=status,
+            element_id=bound.get("element_id"),
+            element_name=bound.get("element_name"),
+            match_score=bound.get("score"),
         ))
     total = len(results)
     if matched == 0:

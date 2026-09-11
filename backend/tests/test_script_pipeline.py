@@ -11,7 +11,7 @@ from app.services.script_pipeline import (
     ActionIntent,
     ActionWithLocator,
     AssertionPlan,
-    ElementLookupProto,
+    CandidatesLookupProto,
     LLMGatewayProto,
     GenerateResult,
     NormalizeError,
@@ -109,13 +109,18 @@ class TestStep2ToAssertions:
 
 
 class FakeElementLookup:
-    """内存元素库, page.element_name -> locator 字符串。"""
+    """内存元素库, page.element_name -> find_candidates 结构化候选。"""
     def __init__(self, mapping: dict):
         self.mapping = mapping
 
-    async def find(self, project_id: str, target: str) -> Optional[str]:
+    async def find_candidates(self, project_id: str, target: str,
+                              intent_action=None, page_id=None):
         # target 形如 "LoginPage.username" 或 "用户名"
-        return self.mapping.get(target)
+        loc = self.mapping.get(target)
+        if loc is None:
+            return []
+        return [{"element_id": "el-1", "element_name": target, "locator": loc,
+                 "confidence": 5, "score": 1.0, "match_level": "L1"}]
 
 
 class TestStep3MatchLocators:

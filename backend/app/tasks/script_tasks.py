@@ -8,7 +8,7 @@ from app.tasks import celery_app
 from app.core.database import AsyncSessionLocal
 from app.core.sse import SSEStream
 from app.services.script_convert_service import ScriptConvertService
-from app.services.element_service import ElementLocatorLookup, ElementService
+from app.services.element_service import ElementService
 from app.services.ai_gateway import AIGateway
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ def convert_scripts_task(self, session_id: str, case_ids: list, project_id: str,
                 c["module"] = page_by_point.get(c.get("point_id"))
             gateway = _CountingGateway(AIGateway())
             element_svc = ElementService(db)
-            lookup = ElementLocatorLookup(element_svc)
+            lookup = element_svc  # ElementService.find_candidates 满足 CandidatesLookupProto
             summary = await convert_scripts_task_impl(session_id, cases, gateway, lookup, db, ai_optimize=ai_optimize)
             # 联动 automation_status -> converted (CASE-MGMT-04)
             await db.execute(
