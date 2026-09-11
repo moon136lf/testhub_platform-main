@@ -312,12 +312,20 @@ const selectedIds = computed(() =>
   (stagingState.value?.elements || []).filter((e) => e.included).map((e) => e.temp_id)
 )
 
-// hotspot 标签与别名框一致：草稿名优先
+// hotspot 标签与别名框一致（草稿名优先）；框坐标优先用视口坐标
+// （会话截图是视口截图，_viewport_box 由后端 bounding_box 生成；缺失回退文档坐标兼容旧会话）
 const highlightElements = computed(() =>
-  (stagingState.value?.elements || []).map((el) => ({
-    ...el,
-    element_text: el._nameDraft || el.element_text || el.temp_id
-  }))
+  (stagingState.value?.elements || []).map((el) => {
+    const vb = el._viewport_box
+    return {
+      ...el,
+      element_text: el._nameDraft || el.element_text || el.temp_id,
+      position_x: vb ? vb.x : el.position_x,
+      position_y: vb ? vb.y : el.position_y,
+      width: vb ? vb.width : el.width,
+      height: vb ? vb.height : el.height
+    }
+  })
 )
 
 // staging 列表
