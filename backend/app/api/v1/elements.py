@@ -1192,25 +1192,30 @@ async def verify_element_locator(element_id: str, request: LocatorVerifyRequest,
 
     from app.services.playwright_service import PlaywrightService
     from app.services.element_asset_service import verify_locator_on_page
+    # Playwright 子进程操作必须走 Proactor 桥（uvicorn Windows 下宿主是 Selector
+    # loop，不支持 create_subprocess_exec → NotImplementedError → 502）
     pw = PlaywrightService()
     page = None
     try:
-        await pw.start(headless=True)
+        await _bridge.run(pw.start(headless=True))
         target_url = env.url.rstrip("/") + (page_row.page_url or "")
-        page = await pw.browser.new_page()
-        await page.goto(target_url, timeout=30000, wait_until="networkidle")
-        result = await verify_locator_on_page(
+        page = await _bridge.run(pw.browser.new_page())
+        await _bridge.run(page.goto(target_url, timeout=30000, wait_until="networkidle"))
+        result = await _bridge.run(verify_locator_on_page(
             page, {"type": request.locator_type, "value": request.locator_value,
-                   "score": request.score or 0})
+                   "score": request.score or 0}))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"页面打开失败: {str(e)[:200]}")
     finally:
         if page:
             try:
-                await page.close()
+                await _bridge.run(page.close())
             except Exception:
                 pass
-        await pw.close()
+        try:
+            await _bridge.run(pw.close())
+        except Exception:
+            pass
     return {"code": 0, "data": result}
 
 
