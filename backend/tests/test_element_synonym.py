@@ -82,3 +82,23 @@ async def test_find_candidates_no_synonym_query_fallback():
     cands = await svc.find_candidates(PROJ_UUID, "账号输入框", intent_action="input")
     assert cands[0]["match_level"] == "L1"
     assert cands[0]["score"] >= 1.0
+
+
+@pytest.mark.asyncio
+async def test_find_candidates_synonym_norm_space_target_hit():
+    """带空格目标词通过 synonym_norm 列命中（SQL 归一化匹配）。"""
+    svc = ElementService(db=MagicMock())
+    syn = MagicMock()
+    syn.element_id = "el-1"
+    syn.synonym_norm = "账号输入框"
+    syn.synonym_text = "账 号 输 入 框"
+    elem = _mk_elem(name="输入框1", tag="input")
+    syn_result = MagicMock()
+    syn_result.scalars.return_value.all.return_value = [syn]
+    elem_result = MagicMock()
+    elem_result.scalars.return_value.all.return_value = [elem]
+    svc.db.execute = AsyncMock(side_effect=[syn_result, elem_result])
+    cands = await svc.find_candidates(PROJ_UUID, "账 号 输 入 框", intent_action="input")
+    top = cands[0]
+    assert top["element_id"] == "el-1"
+    assert top["match_level"] == "L2"

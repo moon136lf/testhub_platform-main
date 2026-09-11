@@ -283,5 +283,6 @@ class ElementSynonym(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     element_id = Column(UUID(as_uuid=True), ForeignKey("element_repository.id", ondelete="CASCADE"), nullable=False, index=True)
     synonym_text = Column(String(200), nullable=False, comment="用例目标词原文")
+    synonym_norm = Column(String(200), comment="归一化文本")
     source = Column(String(20), nullable=False, default="manual_binding", comment="manual_binding/ai_l2_hit")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -168,7 +168,8 @@ class ElementService:
             if normalize_text(getattr(r, "synonym_text", "")) == norm:
                 return True
         self.db.add(ElementSynonym(
-            element_id=element_id, synonym_text=text.strip()[:200], source=source,
+            element_id=element_id, synonym_text=text.strip()[:200],
+            synonym_norm=norm[:200], source=source,
         ))
         await self.db.flush()
         return True
@@ -189,9 +190,10 @@ class ElementService:
         # synonym 命中优先（Katalon 同义词机制）：归一化相等的 synonym → score=0.9
         syn_scores = {}
         try:
-            from app.models.element import ElementSynonym
             syn_result = await self.db.execute(
-                select(ElementSynonym).where(ElementSynonym.synonym_text == target)
+                select(ElementSynonym).where(
+                    ElementSynonym.synonym_norm == normalize_text(target)
+                )
             )
             try:
                 syn_rows = syn_result.scalars().all()
