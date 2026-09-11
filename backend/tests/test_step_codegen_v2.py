@@ -51,6 +51,14 @@ def test_assert_attribute_requires_value():
         ])
 
 
+def test_assert_attribute_requires_expected():
+    with pytest.raises(ValueError):
+        generate_script("t", [
+            {"seq": 1, "action": "assert_attribute", "target": "#pwd", "value": "type",
+             "expected": ""},
+        ])
+
+
 def test_unknown_action_still_raises():
     with pytest.raises(ValueError):
         generate_script("t", [{"seq": 1, "action": "no_such", "target": "", "value": ""}])

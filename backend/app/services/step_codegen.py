@@ -96,6 +96,8 @@ def _gen_step(step: Dict) -> str:
     elif action == "assert_attribute":
         if not target or not value:
             raise ValueError("assert_attribute 需要 target 与 value(属性名)")
+        if not inline_expected:
+            raise ValueError("assert_attribute 需要 expected（期望属性值）")
         return (
             f"    assert {_loc(target)}.get_attribute({_escape(value)}) == {_escape(inline_expected)}, "
             f'"属性 " + {_escape(value)} + " 不符"'

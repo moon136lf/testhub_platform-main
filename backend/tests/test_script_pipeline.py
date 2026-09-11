@@ -96,11 +96,23 @@ class TestStep2ToAssertions:
         )
 
     def test_parses_assertions(self):
-        # "跳转首页" 命中确定性规则(expect_url)，不调 LLM
+        # value 为合法 URL 时 "跳转首页" 命中确定性规则(expect_url)，不调 LLM
+        case = NormalizedCase(
+            case_id="c1", title="登录",
+            steps=[{"step": 1, "action": "点击登录", "value": "http://x/home",
+                    "expected": "跳转首页"}],
+            expected_result="成功进入首页",
+        )
         gw = FakeGateway('[]')
-        asserts = asyncio_run(step2_to_assertions(self._case(), gw))
+        asserts = asyncio_run(step2_to_assertions(case, gw))
         assert asserts[0].assertion_type == "expect_url"
         assert asserts[0].is_valid is True
+
+    def test_navigate_without_url_falls_back_to_llm(self):
+        # value 非 URL 时不再生成必败 URL 断言，走 LLM 兜底
+        gw = FakeGateway('[{"step":1,"assertion_type":"row_visible","target":"首页","expected":"可见","is_valid":true}]')
+        asserts = asyncio_run(step2_to_assertions(self._case(), gw))
+        assert asserts[0].assertion_type == "row_visible"
 
     def test_tautological_assertion_marked_invalid(self):
         # 规则推断不出的行走 LLM 兜底，永真断言黑名单仍生效

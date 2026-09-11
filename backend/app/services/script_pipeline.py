@@ -140,7 +140,7 @@ ASSERTION_RULES_DOC = """预期结果→断言类型模板库（方案V1阶段6�
 推断不出 → None（走 LLM 兜底）"""
 
 
-def infer_assertion_rule(op: str, target: str, value: str, expected_text: str, action: str):
+def infer_assertion_rule(target: Optional[str], value: str, expected_text: str, action: str):
     """确定性断言推断。返回 {assertion_type, expected, target} 或 None。"""
     if not expected_text:
         return None
@@ -150,12 +150,12 @@ def infer_assertion_rule(op: str, target: str, value: str, expected_text: str, a
         return {"assertion_type": "expect_attribute", "expected": "password", "target": target}
 
     if action == "navigate" or any(k in t for k in ("进入", "跳转", "URL", "地址")):
+        # 只有 value 是合法 URL 才生成 URL 断言，否则 None 走 LLM 兜底
+        if not (value and value.startswith("http")):
+            return None
         # 从测试数据 URL 提取 path 尾段作期望
-        path = ""
-        if value and value.startswith("http"):
-            path = value.rstrip("/").rsplit("/", 1)[-1] or value
-        exp = path or t
-        return {"assertion_type": "expect_url", "expected": exp, "target": ""}
+        path = value.rstrip("/").rsplit("/", 1)[-1] or value
+        return {"assertion_type": "expect_url", "expected": path, "target": ""}
 
     if value and value in t and ("显示" in t or "输入" in t):
         return {"assertion_type": "expect_value", "expected": value, "target": target}
@@ -183,7 +183,7 @@ async def step2_to_assertions(case: NormalizedCase, gateway: LLMGatewayProto) ->
     for s in case.steps:
         action = s.get("action", "")
         hit = infer_assertion_rule(
-            action, s.get("action", ""), s.get("value", ""),
+            s.get("target") or None, s.get("value", ""),
             (s.get("expected") or "").strip(), action)
         if hit:
             plans.append(AssertionPlan(

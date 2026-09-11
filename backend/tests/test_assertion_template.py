@@ -5,30 +5,44 @@ from app.services.script_pipeline import infer_assertion_rule, step2_to_assertio
 
 def test_expect_value_from_display():
     # "显示test02" + 测试数据 test02 → expect_value
-    a = infer_assertion_rule("输入", "账号输入框", "test02", "显示test02", "input")
+    a = infer_assertion_rule("账号输入框", "test02", "显示test02", "input")
     assert a is not None and a["assertion_type"] == "expect_value"
     assert a["expected"] == "test02"
 
 
+def test_navigate_empty_value_returns_none():
+    """navigate 但 value 不是 URL → None 走 LLM 兜底，不生成必败 URL 断言。"""
+    assert infer_assertion_rule("浏览器地址栏", "", "进入登录页", "navigate") is None
+    assert infer_assertion_rule("浏览器地址栏", "进入登录页", "跳转到登录页", "click") is None
+
+
+def test_target_passed_through():
+    """target 参数透传到结果；传 None 则结果 target 为 None。"""
+    a = infer_assertion_rule(None, "test02", "显示test02", "input")
+    assert a is not None and a["target"] is None
+    b = infer_assertion_rule("密码输入框", "123456", "显示为密文", "input")
+    assert b["target"] == "密码输入框"
+
+
 def test_expect_url_from_navigate():
-    a = infer_assertion_rule("输入", "浏览器地址栏", "http://x/login", "进入登录页", "navigate")
+    a = infer_assertion_rule("浏览器地址栏", "http://x/login", "进入登录页", "navigate")
     assert a["assertion_type"] == "expect_url"
     assert a["expected"] == "login"  # 从数据 URL 提取 path 尾段
 
 
 def test_expect_attribute_password():
-    a = infer_assertion_rule("输入", "密码输入框", "123456", "显示为密文", "input")
+    a = infer_assertion_rule("密码输入框", "123456", "显示为密文", "input")
     assert a["assertion_type"] == "expect_attribute"
     assert a["expected"] == "password"
 
 
 def test_expect_toast_from_success_word():
-    a = infer_assertion_rule("点击", "登录按钮", "", "欢迎登陆，提示成功", "click")
+    a = infer_assertion_rule("登录按钮", "", "欢迎登陆，提示成功", "click")
     assert a["assertion_type"] in ("expect_toast", "expect_text")
 
 
 def test_uninferable_returns_none():
-    assert infer_assertion_rule("点击", "某按钮", "", "触发某种效果", "click") is None
+    assert infer_assertion_rule("某按钮", "", "触发某种效果", "click") is None
 
 
 @pytest.mark.asyncio
