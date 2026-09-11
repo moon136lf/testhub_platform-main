@@ -271,3 +271,75 @@ class TestScanInteractiveElements:
              patch("app.services.playwright_locator_core.TEXT_SELECTORS", []):
             result = await scan_interactive_elements(page, include_text=True, include_div_text=True)
         assert len(result) == 0
+
+    @pytest.mark.asyncio
+    async def test_on_progress_called_per_selector_round(self):
+        """传 on_progress 时每轮扫描完回调一次 (selector, 累计数)"""
+        from unittest.mock import patch
+        button = _make_elem(visible=True, box={"x": 1, "y": 1, "width": 10, "height": 10})
+        span = _make_elem(visible=True, box={"x": 2, "y": 2, "width": 10, "height": 10})
+        span.inner_text = AsyncMock(return_value="文本")
+
+        def locator_factory(selector):
+            mock_loc = AsyncMock()
+            if selector == "button":
+                mock_loc.all = AsyncMock(return_value=[button])
+            elif selector == "span":
+                mock_loc.all = AsyncMock(return_value=[span])
+            else:
+                mock_loc.all = AsyncMock(return_value=[])
+            return mock_loc
+
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=locator_factory)
+        calls = []
+
+        async def on_progress(selector, total):
+            calls.append((selector, total))
+
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", ["button"]),              patch("app.services.playwright_locator_core.TEXT_SELECTORS", ["span"]):
+            result = await scan_interactive_elements(page, include_text=True, on_progress=on_progress)
+
+        assert len(result) == 2
+        assert ("button", 1) in calls
+        assert ("span", 2) in calls
+        assert len(calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_on_progress_none_by_default(self):
+        """缺省 on_progress=None 行为不变（回调不被调用）"""
+        from unittest.mock import patch
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=lambda sel: AsyncMock(all=AsyncMock(return_value=[])))
+        calls = []
+
+        async def on_progress(selector, total):
+            calls.append((selector, total))
+
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", []),              patch("app.services.playwright_locator_core.TEXT_SELECTORS", []):
+            await scan_interactive_elements(page, on_progress=None)
+        assert calls == []
+
+    @pytest.mark.asyncio
+    async def test_on_progress_exception_swallowed(self):
+        """回调抛异常不中断扫描"""
+        from unittest.mock import patch
+        button = _make_elem(visible=True, box={"x": 1, "y": 1, "width": 10, "height": 10})
+
+        def locator_factory(selector):
+            mock_loc = AsyncMock()
+            if selector == "button":
+                mock_loc.all = AsyncMock(return_value=[button])
+            else:
+                mock_loc.all = AsyncMock(return_value=[])
+            return mock_loc
+
+        page = AsyncMock()
+        page.locator = MagicMock(side_effect=locator_factory)
+
+        async def bad_progress(selector, total):
+            raise RuntimeError("boom")
+
+        with patch("app.services.playwright_locator_core.INTERACTIVE_SELECTORS", ["button"]),              patch("app.services.playwright_locator_core.TEXT_SELECTORS", []):
+            result = await scan_interactive_elements(page, on_progress=bad_progress)
+        assert len(result) == 1

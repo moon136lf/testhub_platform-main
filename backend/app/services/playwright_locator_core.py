@@ -328,7 +328,10 @@ TEXT_SELECTORS = ["span", "p", "h1", "h2", "h3", "h4", "label", "td", "th"]
 DIV_TEXT_SELECTORS = ["div", "a:not([href])"]
 
 
-async def scan_interactive_elements(page, include_text: bool = False, include_div_text: bool = False) -> List[Any]:
+async def scan_interactive_elements(
+    page, include_text: bool = False, include_div_text: bool = False,
+    on_progress=None,
+) -> List[Any]:
     """
     扫描页面上的可交互元素
 
@@ -336,12 +339,21 @@ async def scan_interactive_elements(page, include_text: bool = False, include_di
         page: Playwright Page 对象
         include_text: 同时扫描文字/不可点击元素（span/p/标题等），非空 inner_text 才保留
         include_div_text: 扫描 div 叶子节点与无 href 链接（展示文本，独立参数，可单独开启）
+        on_progress: 可选回调 (selector, running_total)，每轮选择器扫描完调用一次
+            （会话抓取 SSE 按轮计数用）；回调异常被吞掉不中断扫描
 
     Returns:
         可见的元素 Locator 列表（基于坐标去重，交互元素优先于文本元素）
     """
     elements: List[Any] = []
     seen_coords = set()  # 基于坐标去重
+
+    async def _report(selector: str):
+        if on_progress:
+            try:
+                await on_progress(selector, len(elements))
+            except Exception:
+                pass
 
     async def scan_selectors(selectors, require_text: bool):
         for selector in selectors:
@@ -370,6 +382,7 @@ async def scan_interactive_elements(page, include_text: bool = False, include_di
                         elements.append(elem)
                     except Exception:
                         continue
+                await _report(selector)
             except Exception:
                 continue
 
@@ -396,6 +409,7 @@ async def scan_interactive_elements(page, include_text: bool = False, include_di
                         elements.append(elem)
                     except Exception:
                         continue
+                await _report(selector)
             except Exception:
                 continue
 
