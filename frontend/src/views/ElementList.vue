@@ -306,6 +306,44 @@
         <el-button @click="importDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+    <!-- 迁移元素：双页面树选择目标 -->
+    <el-dialog v-model="migrateVisible" title="迁移元素到目标页面" width="640px">
+      <div class="migrate-tip">
+        左侧为可选目标页面树（已排除被删页面及其子级），点击选中目标后确认。
+      </div>
+      <div class="migrate-body">
+        <div class="migrate-pane">
+          <div class="migrate-pane-title">目标页面树</div>
+          <el-tree
+            :data="migrateTreeData"
+            node-key="id"
+            :props="{ label: 'page_name', children: 'children' }"
+            default-expand-all
+            :expand-on-click-node="false"
+            :highlight-current="true"
+            @node-click="(d) => (migrateTargetId = d.id)"
+          >
+            <template #default="{ data }">
+              <span class="migrate-node" :class="{ picked: migrateTargetId === data.id }">
+                📄 {{ data.page_name }}
+              </span>
+            </template>
+          </el-tree>
+        </div>
+        <div class="migrate-arrow">→</div>
+        <div class="migrate-pane">
+          <div class="migrate-pane-title">已选目标</div>
+          <div v-if="migrateTargetId" class="migrate-picked-name">
+            {{ flattenTree(pages).find((p) => p.id === migrateTargetId)?.page_name }}
+          </div>
+          <div v-else class="migrate-empty">尚未选择</div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="cancelMigrate">取消</el-button>
+        <el-button type="primary" @click="confirmMigrate">确认迁移</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -610,23 +648,16 @@ const deleteCtxPage = async () => {
             type: 'warning',
           }
         )
-        // confirm：迁移 —— 选目标页面
-        const pagesOptions = pages.value.filter(p => p.id !== page.id)
+        // confirm：迁移 —— 双树选择目标页面（左树可选，右树为已选目标，含子级页面）
+        const pagesOptions = flattenTree(pages.value).filter(p => p.id !== page.id)
         if (!pagesOptions.length) {
           ElMessage.warning('没有其他页面可迁移，请先新增页面')
           return
         }
-        const { value } = await ElMessageBox.prompt(
-          '输入目标页面名称（从下列选择）：\n' + pagesOptions.map(p => p.page_name).join('、'),
-          '迁移元素到', { inputPattern: /\S+/ }
-        )
-        const target = pagesOptions.find(p => p.page_name === value.trim())
-        if (!target) {
-          ElMessage.error('未找到该页面')
-          return
-        }
+        const target = await pickTargetPage(page)
+        if (!target) return
         await elementAPI.deletePageNode(page.id, target.id, null)
-        ElMessage.success('页面已删除，元素已迁移')
+        ElMessage.success(`页面已删除，元素已迁移到「${target.page_name}」`)
       } catch (e2) {
         if (e2 === 'cancel') {
           // 强制删除
@@ -646,6 +677,52 @@ const deleteCtxPage = async () => {
       ElMessage.error('删除失败: ' + (e.message || e))
     }
   }
+}
+
+// ---- 迁移目标双树弹窗 ----
+const flattenTree = (nodes, out = []) => {
+  for (const n of nodes || []) {
+    out.push(n)
+    if (n.children?.length) flattenTree(n.children, out)
+  }
+  return out
+}
+
+const migrateVisible = ref(false)
+const migrateSourcePage = ref(null)
+const migrateTargetId = ref(null)
+// 迁移目标树：排除被删页面本身及其子树（子树会一并删除）
+const migrateTreeData = computed(() => {
+  const exclude = (nodes) => {
+    if (!migrateSourcePage.value) return nodes
+    return nodes
+      .filter((n) => n.id !== migrateSourcePage.value.id)
+      .map((n) => ({ ...n, children: n.children?.length ? exclude(n.children) : [] }))
+  }
+  return exclude(pages.value)
+})
+
+const pickTargetPage = (sourcePage) => {
+  migrateSourcePage.value = sourcePage
+  migrateTargetId.value = null
+  migrateVisible.value = true
+  return new Promise((resolve) => { migrateResolve.value = resolve })
+}
+const migrateResolve = ref(null)
+const confirmMigrate = () => {
+  const target = flattenTree(pages.value).find((p) => p.id === migrateTargetId.value)
+  if (!target) {
+    ElMessage.warning('请先在右侧选择目标页面')
+    return
+  }
+  migrateVisible.value = false
+  migrateResolve.value?.(target)
+  migrateResolve.value = null
+}
+const cancelMigrate = () => {
+  migrateVisible.value = false
+  migrateResolve.value?.(null)
+  migrateResolve.value = null
 }
 
 // ---- 详情 ----
@@ -1059,5 +1136,57 @@ onBeforeUnmount(() => {
 .import-result {
   margin-top: 12px;
   font-size: 13px;
+}
+.migrate-tip {
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 10px;
+}
+.migrate-body {
+  display: grid;
+  grid-template-columns: 1fr 40px 1fr;
+  align-items: start;
+  min-height: 260px;
+}
+.migrate-pane {
+  border: 1px solid var(--el-border-color-lighter, #e4e7ed);
+  border-radius: 4px;
+  padding: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+.migrate-pane-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.migrate-arrow {
+  text-align: center;
+  color: #909399;
+  font-size: 18px;
+  padding-top: 8px;
+}
+.migrate-node {
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 3px;
+  width: 100%;
+}
+.migrate-node.picked {
+  background: var(--el-color-primary-light-9, #ecf5ff);
+  color: var(--el-color-primary, #409eff);
+}
+.migrate-picked-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-color-primary, #409eff);
+  padding: 8px 4px;
+}
+.migrate-empty {
+  color: #c0c4cc;
+  font-size: 13px;
+  padding: 8px 4px;
 }
 </style>
