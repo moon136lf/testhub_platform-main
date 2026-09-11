@@ -99,7 +99,8 @@ class SSEStream:
             max_timeout = 60  # 最多等待 60 次（约 5 分钟）
 
             while timeout_count < max_timeout:
-                # 从 Redis List 中获取消息
+                # 从 Redis List 中获取消息（先确保连接绑定当前事件循环，见 _ensure_redis）
+                await _ensure_redis()
                 messages = await redis_client.redis.lrange(self.redis_key, 0, -1)
 
                 if messages:
