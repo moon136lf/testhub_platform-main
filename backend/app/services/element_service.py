@@ -27,6 +27,58 @@ def _default_cn_alias(elem_type: str, counter: int) -> str:
     return f"{cn}{counter}"
 
 
+def normalize_text(s):
+    """归一化：全角→半角、去空白/标点、lower（Healenium 预处理思路）。"""
+    if not s:
+        return ""
+    out = []
+    for ch in s:
+        code = ord(ch)
+        if code == 0x3000:
+            ch = " "
+        elif 0xFF01 <= code <= 0xFF5E:
+            ch = chr(code - 0xFEE0)
+        out.append(ch)
+    s = "".join(out)
+    s = re.sub(r"[\s。，！？；：""''\(\)（）【】《》、,.!?;:'\"()\[\]{}]+", "", s)
+    return s.lower().strip()
+
+
+def _bigram_overlap(a, b):
+    if len(a) < 2 or len(b) < 2:
+        return 1.0 if a == b else 0.0
+    ga = {a[i:i+2] for i in range(len(a)-1)}
+    gb = {b[i:i+2] for i in range(len(b)-1)}
+    if not ga or not gb:
+        return 0.0
+    return len(ga & gb) / len(ga | gb)
+
+
+def score_element(target, intent_action, elem):
+    """加权评分（方案V1）：别名bigram 0.4 + text包含 0.3 + 类型一致 0.2。
+    归一化精确相等=1.0；其余封顶0.99。"""
+    t = normalize_text(target)
+    name = normalize_text(elem.get("element_name"))
+    text = normalize_text(elem.get("element_text"))
+    if t and (t == name or (text and t == text)):
+        return 1.0
+    alias_sim = max(_bigram_overlap(t, name), _bigram_overlap(t, text) if text else 0.0)
+    contain = 0.0
+    for ref in (name, text):
+        if ref and len(ref) >= 2 and (ref in t or t in ref):
+            contain = 1.0
+            break
+    type_score = 0.0
+    if intent_action:
+        tag = (elem.get("tag") or "").lower()
+        if intent_action in ("input", "select") and tag in ("input", "textarea"):
+            type_score = 1.0
+        elif intent_action == "click" and tag in ("button", "a"):
+            type_score = 1.0
+    score = 0.4 * alias_sim + 0.3 * contain + 0.2 * type_score
+    return round(min(score, 0.99), 4)
+
+
 class ElementService:
     """元素管理服务"""
 
@@ -95,6 +147,68 @@ class ElementService:
     def _best_element(candidates):
         """多命中取 score 最高的（定位质量优先）。"""
         return max(candidates, key=lambda e: (e.confidence or 0))
+
+    MATCH_THRESHOLD = 0.75
+    L3_MAX_CANDIDATES = 20
+
+    async def find_candidates(self, project_id, target, intent_action=None, page_id=None):
+        """三级匹配管线 L1/L2（方案V1）。返回降序列表：
+        [{element_id, element_name, locator, confidence, score, match_level}]
+        score>=0.75→L1(1.0)/L2；<0.75→low（供L3候选，截断20）。"""
+        if not target:
+            return []
+        try:
+            pid = uuid.UUID(project_id)
+        except (ValueError, TypeError):
+            return []
+        result = await self.db.execute(
+            select(ElementRepository).where(
+                ElementRepository.project_id == pid,
+                ElementRepository.status == "active",
+            )
+        )
+        rows = result.scalars().all()
+        if not isinstance(rows, list):
+            rows = [rows] if rows is not None else []
+        if rows and not hasattr(rows[0], "element_name"):
+            rows = []
+        cands = []
+        for e in rows:
+            elem_dict = {
+                "element_name": getattr(e, "element_name", "") or "",
+                "element_text": getattr(e, "element_text", "") or "",
+                "tag": getattr(e, "tag_name", "") or "",
+                "locators": getattr(e, "locator_strategies", None) or {},
+            }
+            score = score_element(target, intent_action, elem_dict)
+            level = "L1" if score >= 1.0 else ("L2" if score >= self.MATCH_THRESHOLD else "low")
+            cands.append({
+                "element_id": str(getattr(e, "element_id", "") or getattr(e, "id", "")),
+                "element_name": elem_dict["element_name"],
+                "locator": self._best_locator(elem_dict["locators"]),
+                "confidence": getattr(e, "confidence", 0) or 0,
+                "score": score,
+                "match_level": level,
+            })
+        cands.sort(key=lambda c: (-c["score"], -c["confidence"]))
+        high = [c for c in cands if c["match_level"] != "low"]
+        low = [c for c in cands if c["match_level"] == "low"][: self.L3_MAX_CANDIDATES]
+        return high + low
+
+    @staticmethod
+    def _best_locator(locators):
+        strategies = (locators or {}).get("strategies") or []
+        if not strategies:
+            return ""
+        best = None
+        for s in strategies:
+            if s is None:
+                continue
+            if best is None or (s.get("confidence", 0) or 0) > (best.get("confidence", 0) or 0):
+                best = s
+        if best is None:
+            return ""
+        return best.get("value", "")
 
     async def writeback_healed_locator(self, element_id: str, healed_locator: dict) -> bool:
         """TRANS-08: confidence>=3 自愈成功后回写 ElementRepository (source=healed)."""
