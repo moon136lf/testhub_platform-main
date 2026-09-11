@@ -20,6 +20,32 @@ logger = logging.getLogger(__name__)
 PASS_HISTORY_WINDOW = 10  # R2/R5 取近 N 次 step=0 结果
 
 
+async def _sync_ai_regression_test_set(db: AsyncSession, project_id: str,
+                                       case_ids: list) -> None:
+    """AI识别回归 → 同步创建/更新 source=ai_regression 的测试集 (消除空挂).
+
+    存在同名 source=ai_regression 测试集则更新 case_ids, 否则新建
+    (命名 "{项目名}-AI识别回归集"; 项目查不到时用 "项目".).
+    """
+    from app.models.test_set import TestSet
+    from app.models.project import Project
+    pr = await db.execute(select(Project).where(Project.id == _uuid(project_id)))
+    project = pr.scalar_one_or_none()
+    proj_name = project.name if project else "项目"
+    name = f"{proj_name}-AI识别回归集"
+    tr = await db.execute(
+        select(TestSet).where(TestSet.project_id == _uuid(project_id),
+                              TestSet.name == name,
+                              TestSet.source == "ai_regression"))
+    ts = tr.scalar_one_or_none()
+    if ts is None:
+        db.add(TestSet(project_id=_uuid(project_id), name=name,
+                       source="ai_regression", case_ids=case_ids))
+    else:
+        ts.case_ids = case_ids
+    await db.flush()
+
+
 def _uuid(v):
     """str/UUID 双接受; 非法值原样返回 (FakeDB/无 DB 场景不炸)."""
     try:
@@ -42,10 +68,20 @@ class RegressionService:
                 ScriptAsset.status == "confirmed"))
         scripts = result.scalars().all()
         suggested = 0
+        regression_case_ids = []
         for s in scripts:
             row = await self._identify_one(s)
             if row and row.ai_suggested:
                 suggested += 1
+                if s.case_id:
+                    regression_case_ids.append(s.case_id)
+        # AI识别回归同步建/更新测试集 (消除"识别完成但无测试集可跑"的空挂)
+        if regression_case_ids:
+            try:
+                await _sync_ai_regression_test_set(self.db, project_id,
+                                                   [str(c) for c in regression_case_ids])
+            except Exception as e:
+                logger.warning(f"AI回归测试集同步失败(非阻断): {e}")
         return {"identified": len(scripts), "suggested_count": suggested}
 
     async def identify_for_script(self, project_id: str, script_id: str) -> None:

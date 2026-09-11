@@ -1,6 +1,6 @@
 """Regression (#8) tests (mock db / pure-function rule engine)."""
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 
@@ -211,3 +211,69 @@ class TestForRegressionSource:
         stats = asyncio_run(svc.get_stats("p1"))
         assert stats["total"] == 1
         assert stats["passed"] == 1
+
+
+# ---- AI识别回归同步创建 source=ai_regression 测试集 (消除空挂) ----
+def _fake_case():
+    c = MagicMock()
+    c.priority = 'P0'
+    c.point_id = None
+    return c
+
+
+class TestSyncTestSet:
+    def _make_script(self, script_id, case_id=None):
+        s = _FakeScript(script_id)
+        s.case_id = case_id
+        s.step_mapping = []
+        s.category = None
+        return s
+
+    def test_identify_creates_ai_regression_test_set(self):
+        """identify_project 后存在 source=ai_regression 的 TestSet 且 case_ids 对齐回归成员."""
+        from app.models.test_set import TestSet
+        from unittest.mock import patch
+        pid = uuid4()
+        cid = uuid4()
+        script = self._make_script(uuid4(), case_id=cid)
+        script.project_id = pid
+        db = FakeRegressionDB([
+            FakeResult(scalars=[script]),   # 查 confirmed 脚本
+            FakeResult(scalar=_fake_case()),  # _assemble: TestCase (point_id=None, 不查 TestPoint)
+            FakeResult(scalars=[]),          # _assemble: ExecutionDetail
+            FakeResult(scalar=None),         # upsert: 无现有 RegressionSet 行
+            FakeResult(scalar=None),         # sync: 查 Project
+            FakeResult(scalar=None),         # sync: 查现有 ai_regression TestSet
+        ])
+        svc = RegressionService(db)
+        with patch("app.services.regression_service.score_script", return_value=(100, "P0核心")):
+            asyncio_run(svc.identify_project(str(pid)))
+        ts = [o for o in db.added if isinstance(o, TestSet)]
+        assert len(ts) == 1
+        assert ts[0].source == "ai_regression"
+        assert ts[0].case_ids == [str(cid)]
+
+    def test_identify_updates_existing_ai_regression_test_set(self):
+        """已存在同名 source=ai_regression 测试集 → 更新 case_ids 不新建."""
+        from app.models.test_set import TestSet
+        pid = uuid4()
+        cid = uuid4()
+        script = self._make_script(uuid4(), case_id=cid)
+        script.project_id = pid
+        project = MagicMock()
+        project.name = "演示项目"
+        existing = TestSet(project_id=pid, name="演示项目-AI识别回归集",
+                           source="ai_regression", case_ids=[])
+        db = FakeRegressionDB([
+            FakeResult(scalars=[script]),
+            FakeResult(scalar=_fake_case()),
+            FakeResult(scalars=[]),
+            FakeResult(scalar=None),   # upsert: 无现有 RegressionSet 行
+            FakeResult(scalar=project),
+            FakeResult(scalar=existing),
+        ])
+        svc = RegressionService(db)
+        with patch("app.services.regression_service.score_script", return_value=(100, "P0核心")):
+            asyncio_run(svc.identify_project(str(pid)))
+        assert not any(isinstance(o, TestSet) for o in db.added)
+        assert existing.case_ids == [str(cid)]
