@@ -15,7 +15,7 @@ class TestSetCreateRequest(BaseModel):
     project_id: str
     name: str = Field(..., min_length=1, max_length=100)
     case_ids: List[str] = Field(..., min_length=1)
-    source: str = Field("manual", pattern="^(manual|ai_suggest|convert_page)$")
+    source: str = Field("manual", pattern="^(manual|ai_suggest|convert_page|ai_regression|manual_regression)$")
     description: Optional[str] = Field(None, max_length=500)
 
 

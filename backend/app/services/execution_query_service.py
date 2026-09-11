@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.execution import ExecutionRecord, ExecutionDetail
+from app.models.execution import ExecutionRecord, ExecutionDetail, ExecutionBug
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ class ExecutionQueryService:
         base = select(ExecutionRecord).where(
             ExecutionRecord.project_id == pid,
             ExecutionRecord.started_at >= since,
+            ExecutionRecord.is_deleted.is_(False),
         )
         if exec_type:
             base = base.where(ExecutionRecord.exec_type == exec_type)
@@ -54,12 +55,18 @@ class ExecutionQueryService:
                      .order_by(ExecutionDetail.step))
         details = (await self.db.execute(details_q)).scalars().all()
 
+        bugs_q = (select(ExecutionBug)
+                  .where(ExecutionBug.record_id == rec.id)
+                  .order_by(ExecutionBug.created_at))
+        bugs = (await self.db.execute(bugs_q)).scalars().all()
+
         return {
             "record": rec.to_dict(),
             "fail_step_count": fail_step_count,
             "total_duration_ms": rec.duration_ms or 0,
             "token_remaining": None,
             "details": [d.to_dict() for d in details],
+            "bugs": [b.to_dict() for b in bugs],
         }
 
     async def list_details(self, exec_id: str, *, status: Optional[str] = "fail") -> list:

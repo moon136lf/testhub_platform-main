@@ -199,8 +199,20 @@ def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: l
                     if fail_fast and detail.status == "fail":
                         break  # 失败策略=停止: 脚本级 fail-fast (spec 偏差 K)
             # 持久化 detail (T6 遗留: execute 未 db.add, 这里补)
+            from app.models.execution import ExecutionBug
             for d in details:
                 db.add(d)
+            await db.flush()  # 先落 detail 拿 id, bug 行引用 detail_id
+            for d in details:
+                # 阶段10: 失败明细自动生成 bug 行
+                if d.status == "fail":
+                    db.add(ExecutionBug(
+                        record_id=er.id, detail_id=d.id,
+                        step_snapshot={"step": d.step, "action": d.action,
+                                       "error_type": d.error_type, "error_msg": d.error_msg},
+                        screenshot_url=d.screenshot_url,
+                        error_stack=d.stack_trace,
+                    ))
             # 更新 execution_record 汇总
             passed = sum(1 for d in details if d.status == "pass")
             failed = sum(1 for d in details if d.status == "fail")

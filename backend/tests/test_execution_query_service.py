@@ -53,12 +53,14 @@ class TestGetDetail:
             Mock(scalar_one_or_none=Mock(return_value=rec)),
             _mock_scalar(2),
             _mock_scalars([fail_detail]),
+            Mock(scalars=Mock(return_value=Mock(all=Mock(return_value=[])))),  # bugs 查询（阶段10）
         ]
         svc = ExecutionQueryService(mock_db)
         result = await svc.get_detail("exec-1")
         assert result["record"]["exec_id"] == "EXEC-1"
         assert result["fail_step_count"] == 2
         assert len(result["details"]) == 1
+        assert result["bugs"] == []
 
     @pytest.mark.asyncio
     async def test_get_detail_missing_returns_none(self, mock_db):

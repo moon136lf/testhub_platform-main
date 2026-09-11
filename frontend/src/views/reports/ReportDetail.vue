@@ -9,6 +9,9 @@
             <el-button @click="generate(true)">重新生成</el-button>
             <el-button @click="exportReport('html')">导出HTML</el-button>
             <el-button @click="exportReport('pdf')">导出PDF</el-button>
+            <el-popconfirm title="确认删除该执行记录？" @confirm="deleteRecord">
+              <template #reference><el-button type="danger">删除记录</el-button></template>
+            </el-popconfirm>
           </div>
         </div>
       </template>
@@ -61,6 +64,34 @@
       </el-table>
     </el-card>
 
+    <!-- Bug 清单（阶段10：失败自动生成的缺陷行） -->
+    <el-card style="margin-top: 16px" v-if="detail && (detail.bugs || []).length">
+      <template #header><span>Bug 清单（{{ detail.bugs.length }}）</span></template>
+      <el-table :data="detail.bugs" border size="small">
+        <el-table-column label="失败步骤" width="200">
+          <template #default="{ row }">
+            <span v-if="row.step_snapshot">第 {{ row.step_snapshot.step }} 步 {{ row.step_snapshot.action }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="错误类型" width="140">
+          <template #default="{ row }">{{ row.step_snapshot?.error_type || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="错误信息" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.step_snapshot?.error_msg || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="AI诊断" min-width="200">
+          <template #default="{ row }">{{ row.ai_diagnosis || '未诊断' }}</template>
+        </el-table-column>
+        <el-table-column label="截图" width="110">
+          <template #default="{ row }">
+            <el-image v-if="row.screenshot_url" :src="row.screenshot_url" :preview-src-list="[row.screenshot_url]" style="width: 80px" />
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
     <el-dialog v-model="diagVisible" title="AI 诊断" width="640px">
       <div v-loading="diagLoading">
         <DiagnosisCard v-if="diagCard" :card="diagCard" :applying="applying" @apply="onApply" />
@@ -107,6 +138,14 @@ const generate = async (force) => {
 }
 const exportReport = (format) => {
   window.location = axios.defaults.baseURL + reportAPI.exportUrl(route.params.execId, format)
+}
+
+const deleteRecord = async () => {
+  try {
+    await axios.delete(`/reports/records/by-id/${detail.value.record.id}`)
+    ElMessage.success('记录已删除')
+    window.location = '/reports'
+  } catch (e) { ElMessage.error(e?.response?.data?.detail || '删除失败') }
 }
 
 // ---- AI 诊断 (#5c) ----

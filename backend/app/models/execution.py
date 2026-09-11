@@ -2,7 +2,7 @@
 Execution related models
 """
 
-from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, JSON, Numeric, Index
+from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, JSON, Numeric, Index, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
@@ -30,6 +30,7 @@ class ExecutionRecord(Base):
     report_url = Column(Text)
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     finished_at = Column(DateTime(timezone=True))
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default="false", comment="软删标记")
 
     def to_dict(self):
         return {
@@ -119,5 +120,34 @@ class ExecutionDetail(Base):
             "heal_status": self.heal_status,
             "heal_log": self.heal_log,
             "duration_ms": self.duration_ms,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ExecutionBug(Base):
+    """缺陷记录表 — 失败执行自动生成 bug 行（阶段10）。"""
+    __tablename__ = "execution_bug"
+    __table_args__ = (
+        Index("idx_exec_bug_record", "record_id"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    record_id = Column(UUID(as_uuid=True), ForeignKey("execution_record.id", ondelete="CASCADE"), nullable=False)
+    detail_id = Column(UUID(as_uuid=True), ForeignKey("execution_detail.id", ondelete="SET NULL"))
+    step_snapshot = Column(JSONB, comment="失败步骤快照 {step, action, error_type, error_msg}")
+    screenshot_url = Column(Text)
+    error_stack = Column(Text)
+    ai_diagnosis = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "record_id": str(self.record_id),
+            "detail_id": str(self.detail_id) if self.detail_id else None,
+            "step_snapshot": self.step_snapshot,
+            "screenshot_url": self.screenshot_url,
+            "error_stack": self.error_stack,
+            "ai_diagnosis": self.ai_diagnosis,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

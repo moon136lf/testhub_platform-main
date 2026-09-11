@@ -92,12 +92,6 @@ const router = createRouter({
           meta: { title: 'UI自动化测试' }
         },
         {
-          path: 'auto/regression',
-          name: 'Regression',
-          component: () => import('@/views/Regression.vue'),
-          meta: { title: '回归测试' }
-        },
-        {
           path: 'settings/ai',
           name: 'AISettings',
           component: () => import('@/views/system/AISettings.vue'),
