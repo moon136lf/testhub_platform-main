@@ -87,6 +87,42 @@ class ElementService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def picker_data(self, project_id: str, page_id: Optional[str] = None,
+                          q: Optional[str] = None) -> Dict:
+        """元素选择器数据源（方案V1阶段8）：按页面分组，alias+首选定位+confidence。
+
+        ElementRepository.page_id 为 nullable=False → inner join 足够，
+        不存在无页面的全局元素。
+        """
+        stmt = (
+            select(PageRepository, ElementRepository)
+            .join(ElementRepository, ElementRepository.page_id == PageRepository.id)
+            .where(PageRepository.project_id == uuid.UUID(project_id),
+                   ElementRepository.status == "active")
+        )
+        if page_id:
+            stmt = stmt.where(PageRepository.id == uuid.UUID(page_id))
+        if q:
+            kw = f"%{q}%"
+            stmt = stmt.where(or_(
+                ElementRepository.element_name.ilike(kw),
+                ElementRepository.element_text.ilike(kw)))
+        result = await self.db.execute(stmt)
+        rows = result.all() if hasattr(result, "all") else []
+        pages: Dict[str, dict] = {}
+        for page, el in rows:
+            pg = pages.setdefault(str(page.id), {
+                "page_id": str(page.id), "page_name": page.page_name, "elements": []})
+            strategies = (el.locator_strategies or {}).get("strategies") or []
+            best = max(strategies, key=lambda s: s.get("confidence", 0) or 0) if strategies else {}
+            pg["elements"].append({
+                "element_id": str(el.id),
+                "element_name": el.element_name,
+                "locator": best.get("value", ""),
+                "confidence": el.confidence or 0,
+            })
+        return {"pages": list(pages.values())}
+
     async def find_by_name(self, project_id: str, element_name: str) -> Optional[ElementRepository]:
         """按项目+元素名/文本查找元素 (供转脚本定位匹配用, TRANS-01)。
 

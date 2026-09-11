@@ -399,6 +399,23 @@ async def delete_element(
 # ============================================================
 
 
+@router.get("/picker")
+async def element_picker(
+    project_id: str = Query(..., description="项目 ID"),
+    page_id: Optional[str] = Query(None, description="页面 ID（可选，限定单页）"),
+    q: Optional[str] = Query(None, description="搜索别名/文本（可选）"),
+    db: AsyncSession = Depends(get_db),
+):
+    """元素选择器数据源（方案V1阶段8）：按页面分组，alias+首选定位+confidence。"""
+    try:
+        uuid.UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+    svc = ElementService(db)
+    data = await svc.picker_data(project_id, page_id=page_id, q=q)
+    return {"code": 0, "data": data}
+
+
 @router.get("/login-state")
 async def get_login_state(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
     """登录态摘要 (P1 占位: login_state 表 P3 才建, 无表/无行时返回 not_configured)."""
