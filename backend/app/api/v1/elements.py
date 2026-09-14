@@ -1052,7 +1052,7 @@ def _element_uuid_or_400(element_id: str) -> uuid.UUID:
         raise HTTPException(status_code=400, detail="Invalid element ID format")
 
 
-@router.put("/elements/{element_id}")
+@asset_router.put("/elements/{element_id}")
 async def update_element(element_id: str, request: ElementUpdateRequest,
                          db: AsyncSession = Depends(get_db)):
     """编辑元素（白名单字段）。"""
@@ -1094,6 +1094,15 @@ async def add_locator(element_id: str, request: LocatorAddRequest,
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "message": "added"}
+
+
+@asset_router.post("/elements-asset/move-to-page")
+async def move_elements_to_page(request: ElementMoveRequest, db: AsyncSession = Depends(get_db)):
+    """批量迁移元素到目标页面（单个/多个）。"""
+    if not request.element_ids:
+        raise HTTPException(status_code=400, detail="未选择要迁移的元素")
+    moved = await ElementAssetService(db).move_elements_to_page(request.element_ids, request.target_page_id)
+    return {"code": 0, "data": {"moved": moved}}
 
 
 @asset_router.get("/elements/{element_id}/references")
@@ -1145,6 +1154,7 @@ from app.schemas.element_schema import (
     PageRenameRequest,
     PageMoveRequest,
     ElementCreateRequest,
+    ElementMoveRequest,
 )
 
 
@@ -1161,9 +1171,9 @@ async def create_sub_page(request: SubPageCreateRequest, db: AsyncSession = Depe
 
 @asset_router.put("/pages-tree/{page_id}")
 async def rename_page_node(page_id: str, request: PageRenameRequest, db: AsyncSession = Depends(get_db)):
-    """重命名页面。"""
+    """编辑页面（名称必填，URL 可选）。"""
     try:
-        await ElementAssetService(db).rename_page(page_id, request.page_name)
+        await ElementAssetService(db).rename_page(page_id, request.page_name, request.page_url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "message": "renamed"}
@@ -1285,7 +1295,7 @@ async def verify_element_locator(element_id: str, request: LocatorVerifyRequest,
     pw = PlaywrightService()
     page = None
     try:
-        await _bridge.run(pw.start(headless=True))
+        await _bridge.run(pw.start(headless=False))
         page_url = (page_row.page_url or "").strip()
         # page_url 存的是绝对 URL 时直接用；相对路径才拼环境 URL（环境 URL 误填成完整地址曾拼出双 host）
         if page_url.startswith("http://") or page_url.startswith("https://"):
