@@ -738,11 +738,24 @@ async def browser_session_status(sid: str):
             state = "ready"
             sess.state = "ready"
     import base64
-    title = await _bridge.run(sess.page.title())
-    screenshot_b64 = base64.b64encode(await _bridge.run(sess.page.screenshot())).decode()
+    # 截图可能因页面动画/渲染挂起而超时（Playwright 默认 30s）——失败不应炸整个
+    # status 端点（前端轮询会因 500 中断），降级返回旧截图提示
+    try:
+        png = await _bridge.run(sess.page.screenshot(timeout=8000))
+        screenshot_b64 = base64.b64encode(png).decode()
+    except Exception as e:
+        logger.warning(f"status screenshot timeout/failed | sid={sid}: {str(e)[:150]}")
+        screenshot_b64 = None
+    try:
+        title = await _bridge.run(sess.page.title())
+    except Exception:
+        title = None
     # 实际视口尺寸（headed 模式跟随窗口，前端点选坐标换算需要）
-    viewport = await _bridge.run(_call(
-        sess.page.evaluate, "() => ({w: window.innerWidth, h: window.innerHeight})"))
+    try:
+        viewport = await _bridge.run(_call(
+            sess.page.evaluate, "() => ({w: window.innerWidth, h: window.innerHeight})"))
+    except Exception:
+        viewport = {}
     return {"code": 0, "data": {"state": state, "url": url,
                                 "title": title, "screenshot_b64": screenshot_b64,
                                 "viewport_width": viewport.get("w"),
@@ -1060,6 +1073,16 @@ async def reorder_locator(element_id: str, request: LocatorReorderRequest,
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "message": "reordered"}
+
+
+@asset_router.delete("/elements/{element_id}/locators/{index}")
+async def remove_locator(element_id: str, index: int, db: AsyncSession = Depends(get_db)):
+    """删除定位器（按数组原序 index）。"""
+    try:
+        await ElementAssetService(db).remove_locator(element_id, index)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "message": "removed"}
 
 
 @asset_router.post("/elements/{element_id}/locators")

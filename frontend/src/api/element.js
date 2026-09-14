@@ -97,6 +97,10 @@ export const elementAPI = {
     const response = await axios.post(`/elements/${elementId}/locators`, { type, value, score })
     return response.data
   },
+  async deleteLocator(elementId, index) {
+    const response = await axios.delete(`/elements/${elementId}/locators/${index}`)
+    return response.data
+  },
   async reorderLocator(elementId, index, direction) {
     const response = await axios.post(`/elements/${elementId}/locators/reorder`, { index, direction })
     return response.data

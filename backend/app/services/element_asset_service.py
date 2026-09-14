@@ -16,7 +16,7 @@ from app.models.test_case import ScriptAsset
 logger = logging.getLogger(__name__)
 
 # 可编辑字段白名单（防乱写）
-_EDITABLE_FIELDS = {"element_name", "element_type", "element_text"}
+_EDITABLE_FIELDS = {"element_name", "element_type", "element_text", "page_id"}
 
 
 def _to_uuid(value: str):
@@ -71,7 +71,16 @@ class ElementAssetService:
         for k, v in fields.items():
             if k not in _EDITABLE_FIELDS:
                 raise ValueError(f"字段不可编辑: {k}")
-            setattr(el, k, v)
+            if k == "page_id" and v is not None:
+                from sqlalchemy import func as _func
+                t = await self.db.execute(
+                    select(_func.count(PageRepository.id)).where(PageRepository.id == _uuid.UUID(str(v)))
+                )
+                if not (t.scalar() or 0):
+                    raise ValueError("所属页面不存在")
+                setattr(el, k, _uuid.UUID(str(v)))
+            else:
+                setattr(el, k, v)
         await self.db.commit()
         return el
 
@@ -111,6 +120,23 @@ class ElementAssetService:
         })
         el.locator_strategies = {"strategies": sts}
         # JSONB 原地 append 不触发 UPDATE，须显式标记（否则自定义定位器静默丢失）
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(el, "locator_strategies")
+        await self.db.commit()
+
+    async def remove_locator(self, element_id: str, index: int) -> None:
+        """删除定位器（按数组原序 index，删除后重排 score）。"""
+        from app.models.element import ElementRepository
+        el = await self.db.get(ElementRepository, _uuid.UUID(element_id))
+        if not el:
+            raise ValueError("元素不存在")
+        sts = (el.locator_strategies or {}).get("strategies", [])
+        if index < 0 or index >= len(sts):
+            raise ValueError("定位器索引越界")
+        sts.pop(index)
+        for pos, s in enumerate(sts):
+            s["score"] = max(0, 150 - pos * 10)
+        el.locator_strategies = {"strategies": sts}
         from sqlalchemy.orm.attributes import flag_modified
         flag_modified(el, "locator_strategies")
         await self.db.commit()

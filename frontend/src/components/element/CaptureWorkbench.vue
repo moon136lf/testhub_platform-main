@@ -479,8 +479,13 @@ const refreshScreenshot = async () => {
     const s = await elementAPI.getBrowserStatus(browserSessionId.value)
     statusUrl.value = s.url || ''
     if (s.state === 'released' || !s.screenshot_b64) {
-      screenshotSrc.value = ''
-      if (s.state === 'released') browserReleased.value = true
+      // screenshot_b64 为 null = 后端截图超时降级（页面渲染挂起），保留旧截图不清空
+      if (s.state === 'released') {
+        screenshotSrc.value = ''
+        browserReleased.value = true
+      } else if (!screenshotSrc.value) {
+        screenshotSrc.value = ''
+      }
     } else {
       screenshotSrc.value = `data:image/png;base64,${s.screenshot_b64}`
       if (s.viewport_width) viewportW.value = s.viewport_width

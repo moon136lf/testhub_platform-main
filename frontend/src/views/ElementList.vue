@@ -101,8 +101,9 @@
           <el-table-column label="更新时间" width="160">
             <template #default="{ row }">{{ formatTime(row.updated_at || row.created_at) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="130" fixed="right">
+          <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
+              <el-button type="primary" link :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
               <el-button type="primary" link :icon="View" @click="openDetail(row)">详情</el-button>
               <el-button type="danger" link :icon="Delete" @click="deleteElement(row)">删除</el-button>
             </template>
@@ -249,14 +250,14 @@
         <el-form-item label="定位器">
           <div style="width:100%">
             <div v-for="(loc, i) in createForm.locators" :key="i" style="display:flex; gap:6px; margin-bottom:6px">
-              <el-select v-model="loc.type" style="width:120px" size="small">
+              <el-select v-model="loc.type" style="width:140px">
                 <el-option v-for="t in ['id', 'css', 'data-testid', 'text', 'xpath']" :key="t" :label="t" :value="t" />
               </el-select>
-              <el-input v-model="loc.value" placeholder="定位表达式" size="small" style="flex:1" />
-              <el-input-number v-model="loc.score" :min="0" :max="150" size="small" style="width:100px" />
-              <el-button size="small" type="danger" text @click="createForm.locators.splice(i, 1)">删除</el-button>
+              <el-input v-model="loc.value" placeholder="定位表达式" style="flex:1" />
+              <el-input-number v-model="loc.score" :min="0" :max="150" style="width:110px" />
+              <el-button type="danger" text @click="createForm.locators.splice(i, 1)">删除</el-button>
             </div>
-            <el-button size="small" text type="primary" @click="createForm.locators.push({ type: 'css', value: '', score: 50 })">+ 添加定位器</el-button>
+            <el-button text type="primary" @click="createForm.locators.push({ type: 'css', value: '', score: 50 })">+ 添加定位器</el-button>
           </div>
         </el-form-item>
       </el-form>
@@ -266,9 +267,54 @@
       </template>
     </el-dialog>
 
+    <!-- 编辑元素弹窗（字段与新建一致） -->
+    <el-dialog v-model="editDialogVisible" title="编辑元素" width="480px">
+      <el-form label-width="80px">
+        <el-form-item label="名称" required>
+          <el-input v-model="editForm.name" />
+        </el-form-item>
+        <el-form-item label="类型" required>
+          <el-select v-model="editForm.element_type" style="width: 100%">
+            <el-option v-for="t in ['button', 'input', 'link', 'select', 'other']" :key="t" :label="t" :value="t" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="显示文本">
+          <el-input v-model="editForm.element_text" />
+        </el-form-item>
+        <el-form-item label="作用域" required>
+          <el-radio-group v-model="editForm.scope" disabled>
+            <el-radio value="page">页面级</el-radio>
+            <el-radio value="global">全局</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="editForm.scope === 'page'" label="所属页面" required>
+          <el-select v-model="editForm.page_id" style="width: 100%" placeholder="选择页面">
+            <el-option v-for="p in flattenTree(pages)" :key="p.id" :label="p.page_name" :value="p.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="定位器">
+          <div style="width:100%">
+            <div v-for="(loc, i) in editForm.locators" :key="i" style="display:flex; gap:6px; margin-bottom:6px">
+              <el-select v-model="loc.type" style="width:140px">
+                <el-option v-for="t in ['id', 'css', 'data-testid', 'text', 'xpath']" :key="t" :label="t" :value="t" />
+              </el-select>
+              <el-input v-model="loc.value" placeholder="定位表达式" style="flex:1" />
+              <el-input-number v-model="loc.score" :min="0" :max="150" style="width:110px" />
+              <el-button type="danger" text @click="editForm.locators.splice(i, 1)">删除</el-button>
+            </div>
+            <el-button text type="primary" @click="editForm.locators.push({ type: 'css', value: '', score: 50 })">+ 添加定位器</el-button>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 回收站弹窗 -->
     <el-dialog v-model="recycleDialogVisible" title="回收站（30天内可恢复）" width="860px">
-      <el-table :data="recycleItems" v-loading="recycleLoading" size="small">
+      <el-table :data="recycleItems" v-loading="recycleLoading">
         <el-table-column prop="element_name" label="名称" min-width="160" show-overflow-tooltip />
         <el-table-column prop="page_name" label="所属页面" width="140" show-overflow-tooltip />
         <el-table-column prop="element_type" label="类型" width="90" />
@@ -350,7 +396,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, View, Upload, Download } from '@element-plus/icons-vue'
+import { Plus, Delete, View, Upload, Download, Edit } from '@element-plus/icons-vue'
 import { elementAPI } from '@/api/element.js'
 import { projectAPI } from '@/api/project.js'
 
@@ -815,6 +861,88 @@ const verifyPrimary = async () => {
     verifyResult.value = { error: e.message || String(e) }
   } finally {
     verifying.value = false
+  }
+}
+
+// ---- 编辑元素（字段与新建一致，弹窗展示） ----
+const editDialogVisible = ref(false)
+const editForm = ref({ id: null, name: '', element_type: 'button', element_text: '', scope: 'page', page_id: null, locators: [] })
+// 编辑保存时记录定位器原序，删除/新增的分别处理
+let editOriginalLocators = []
+
+const openEditDialog = (row) => {
+  const raw = extractLocators(row)
+  editOriginalLocators = raw.map((s) => ({ ...s }))
+  editForm.value = {
+    id: row.id,
+    name: row.element_name || '',
+    element_type: row.element_type || 'button',
+    element_text: row.element_text || '',
+    scope: row.scope || 'page',
+    page_id: row.page_id || null,
+    locators: raw.map((s) => ({ type: s.type, value: s.value, score: s.score })),
+  }
+  editDialogVisible.value = true
+}
+
+const submitEdit = async () => {
+  const form = editForm.value
+  if (!form.name || !form.element_type) {
+    ElMessage.warning('请填写名称和类型')
+    return
+  }
+  if (form.scope === 'page' && !form.page_id) {
+    ElMessage.warning('页面级元素需选择所属页面')
+    return
+  }
+  try {
+    // 基础字段（后端白名单校验）
+    await elementAPI.updateElement(form.id, {
+      element_name: form.name,
+      element_type: form.element_type,
+      element_text: form.element_text || undefined,
+      page_id: form.scope === 'page' ? form.page_id : undefined,
+    })
+    // 定位器差异同步：以原始列表为基准做删除 + 调序，再追加新增行
+    const keptValues = new Set(form.locators.map((l) => `${l.type}|${l.value}`))
+    // 1) 删除：原列表中不在现列表的，从尾往前删（避免索引位移）
+    for (let i = editOriginalLocators.length - 1; i >= 0; i--) {
+      const orig = editOriginalLocators[i]
+      if (!keptValues.has(`${orig.type}|${orig.value}`)) {
+        await elementAPI.deleteLocator(form.id, i)
+      }
+    }
+    // 2) 重算删除后的原序列表，再按现列表顺序提交 reorder + add
+    const remaining = editOriginalLocators.filter(
+      (o) => keptValues.has(`${o.type}|${o.value}`))
+    const remainingKeys = new Set(remaining.map((o) => `${o.type}|${o.value}`))
+    // 现列表中已存在项：按现列表顺序对原序做对齐（简单做法：若顺序不同则逐个 down 顶到位置——
+    // 为避免复杂度，直接采用「删除全部再新增」以外的方式：已存在项顺序与原序一致时跳过）
+    const existingKept = form.locators.filter((l) => remainingKeys.has(`${l.type}|${l.value}`))
+    // 若顺序有变化，用 reorder 逐条上移到目标位置
+    for (let target = 0; target < existingKept.length; target++) {
+      const key = `${existingKept[target].type}|${existingKept[target].value}`
+      const curRawIdx = remaining.indexOf(remaining.find((o) => `${o.type}|${o.value}` === key))
+      if (curRawIdx !== target) {
+        await elementAPI.reorderLocator(form.id, curRawIdx, 'up')
+        // 同步本地 remaining 视图
+        const [moved] = remaining.splice(curRawIdx, 1)
+        remaining.splice(target, 0, moved)
+      }
+    }
+    // 3) 新增项：原列表没有的逐条 add
+    const originalKeys = new Set(editOriginalLocators.map((o) => `${o.type}|${o.value}`))
+    for (const l of form.locators) {
+      if (!originalKeys.has(`${l.type}|${l.value}`)) {
+        await elementAPI.addLocator(form.id, l.type, l.value, l.score)
+      }
+    }
+    ElMessage.success('元素已保存')
+    editDialogVisible.value = false
+    loadElements()
+    loadPages()
+  } catch (e) {
+    ElMessage.error('保存失败: ' + (e.response?.data?.detail || e.message || e))
   }
 }
 
