@@ -22,7 +22,8 @@ class NormalizedCase:
 
 
 VALID_ACTIONS = ("navigate", "click", "fill", "select", "check",
-                 "create", "edit", "delete", "workflow_action", "input_captcha")
+                 "create", "edit", "delete", "workflow_action", "input_captcha",
+                 "captcha_recognize")
 
 
 @dataclass
@@ -40,13 +41,15 @@ class LLMGatewayProto(Protocol):
 
 STEP1_PROMPT = """你是测试脚本转换器。把测试步骤转成结构化动作意图, 输出 JSON 数组。
 每项: {{"step": int, "action": 动作类型, "target": 目标元素或页面, "value": 输入值}}
-动作类型只能选: navigate/click/fill/select/check/create/edit/delete/workflow_action/input_captcha
+动作类型只能选: navigate/click/fill/select/check/create/edit/delete/workflow_action/captcha_recognize
 映射规则:
 - 点击X → click, target=X
 - 输入/填写 X到Y → fill, target=Y, value=X (例: "输入test02到账号输入框" → fill, target=账号输入框, value=test02)
 - 目标含"地址栏"或"URL"且值为 http 开头 → navigate, target 可为空, value=URL
 - 步骤的 目标[]/数据[]/预期[] 分别对应 target/value/断言依据, 不得遗漏或编造
-- 识别验证码(含"识别图形验证码，输入验证码"等描述, 无论原文一步还是两步) → input_captcha, target=验证码图片元素, value=验证码输入框; 后续不得再出现单独的输入验证码步骤
+- 识别验证码 → captcha_recognize, target=验证码图片元素
+- 输入/填写 验证码到输入框 → fill, target=验证码输入框, value=识别结果(引用上一步识别输出)
+- 识别验证码与输入验证码是两个独立步骤，不得合并为一步
 只输出 JSON 数组, 不要解释文字。
 
 用例标题: {title}

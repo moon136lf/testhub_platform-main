@@ -7,6 +7,7 @@
 const ACTION_MAP = {
   navigate: 'navigate', click: 'click', fill: 'input', select: 'select',
   check: 'click', create: 'input', edit: 'input', delete: 'click', workflow_action: 'click',
+  captcha_recognize: 'captcha_recognize',  // 需求②：识别验证码独立步骤
 }
 
 const extractLocator = (impl) => {

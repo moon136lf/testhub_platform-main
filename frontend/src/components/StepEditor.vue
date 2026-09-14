@@ -96,6 +96,7 @@ const ACTIONS = [
   { value: 'click', label: '点击' },
   { value: 'input', label: '输入' },
   { value: 'input_captcha', label: '输入验证码' },
+  { value: 'captcha_recognize', label: '识别验证码' },
   { value: 'select', label: '下拉选择' },
   { value: 'wait', label: '等待(秒)' },
   { value: 'assert_text', label: '断言文本' },

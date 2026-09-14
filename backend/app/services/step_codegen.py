@@ -13,6 +13,7 @@ SUPPORTED_ACTIONS = [
     "navigate", "click", "input", "select", "wait",
     "assert_text", "assert_visible", "assert_db",
     "input_captcha", "assert_url", "assert_attribute",  # 方案V1阶段5
+    "captcha_recognize",  # 需求②：只识别验证码，不填写
 ]
 
 _HEADER = '''"""{title} — 由步骤化编辑器生成"""
@@ -83,6 +84,13 @@ def _gen_step(step: Dict) -> str:
             f"    _captcha_img = {_loc(extra)}\n"
             f"    captcha_text = _recognize_captcha(_captcha_img.screenshot())  # 由执行器注入\n"
             f"    {_loc(target)}.fill(captcha_text)"
+        )
+    elif action == "captcha_recognize":
+        # 需求②：只识别验证码存变量，不填输入框（填写由后续 input/fill 步骤完成）
+        if not target:
+            raise ValueError("captcha_recognize 需要 target（验证码图片定位）")
+        return (
+            f"    captcha_text = _recognize_captcha({_loc(target)}.screenshot())  # 由执行器注入"
         )
     elif action == "assert_url":
         # 非元素断言：expected 为 URL 包含串，内联在 assert_db 行为之外单独生成

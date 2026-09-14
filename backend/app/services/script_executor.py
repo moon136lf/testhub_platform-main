@@ -96,7 +96,11 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
         await page.locator(target).click()
         return None
     if action == "input":
-        await page.locator(target).fill(value)
+        fill_value = value
+        if fill_value == "识别结果" or fill_value == "{captcha_text}":
+            # 需求②：引用上一步 captcha_recognize 的识别输出
+            fill_value = getattr(page, "_script_vars", {}).get("captcha_text", "")
+        await page.locator(target).fill(fill_value)
         return None
     if action == "input_captcha":
         # 复合动作：截图验证码图片(target) → ddddocr 识别 → 自动填入输入框(value)
@@ -110,6 +114,24 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
             text = (text or "").strip()
             if text:
                 await page.locator(value).fill(text)
+                return None
+            last_err = f"OCR 识别结果为空 (attempt={attempt + 1})"
+            await page.wait_for_timeout(500)
+        raise RuntimeError(f"验证码识别失败: {last_err}。ddddocr 仅支持普通字符型图形验证码，"
+                           f"算术题/滑块/点选类需人工处理")
+    if action == "captcha_recognize":
+        # 需求②：只识别验证码（截图 target → ddddocr），存全局变量 captcha_text，不填写
+        # 填写由后续 input/fill 步骤用 {captcha_text} 引用完成
+        import ddddocr
+        ocr = ddddocr.DdddOcr(show_ad=False)
+        last_err = None
+        for attempt in range(2):
+            img_bytes = await page.locator(target).screenshot()
+            text = ocr.classification(img_bytes)
+            text = (text or "").strip()
+            if text:
+                page._script_vars = getattr(page, "_script_vars", {})
+                page._script_vars["captcha_text"] = text
                 return None
             last_err = f"OCR 识别结果为空 (attempt={attempt + 1})"
             await page.wait_for_timeout(500)
