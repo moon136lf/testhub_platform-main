@@ -340,7 +340,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { scriptAPI } from '@/api/script'
@@ -743,6 +743,7 @@ onMounted(async () => {
   if (projects.value.length) form.projectId = projects.value[0].id
   // 转脚本页跳转定位：/auto/ui?caseId=xx → 脚本库按用例过滤
   const route = useRoute()
+  const router = useRouter()
   const caseId = route.query.caseId
   if (caseId && projects.value.length) {
     activeTab.value = 'library'
@@ -752,6 +753,8 @@ onMounted(async () => {
       scripts.value = resp.data || []
       scriptTotal.value = resp.total ?? (resp.data || []).length
     } catch { ElMessage.error('脚本定位失败') }
+    // 定位完成后清理 query，避免刷新/切换时残留过滤
+    router.replace({ query: {} })
   } else if (form.projectId) {
     loadSets(); loadScripts()
   }

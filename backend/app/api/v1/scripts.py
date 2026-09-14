@@ -9,7 +9,7 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 import uuid
@@ -139,10 +139,12 @@ async def list_scripts(
         if keyword:
             stmt = stmt.where(ScriptAsset.name.ilike(f"%{keyword}%"))
         stmt = stmt.order_by(ScriptAsset.updated_at.desc())
+        total = (await db.execute(
+            select(func.count()).select_from(stmt.subquery()))).scalar() or 0
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
         scripts = result.scalars().all()
-        return {"code": 0, "data": await _enrich_scripts(db, scripts)}
+        return {"code": 0, "data": await _enrich_scripts(db, scripts), "total": total}
     # include_regression=True: 双实体联查 (ScriptAsset LEFT JOIN RegressionSet)
     from app.models.regression import RegressionSet
     stmt = select(ScriptAsset, RegressionSet).outerjoin(
@@ -157,6 +159,8 @@ async def list_scripts(
     if keyword:
         stmt = stmt.where(ScriptAsset.name.ilike(f"%{keyword}%"))
     stmt = stmt.order_by(ScriptAsset.updated_at.desc())
+    total = (await db.execute(
+        select(func.count()).select_from(stmt.subquery()))).scalar() or 0
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
     pairs = result.all()
@@ -172,7 +176,7 @@ async def list_scripts(
             "include_source": reg.include_source if reg else None,
         })
         items.append(d)
-    return {"code": 0, "data": items}
+    return {"code": 0, "data": items, "total": total}
 
 
 @router.get("/stats")

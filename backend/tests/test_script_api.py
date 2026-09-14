@@ -195,6 +195,23 @@ class TestListScriptsEndpoint:
         assert response["data"] == []
 
     @pytest.mark.asyncio
+    async def test_list_returns_total(self, mock_db):
+        """IA改造T3: 响应含 total，分页可用（AutoUITest.vue total 取 resp.total）。"""
+        from app.api.v1.scripts import list_scripts
+
+        mock_result = MagicMock()
+        mock_result.scalars = MagicMock(
+            return_value=MagicMock(all=MagicMock(return_value=[]))
+        )
+        mock_result.scalar = MagicMock(return_value=7)
+        mock_db.execute.return_value = mock_result
+
+        response = await list_scripts(None, None, page=1, page_size=20, db=mock_db)
+
+        assert response["code"] == 0
+        assert response["total"] == 7
+
+    @pytest.mark.asyncio
     async def test_list_applies_pagination_offset_limit(self, mock_db):
         """page=2, page_size=1 -> stmt must carry limit + offset(1)."""
         from app.api.v1.scripts import list_scripts
@@ -208,8 +225,8 @@ class TestListScriptsEndpoint:
         response = await list_scripts(None, None, page=2, page_size=1, db=mock_db)
 
         assert response["code"] == 0
-        mock_db.execute.assert_awaited_once()
-        stmt = mock_db.execute.await_args.args[0]
+        assert mock_db.execute.await_count == 2  # count + page query
+        stmt = mock_db.execute.await_args_list[-1].args[0]
         # Compile to inspect clauses + bound params without a DB.
         compiled = stmt.compile()
         rendered = str(compiled).lower()
@@ -525,8 +542,8 @@ class TestListCategoryKeyword:
                 db=db,
             )
         )
-        # 验证 execute 被调用 (stmt 构建不报错即可)
-        db.execute.assert_awaited_once()
+        # 验证 execute 被调用 (count + 列表查询)
+        assert db.execute.await_count == 2
 
 
 class TestBatchRunEndpoint:
