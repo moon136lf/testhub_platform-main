@@ -159,9 +159,11 @@ async def list_scripts(
     stmt = stmt.order_by(ScriptAsset.updated_at.desc())
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
+    pairs = result.all()
+    # include_regression 路径此前漏调 _enrich_scripts，bound_case/test_set_refs 恒缺失
+    enriched = await _enrich_scripts(db, [s for s, _ in pairs])
     items = []
-    for s, reg in result.all():
-        d = s.to_dict()
+    for (s, reg), d in zip(pairs, enriched):
         d.update({
             "ai_suggested": bool(reg.ai_suggested) if reg else False,
             "ai_reason": reg.ai_reason if reg else None,
