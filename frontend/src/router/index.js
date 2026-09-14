@@ -92,6 +92,12 @@ const router = createRouter({
           meta: { title: 'UI自动化测试' }
         },
         {
+          path: 'auto/ui/set/:id',
+          name: 'TestSetDetail',
+          component: () => import('@/views/TestSetDetail.vue'),
+          meta: { title: '测试集详情' }
+        },
+        {
           path: 'settings/ai',
           name: 'AISettings',
           component: () => import('@/views/system/AISettings.vue'),

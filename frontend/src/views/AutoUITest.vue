@@ -34,6 +34,10 @@
                   </el-tag>
                   <span class="meta-text">{{ (s.case_ids || []).length }} 用例</span>
                   <span class="meta-text" v-if="s.pass_rate != null">通过率 {{ s.pass_rate }}%</span>
+                  <span style="margin-left: auto">
+                    <el-button link type="primary" size="small" @click.stop="$router.push('/auto/ui/set/' + s.id)">详情</el-button>
+                    <el-button link type="danger" size="small" @click.stop="delSet(s)">删除</el-button>
+                  </span>
                 </div>
               </div>
               <el-empty v-if="!sets.length" description="暂无测试集" :image-size="60" />
@@ -427,6 +431,18 @@ const loadSetCases = async (setId) => {
   setCases.value = results
     .filter(r => r.status === 'fulfilled' && r.value)
     .map(r => r.value.data || r.value)
+}
+
+const delSet = async (s) => {
+  try {
+    await ElMessageBox.confirm(`确定删除测试集「${s.name}」？`, '删除确认', { type: 'warning' })
+  } catch { return }
+  try {
+    await testSetAPI.deleteSet(s.id)
+    ElMessage.success('已删除')
+    if (currentSet.value?.id === s.id) currentSet.value = null
+    loadSets()
+  } catch (e) { ElMessage.error(e?.response?.data?.detail || '删除失败') }
 }
 
 const selectSet = async (s) => {
