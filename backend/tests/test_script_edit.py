@@ -11,6 +11,7 @@ def _db():
     db.commit = AsyncMock()
     db.execute = AsyncMock()
     db.add_all = MagicMock()
+    db.refresh = AsyncMock()
     return db
 
 

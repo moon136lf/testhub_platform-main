@@ -14,6 +14,7 @@ def _mock_db(asset):
     db.add_all = MagicMock()
     db.add = MagicMock()
     db.commit = AsyncMock()
+    db.refresh = AsyncMock()
     return db
 
 
@@ -117,3 +118,18 @@ async def test_no_synonym_without_target_text():
               "element_name": "b", "expected": "", "element_id": str(uuid.uuid4())}]
     await svc.save_steps(str(asset.id), "t", steps)
     svc.write_synonym.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_save_steps_refreshes_asset_after_commit():
+    """commit 后 refresh（updated_at server onupdate 过期属性）——缺失会导致端点
+    to_dict() 同步 lazy load → asyncpg MissingGreenlet（真浏览器验收问题1）。"""
+    asset = MagicMock()
+    asset.id = uuid.uuid4()
+    asset.name = "t"
+    db = _mock_db(asset)
+    svc = ScriptEditService(db=db)
+    steps = [{"seq": 1, "action": "click", "target": "#login", "value": "",
+              "element_name": "b", "expected": ""}]
+    await svc.save_steps(str(asset.id), "t", steps)
+    db.refresh.assert_awaited_once_with(asset)

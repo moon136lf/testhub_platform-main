@@ -80,4 +80,7 @@ class ScriptEditService:
                     logger.warning("synonym 回写失败，不阻断保存", exc_info=True)
         self.db.add_all(rows)
         await self.db.commit()
+        # updated_at 有 server onupdate，commit 后属性过期；不 refresh 的话端点 to_dict()
+        # 会同步 lazy load → asyncpg 下 MissingGreenlet 崩（真浏览器验收问题1）
+        await self.db.refresh(asset)
         return asset
