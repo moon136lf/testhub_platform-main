@@ -30,14 +30,15 @@ def build_batch_name(batch_type: str, ts: datetime, requirement=None) -> str:
 
 def build_script_name(batch_name: str | None, fallback_title: str,
                       ts: datetime, taken: set[str] | None = None) -> str:
-    """脚本名: 批次名-自动化脚本HHmmss; 无批次回退用例标题.
-    taken 为已占用名集合, 撞名追加 -2/-3... 直至可用 (上限 10 次)。"""
+    """脚本名: 用例名优先(fallback_title); 撞名追加 -2/-3...(上限10次);
+    无用例名时回退 批次名-自动化脚本HHMMSS 风格 (IA改造T1)."""
     taken = taken or set()
-    base = (f"{batch_name}-自动化脚本{ts.strftime('%H%M%S')}"
-            if batch_name else fallback_title)
+    base = fallback_title or (
+        f"{batch_name}-自动化脚本{ts.strftime('%H%M%S')}" if batch_name
+        else f"自动化脚本{ts.strftime('%H%M%S')}")
     candidate = base
     for n in range(2, 12):
         if candidate not in taken:
             return candidate
         candidate = f"{base}-{n}"
-    return candidate
+    return f"{base}-{ts.strftime('%H%M%S')}"

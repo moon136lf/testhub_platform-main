@@ -146,6 +146,7 @@ class ScriptAsset(Base):
     last_run_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default="false", comment="软删标记")
 
     @property
     def diagnosis_list(self) -> list:
@@ -192,6 +193,7 @@ class ScriptAsset(Base):
             "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "is_deleted": self.is_deleted or False,
         }
 
 

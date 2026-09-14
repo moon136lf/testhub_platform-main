@@ -129,7 +129,7 @@ async def list_scripts(
         page_size = page_size if isinstance(page_size, int) else 20
     if not reg_flag:
         # 既有单实体路径 (零破坏)
-        stmt = select(ScriptAsset)
+        stmt = select(ScriptAsset).where(ScriptAsset.is_deleted.is_(False))
         if project_uuid:
             stmt = stmt.where(ScriptAsset.project_id == project_uuid)
         if case_uuid:
@@ -138,7 +138,7 @@ async def list_scripts(
             stmt = stmt.where(ScriptAsset.category == category)
         if keyword:
             stmt = stmt.where(ScriptAsset.name.ilike(f"%{keyword}%"))
-        stmt = stmt.order_by(ScriptAsset.created_at.desc())
+        stmt = stmt.order_by(ScriptAsset.updated_at.desc())
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
         scripts = result.scalars().all()
@@ -147,7 +147,7 @@ async def list_scripts(
     from app.models.regression import RegressionSet
     stmt = select(ScriptAsset, RegressionSet).outerjoin(
         RegressionSet, RegressionSet.script_id == ScriptAsset.id
-    )
+    ).where(ScriptAsset.is_deleted.is_(False))
     if project_uuid:
         stmt = stmt.where(ScriptAsset.project_id == project_uuid)
     if case_uuid:
@@ -156,7 +156,7 @@ async def list_scripts(
         stmt = stmt.where(ScriptAsset.category == category)
     if keyword:
         stmt = stmt.where(ScriptAsset.name.ilike(f"%{keyword}%"))
-    stmt = stmt.order_by(ScriptAsset.created_at.desc())
+    stmt = stmt.order_by(ScriptAsset.updated_at.desc())
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
     items = []
@@ -335,3 +335,19 @@ async def update_script_content(script_id: str, request: ScriptContentUpdateRequ
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "data": asset.to_dict()}
+
+
+@router.delete("/{script_id}", status_code=200)
+async def delete_script(script_id: str, db: AsyncSession = Depends(get_db)):
+    """删除脚本资产（软删，IA改造T1: 脚本库操作列）。"""
+    try:
+        sid = uuid.UUID(script_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+    asset = await db.get(ScriptAsset, sid)
+    if not asset:
+        raise HTTPException(status_code=404, detail="脚本不存在")
+    asset.is_deleted = True
+    db.add(asset)
+    await db.commit()
+    return {"code": 0, "message": "deleted"}

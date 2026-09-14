@@ -55,7 +55,10 @@ TS = datetime(2026, 9, 2, 12, 30, 45)
 
 
 def test_with_batch_name():
-    assert build_script_name("批次A", "登录用例", TS) == "批次A-自动化脚本123045"
+    # IA改造T1: 用例名优先（fallback_title），批次名仅无用例名时回退
+    assert build_script_name("批次A", "登录用例", TS) == "登录用例"
+    # 无用例名回退批次名风格
+    assert build_script_name("批次A", "", TS) == "批次A-自动化脚本123045"
 
 
 def test_without_batch_name_falls_back_to_title():
@@ -63,11 +66,11 @@ def test_without_batch_name_falls_back_to_title():
 
 
 def test_taken_appends_suffix_2():
-    name = "批次A-自动化脚本123045"
-    assert build_script_name("批次A", "登录", TS, taken={name}) == f"{name}-2"
+    name = "登录用例"
+    assert build_script_name("批次A", "登录用例", TS, taken={name}) == f"{name}-2"
 
 
 def test_taken_suffix2_appends_suffix_3():
-    name = "批次A-自动化脚本123045"
-    assert build_script_name("批次A", "登录", TS,
+    name = "登录用例"
+    assert build_script_name("批次A", "登录用例", TS,
                              taken={name, f"{name}-2"}) == f"{name}-3"

@@ -41,8 +41,9 @@ class SubPageCreateRequest(BaseModel):
 
 
 class PageRenameRequest(BaseModel):
-    """页面重命名请求"""
+    """页面编辑请求（名称必填，URL 可选）"""
     page_name: str = Field(..., min_length=1, max_length=100)
+    page_url: Optional[str] = Field(None, max_length=500)
 
 
 class PageMoveRequest(BaseModel):
@@ -375,6 +376,13 @@ class LocatorVerifyRequest(BaseModel):
     locator_type: str = Field(..., max_length=30)
     locator_value: str = Field(..., min_length=1, max_length=500)
     score: Optional[int] = Field(None, ge=0, le=150)
+
+
+class ElementMoveRequest(BaseModel):
+    """批量迁移元素到目标页面"""
+
+    element_ids: List[str] = Field(..., min_length=1)
+    target_page_id: str = Field(..., min_length=1)
 
 
 class ElementAssetImportRequest(BaseModel):
