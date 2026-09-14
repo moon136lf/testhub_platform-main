@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.services.test_set_service import TestSetService
+from app.services.execution_query_service import ExecutionQueryService
 
 router = APIRouter()
 
@@ -101,6 +102,43 @@ async def run_test_set(set_id: str, request: TestSetRunRequest,
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "data": result}
+
+
+@router.get("/test-sets/{set_id}")
+async def get_test_set(set_id: str, db: AsyncSession = Depends(get_db)):
+    """测试集单查（详情页用）。"""
+    try:
+        ts = await TestSetService(db).get_set(set_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if ts is None:
+        raise HTTPException(status_code=404, detail="测试集不存在")
+    return {"code": 0, "data": ts.to_dict()}
+
+
+@router.get("/test-sets/{set_id}/records")
+async def list_test_set_records(set_id: str, page: int = Query(1, ge=1),
+                                page_size: int = Query(20, ge=1, le=100),
+                                result: str = Query("all", pattern="^(all|success|failed)$"),
+                                db: AsyncSession = Depends(get_db)):
+    """测试集执行记录（result: all/success/failed）。"""
+    try:
+        data = await ExecutionQueryService(db).list_set_records(
+            set_id, page=page, page_size=page_size, result=result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": data}
+
+
+@router.get("/test-sets/{set_id}/trend")
+async def test_set_trend(set_id: str, limit: int = Query(10, ge=1, le=50),
+                         db: AsyncSession = Depends(get_db)):
+    """测试集最近执行趋势。"""
+    try:
+        data = await ExecutionQueryService(db).set_trend(set_id, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"code": 0, "data": data}
 
 
 @router.get("/test-sets/{set_id}/report")

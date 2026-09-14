@@ -19,6 +19,7 @@ class ExecutionRecord(Base):
     exec_id = Column(String(50), unique=True, nullable=False)
     project_id = Column(UUID(as_uuid=True), ForeignKey("project.id", ondelete="RESTRICT"), nullable=False)
     exec_type = Column(String(20), nullable=False)
+    test_set_id = Column(UUID(as_uuid=True), ForeignKey("test_set.id", ondelete="SET NULL"), nullable=True, index=True, comment="来源测试集(测试集执行时写入)")
     status = Column(String(20), nullable=False)
     total_cases = Column(Integer, default=0)
     passed_count = Column(Integer, default=0)

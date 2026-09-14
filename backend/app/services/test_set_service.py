@@ -66,6 +66,13 @@ class TestSetService:
         await self.db.delete(ts)
         await self.db.commit()
 
+    async def get_set(self, set_id: str) -> Optional[TestSet]:
+        """单查测试集；不存在返回 None。"""
+        sid = _to_uuid(set_id)
+        if not sid:
+            return None
+        return await self.db.get(TestSet, sid)
+
     async def list_sets(self, project_id: str) -> List[TestSet]:
         if not project_id:
             return []
@@ -127,7 +134,8 @@ class TestSetService:
         config = {"headless": headless, "timeout": timeout,
                   "max_failures": 1 if fail_fast else 100, "fail_fast": fail_fast}
         task = run_scripts_task.delay(session_id=session_id, script_ids=script_ids,
-                                      config=config, exec_type="ui_testset")
+                                      config=config, exec_type="ui_testset",
+                                      test_set_id=str(ts.id))
         ts.status = "running"
         # 与 run_scripts_task 的 exec_id 生成规则一致，供报告聚合后查
         ts.last_exec_id = f"exec-{session_id[:8]}"

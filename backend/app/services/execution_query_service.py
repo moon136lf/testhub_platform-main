@@ -17,7 +17,8 @@ class ExecutionQueryService:
         self.db = db
 
     async def list_records(self, project_id: str, *, exec_type: Optional[str] = None,
-                          days: int = 7, page: int = 1, page_size: int = 20) -> dict:
+                          days: int = 7, page: int = 1, page_size: int = 20,
+                          test_set_id: Optional[UUID] = None) -> dict:
         pid = UUID(project_id)
         since = datetime.now(timezone.utc) - timedelta(days=days)
         base = select(ExecutionRecord).where(
@@ -27,6 +28,46 @@ class ExecutionQueryService:
         )
         if exec_type:
             base = base.where(ExecutionRecord.exec_type == exec_type)
+        if test_set_id:
+            base = base.where(ExecutionRecord.test_set_id == test_set_id)
+
+        total_q = select(func.count()).select_from(base.subquery())
+        total = (await self.db.execute(total_q)).scalar() or 0
+
+        rows_q = base.order_by(ExecutionRecord.started_at.desc()).offset(
+            (page - 1) * page_size).limit(page_size)
+        rows = (await self.db.execute(rows_q)).scalars().all()
+        return {"total": total, "page": page, "page_size": page_size,
+                "items": [r.to_dict() for r in rows]}
+
+    async def set_trend(self, test_set_id, limit: int = 10) -> list:
+        """某测试集最近 limit 次执行趋势（通过率/状态/时间）。"""
+        rows = (await self.db.execute(
+            select(ExecutionRecord.pass_rate, ExecutionRecord.status, ExecutionRecord.started_at)
+            .where(ExecutionRecord.test_set_id == test_set_id,
+                   ExecutionRecord.is_deleted.is_(False))
+            .order_by(ExecutionRecord.started_at.desc()).limit(limit))).all()
+        return [{"pass_rate": float(r[0] or 0), "status": r[1],
+                 "started_at": r[2].isoformat() if r[2] else None} for r in rows]
+
+    async def list_set_records(self, test_set_id, *, page: int = 1, page_size: int = 20,
+                               result: str = "all") -> dict:
+        """测试集关联的执行记录（result: all/success/failed）。
+
+        ExecutionRecord.status 实际枚举：running / done（script_tasks 写入）。
+        failed 判定：status != 'done' 或 fail_count > 0。
+        """
+        tid = test_set_id if isinstance(test_set_id, UUID) else UUID(str(test_set_id))
+        base = select(ExecutionRecord).where(
+            ExecutionRecord.test_set_id == tid,
+            ExecutionRecord.is_deleted.is_(False),
+        )
+        if result == "success":
+            base = base.where(ExecutionRecord.status == "done",
+                              ExecutionRecord.fail_count == 0)
+        elif result == "failed":
+            base = base.where((ExecutionRecord.status != "done")
+                              | (ExecutionRecord.fail_count > 0))
 
         total_q = select(func.count()).select_from(base.subquery())
         total = (await self.db.execute(total_q)).scalar() or 0

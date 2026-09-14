@@ -115,7 +115,7 @@ class _CountingGateway:
 @celery_app.task(bind=True, name="run_scripts_task")
 def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: list = None,
                      config: dict = None, exec_type: str = None, script_content: str = None,
-                     target_url: str = None, headless: bool = True):
+                     target_url: str = None, headless: bool = True, test_set_id: str = None):
     """执行脚本任务: 建 execution_record → ScriptExecutor.execute → 写 detail → 更新 record → commit.
 
     T6 遗留: ScriptExecutor.execute 未调 db.add(detail)/db.commit(), 这里补持久化。
@@ -181,6 +181,7 @@ def run_scripts_task(self, session_id: str, script_id: str = None, script_ids: l
                 exec_id=f"exec-{session_id[:8]}", project_id=project_id,
                 exec_type=exec_type or ("batch" if script_ids else "single"),
                 status="running", total_cases=len(targets),
+                test_set_id=uuid.UUID(test_set_id) if test_set_id else None,
             )
             db.add(er)
             await db.flush()
