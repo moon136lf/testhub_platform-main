@@ -43,7 +43,9 @@ STEP1_PROMPT = """你是测试脚本转换器。把测试步骤转成结构化�
 动作类型只能选: navigate/click/fill/select/check/create/edit/delete/workflow_action/input_captcha
 映射规则:
 - 点击X → click, target=X
-- 输入/填写 X到Y → fill, target=Y, value=X
+- 输入/填写 X到Y → fill, target=Y, value=X (例: "输入test02到账号输入框" → fill, target=账号输入框, value=test02)
+- 目标含"地址栏"或"URL"且值为 http 开头 → navigate, target 可为空, value=URL
+- 步骤的 目标[]/数据[]/预期[] 分别对应 target/value/断言依据, 不得遗漏或编造
 - 识别验证码(含"识别图形验证码，输入验证码"等描述, 无论原文一步还是两步) → input_captcha, target=验证码图片元素, value=验证码输入框; 后续不得再出现单独的输入验证码步骤
 只输出 JSON 数组, 不要解释文字。
 
@@ -53,7 +55,30 @@ STEP1_PROMPT = """你是测试脚本转换器。把测试步骤转成结构化�
 
 
 def _fmt_steps(steps: List[Dict]) -> str:
-    return "\n".join(f"{s.get('step')}. {s.get('action','')}" for s in steps)
+    """完整输出步骤的目标/数据/预期，缺字段省略对应段。"""
+    lines = []
+    for s in steps:
+        line = f"{s.get('step')}. {s.get('action','')}"
+        if s.get("target"):
+            line += f" 目标[{s['target']}]"
+        if s.get("data"):
+            line += f" 数据[{s['data']}]"
+        elif s.get("value"):
+            line += f" 数据[{s['value']}]"
+        if s.get("expected"):
+            line += f" 预期[{s['expected']}]"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _navigate_postprocess(actions: List[ActionIntent]) -> List[ActionIntent]:
+    """确定性兜底：fill + 目标含地址栏/URL + value 为 http 开头 → 强制 navigate。"""
+    for a in actions:
+        if (a.action == "fill" and a.target and ("地址栏" in a.target or "url" in a.target.lower())
+                and a.value and str(a.value).lower().startswith("http")):
+            a.action = "navigate"
+            a.target = None
+    return actions
 
 
 def step0_normalize(case: Dict[str, Any]) -> NormalizedCase:
@@ -96,7 +121,7 @@ async def step1_to_actions(case: NormalizedCase, gateway: LLMGatewayProto) -> Li
             value=it.get("value"),
         ))
     actions.sort(key=lambda a: a.step)
-    return actions
+    return _navigate_postprocess(actions)
 
 
 @dataclass

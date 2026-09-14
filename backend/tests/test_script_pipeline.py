@@ -87,6 +87,77 @@ class TestStep1ToActions:
             asyncio_run(step1_to_actions(self._case(), gw))
 
 
+class TestFmtSteps:
+    def _case(self, steps):
+        return NormalizedCase(case_id="c1", title="登录", steps=steps,
+                              expected_result="进入首页")
+
+    def test_fmt_steps_includes_target_data_expected(self):
+        from app.services.script_pipeline import _fmt_steps
+        steps = [
+            {"step": 1, "action": "输入", "target": "浏览器地址栏",
+             "data": "http://x/login", "expected": "打开登录页"},
+            {"step": 2, "action": "输入", "target": "账号输入框",
+             "data": "test02", "expected": "显示test02"},
+        ]
+        out = _fmt_steps(steps)
+        assert "1. 输入 目标[浏览器地址栏] 数据[http://x/login] 预期[打开登录页]" in out
+        assert "2. 输入 目标[账号输入框] 数据[test02] 预期[显示test02]" in out
+
+    def test_fmt_steps_omits_missing_fields(self):
+        from app.services.script_pipeline import _fmt_steps
+        steps = [{"step": 1, "action": "点击登录"}]
+        out = _fmt_steps(steps)
+        assert out == "1. 点击登录"
+        assert "目标[" not in out and "数据[" not in out and "预期[" not in out
+
+    def test_prompt_passes_full_steps_to_llm(self):
+        gw = FakeGateway('[{"step":1,"action":"fill","target":"账号输入框","value":"test02"}]')
+        steps = [{"step": 1, "action": "输入", "target": "账号输入框",
+                  "data": "test02", "expected": "显示test02"}]
+        asyncio_run(step1_to_actions(self._case(steps), gw))
+        prompt = gw.chat.call_args[0][0][0]["content"] if hasattr(gw.chat, "call_args") else None
+        # FakeGateway 不记录 prompt，改用包装网关捕获
+        class RecGateway:
+            def __init__(self, inner): self.inner = inner; self.last_prompt = ""
+            async def chat(self, messages, **kw):
+                self.last_prompt = messages[0]["content"]
+                return await self.inner.chat(messages, **kw)
+        rg = RecGateway(FakeGateway('[{"step":1,"action":"fill","target":"账号输入框","value":"test02"}]'))
+        asyncio_run(step1_to_actions(self._case(steps), rg))
+        assert "目标[账号输入框]" in rg.last_prompt
+        assert "数据[test02]" in rg.last_prompt
+        assert "预期[显示test02]" in rg.last_prompt
+
+
+class TestNavigatePostprocess:
+    def _case(self):
+        return NormalizedCase(
+            case_id="c1", title="登录",
+            steps=[{"step": 1, "action": "输入", "target": "浏览器地址栏",
+                    "data": "http://x/login", "expected": "打开登录页"}],
+            expected_result="打开登录页",
+        )
+
+    def test_fill_address_bar_http_forced_to_navigate(self):
+        gw = FakeGateway('[{"step":1,"action":"fill","target":"浏览器地址栏","value":"http://x/login"}]')
+        actions = asyncio_run(step1_to_actions(self._case(), gw))
+        assert actions[0].action == "navigate"
+        assert actions[0].value == "http://x/login"
+
+    def test_fill_non_url_not_forced(self):
+        gw = FakeGateway('[{"step":1,"action":"fill","target":"账号输入框","value":"test02"}]')
+        case = NormalizedCase(
+            case_id="c1", title="登录",
+            steps=[{"step": 1, "action": "输入", "target": "账号输入框",
+                    "data": "test02", "expected": "显示test02"}],
+            expected_result="进入首页",
+        )
+        actions = asyncio_run(step1_to_actions(case, gw))
+        assert actions[0].action == "fill"
+        assert actions[0].target == "账号输入框"
+
+
 class TestStep2ToAssertions:
     def _case(self):
         return NormalizedCase(
