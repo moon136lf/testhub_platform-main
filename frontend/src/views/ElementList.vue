@@ -903,17 +903,28 @@ const submitEdit = async () => {
       element_text: form.element_text || undefined,
       page_id: form.scope === 'page' ? form.page_id : undefined,
     })
-    // 定位器差异同步：以原始列表为基准做删除 + 调序，再追加新增行
+    // 定位器差异同步：以原始列表为基准做删除 + 调序，再追加新增行。
+    // 以「后端当前实际列表」为准：拉一次最新数据，避免弹窗打开期间后端已被其他
+    // 操作修改（如上次保存已删过）导致原序索引越界（400 定位器索引越界）
+    const freshResp = await elementAPI.listElementsAsset(projectId.value, { page: 1, pageSize: 100 })
+    const freshItems = (freshResp && freshResp.data && freshResp.data.items) || []
+    const freshEl = freshItems.find((e) => e.id === form.id)
+    const serverLocators = freshEl ? extractLocators(freshEl) : editOriginalLocators
     const keptValues = new Set(form.locators.map((l) => `${l.type}|${l.value}`))
-    // 1) 删除：原列表中不在现列表的，从尾往前删（避免索引位移）
-    for (let i = editOriginalLocators.length - 1; i >= 0; i--) {
-      const orig = editOriginalLocators[i]
+    // 1) 删除：服务器列表中不在现列表的，从尾往前删（避免索引位移）
+    for (let i = serverLocators.length - 1; i >= 0; i--) {
+      const orig = serverLocators[i]
       if (!keptValues.has(`${orig.type}|${orig.value}`)) {
-        await elementAPI.deleteLocator(form.id, i)
+        try {
+          await elementAPI.deleteLocator(form.id, i)
+        } catch (e) {
+          // 越界（并发修改）容忍：跳过该条继续，最后统一以服务器为准刷新
+          if (!(e.response && e.response.status === 400)) throw e
+        }
       }
     }
     // 2) 重算删除后的原序列表，再按现列表顺序提交 reorder + add
-    const remaining = editOriginalLocators.filter(
+    const remaining = serverLocators.filter(
       (o) => keptValues.has(`${o.type}|${o.value}`))
     const remainingKeys = new Set(remaining.map((o) => `${o.type}|${o.value}`))
     // 现列表中已存在项：按现列表顺序对原序做对齐（简单做法：若顺序不同则逐个 down 顶到位置——
@@ -931,7 +942,7 @@ const submitEdit = async () => {
       }
     }
     // 3) 新增项：原列表没有的逐条 add
-    const originalKeys = new Set(editOriginalLocators.map((o) => `${o.type}|${o.value}`))
+    const originalKeys = new Set(serverLocators.map((o) => `${o.type}|${o.value}`))
     for (const l of form.locators) {
       if (!originalKeys.has(`${l.type}|${l.value}`)) {
         await elementAPI.addLocator(form.id, l.type, l.value, l.score)
