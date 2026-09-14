@@ -72,6 +72,7 @@ from app.services.playwright_locator_core import (
     _NODE_CHAIN_JS,
 )
 from app.schemas.element_schema import NodeHighlightRequest
+from app.schemas.element_schema import ElementMoveRequest
 from app.tasks.element_tasks import MIN_LOCATOR_SCORE
 
 router = APIRouter()
