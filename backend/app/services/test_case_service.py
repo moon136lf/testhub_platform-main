@@ -161,7 +161,7 @@ class TestCaseService:
                     isouter=True  # LEFT JOIN
                 )
                 .where(and_(*conditions))
-                .order_by(TestCase.created_at.desc())
+                .order_by(TestCase.updated_at.desc())
                 .offset(offset)
                 .limit(filters.page_size)
             )
