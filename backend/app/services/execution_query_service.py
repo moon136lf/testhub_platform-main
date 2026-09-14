@@ -67,6 +67,7 @@ class ExecutionQueryService:
                               ExecutionRecord.fail_count == 0)
         elif result == "failed":
             base = base.where((ExecutionRecord.status != "done")
+                              & (ExecutionRecord.status != "running")
                               | (ExecutionRecord.fail_count > 0))
 
         total_q = select(func.count()).select_from(base.subquery())

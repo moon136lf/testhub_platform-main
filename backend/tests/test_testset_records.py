@@ -89,3 +89,11 @@ async def test_run_scripts_task_writes_test_set_id():
     from app.tasks.script_tasks import run_scripts_task
     sig = inspect.signature(run_scripts_task.run)
     assert "test_set_id" in sig.parameters
+
+
+def test_failed_filter_excludes_running():
+    """failed 筛选不应把 running 记录算作失败（T2 小修）。"""
+    import re
+    src = open("app/services/execution_query_service.py", encoding="utf-8").read()
+    seg = src[src.index('result == "failed"'):src.index("total_q", src.index('result == "failed"'))]
+    assert '"running"' in seg
