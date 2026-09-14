@@ -54,9 +54,25 @@ def _bigram_overlap(a, b):
     return len(ga & gb) / len(ga | gb)
 
 
+# 控件角色词（RC2 stem 规则）："账号输入框"→"账号"，"登录按钮"→"登录"
+CONTROL_WORDS = ("输入框", "按钮", "下拉框", "链接", "文本域", "输入域")
+
+
+def _strip_control_words(s):
+    if not s:
+        return s
+    for w in CONTROL_WORDS:
+        if s.endswith(w) and len(s) > len(w):
+            return s[: -len(w)]
+    return s
+
+
 def score_element(target, intent_action, elem):
     """加权评分（方案V1）：别名bigram 0.4 + text包含 0.3 + 类型一致 0.2。
-    归一化精确相等=1.0；其余封顶0.99。"""
+    归一化精确相等=1.0；其余封顶0.99。
+    RC2 stem 规则：用例目标常为"控件角色词"形态（账号输入框），元素名为
+    placeholder（请输入账号）——剥离控件词后互相包含按 contain 计，别名叫至 0.5，
+    剥离后完全相等（登录按钮 vs 登录）→ alias_sim=1.0。"""
     t = normalize_text(target)
     if not t:
         return 0.0  # 纯标点/空白 target 归一化后为空 → 不命中
@@ -64,12 +80,25 @@ def score_element(target, intent_action, elem):
     text = normalize_text(elem.get("element_text"))
     if t and (t == name or (text and t == text)):
         return 1.0
+    t_stem = _strip_control_words(t)
+    n_stem = _strip_control_words(name)
+    x_stem = _strip_control_words(text)
+    stem_equal = bool(t_stem) and t_stem in (n_stem, x_stem)
+    stem_contain = bool(t_stem) and any(
+        r and len(r) >= 2 and (r in t_stem or t_stem in r)
+        for r in (n_stem, x_stem) if r)
     alias_sim = max(_bigram_overlap(t, name), _bigram_overlap(t, text) if text else 0.0)
+    if stem_equal:
+        alias_sim = max(alias_sim, 1.0)
+    elif stem_contain:
+        alias_sim = max(alias_sim, 0.75)
     contain = 0.0
     for ref in (name, text):
         if ref and len(ref) >= 2 and (ref in t or t in ref):
             contain = 1.0
             break
+    if stem_contain:
+        contain = 1.0
     type_score = 0.0
     if intent_action:
         tag = (elem.get("tag") or "").lower()
@@ -259,7 +288,7 @@ class ElementService:
             elem_dict = {
                 "element_name": getattr(e, "element_name", "") or "",
                 "element_text": getattr(e, "element_text", "") or "",
-                "tag": getattr(e, "tag_name", "") or "",
+                "tag": getattr(e, "element_type", "") or "",
                 "locators": getattr(e, "locator_strategies", None) or {},
             }
             score = score_element(target, intent_action, elem_dict)
