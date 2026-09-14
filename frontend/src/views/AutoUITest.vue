@@ -34,6 +34,10 @@
                   </el-tag>
                   <span class="meta-text">{{ (s.case_ids || []).length }} 用例</span>
                   <span class="meta-text" v-if="s.pass_rate != null">通过率 {{ s.pass_rate }}%</span>
+                  <span style="margin-left: auto">
+                    <el-button link type="primary" size="small" @click.stop="$router.push('/auto/ui/set/' + s.id)">详情</el-button>
+                    <el-button link type="danger" size="small" @click.stop="delSet(s)">删除</el-button>
+                  </span>
                 </div>
               </div>
               <el-empty v-if="!sets.length" description="暂无测试集" :image-size="60" />
@@ -156,15 +160,23 @@
 
           <el-table :data="scripts" border style="margin-top: 12px" @selection-change="onSelectionChange">
             <el-table-column type="selection" width="45" />
-            <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="batch_name" label="来源批次" min-width="200" show-overflow-tooltip />
+            <el-table-column label="名称" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span :title="row.name">{{ row.bound_case || row.name }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="来源批次" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.batch_name || '—' }}</template>
+            </el-table-column>
             <el-table-column prop="category" label="分类" width="110" />
-            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">{{ SCRIPT_STATUS_CN[row.status] || row.status }}</template>
+            </el-table-column>
             <el-table-column prop="last_status" label="上次结果" width="100">
               <template #default="{ row }">
-                <el-tag v-if="row.last_status === 'passed'" type="success" size="small">通过</el-tag>
-                <el-tag v-else-if="row.last_status === 'failed'" type="danger" size="small">失败</el-tag>
-                <el-tag v-else type="info" size="small">{{ row.last_status || 'never_run' }}</el-tag>
+                <el-tag :type="LAST_STATUS_TAG[row.last_status] || 'info'" size="small">
+                  {{ LAST_STATUS_CN[row.last_status] || row.last_status || '未运行' }}
+                </el-tag>
               </template>
             </el-table-column>
             <el-table-column label="AI建议" width="90">
@@ -181,7 +193,9 @@
               </template>
             </el-table-column>
             <el-table-column prop="run_count" label="运行次数" width="90" />
-            <el-table-column prop="locator_source" label="定位来源" width="130" />
+            <el-table-column prop="locator_source" label="定位来源" width="110">
+              <template #default="{ row }">{{ LOCATOR_SOURCE_CN[row.locator_source] || row.locator_source }}</template>
+            </el-table-column>
             <el-table-column label="绑定用例" min-width="140" show-overflow-tooltip>
               <template #default="{ row }">{{ row.bound_case || '—' }}</template>
             </el-table-column>
@@ -200,9 +214,12 @@
                 <el-button type="warning" link @click="openDiagnose(row)">调试修复</el-button>
                 <el-button v-if="row.last_status === 'failed'" type="danger" link
                   :loading="diagLoadingId === row.id" @click="handleAiDiagnose(row)">诊断</el-button>
+                <el-button type="danger" link @click="delScript(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
+          <el-pagination style="margin-top: 12px" v-model:current-page="scriptPage" :page-size="scriptPageSize"
+            :total="scriptTotal" layout="total, prev, pager, next" @current-change="loadScripts" />
         </el-card>
       </el-tab-pane>
     </el-tabs>
@@ -327,7 +344,8 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { scriptAPI } from '@/api/script'
 import { testSetAPI } from '@/api/testSet'
@@ -350,6 +368,13 @@ const ERROR_TYPE_MAP = {
 }
 const errorTypeLabel = (t) => ERROR_TYPE_MAP[t] || t || '-'
 const statusTagType = (s) => ({ pending: 'info', running: 'warning', done: 'success' }[s] || 'info')
+
+// 脚本库枚举中文映射（实际值域：last_status=never_run/passed/failed/affected；
+// locator_source=element_library/ai_generated/mixed/none_draft；status=generated/confirmed）
+const LAST_STATUS_CN = { never_run: '未运行', passed: '成功', failed: '失败', affected: '受影响' }
+const LAST_STATUS_TAG = { never_run: 'info', passed: 'success', failed: 'danger', affected: 'warning' }
+const LOCATOR_SOURCE_CN = { element_library: '元素库', ai_generated: 'AI生成', mixed: '混合', none_draft: '草稿' }
+const SCRIPT_STATUS_CN = { generated: '已生成', confirmed: '已入库' }
 
 const SOURCE_LABELS = {
   manual: '手工',
@@ -406,6 +431,18 @@ const loadSetCases = async (setId) => {
   setCases.value = results
     .filter(r => r.status === 'fulfilled' && r.value)
     .map(r => r.value.data || r.value)
+}
+
+const delSet = async (s) => {
+  try {
+    await ElMessageBox.confirm(`确定删除测试集「${s.name}」？`, '删除确认', { type: 'warning' })
+  } catch { return }
+  try {
+    await testSetAPI.deleteSet(s.id)
+    ElMessage.success('已删除')
+    if (currentSet.value?.id === s.id) currentSet.value = null
+    loadSets()
+  } catch (e) { ElMessage.error(e?.response?.data?.detail || '删除失败') }
 }
 
 const selectSet = async (s) => {
@@ -481,6 +518,9 @@ const CATEGORIES = [
 ]
 const filter = reactive({ category: '', keyword: '' })
 const scripts = ref([])
+const scriptPage = ref(1)
+const scriptPageSize = 20
+const scriptTotal = ref(0)
 const selected = ref([])
 const runningId = ref(null)
 const batching = ref(false)
@@ -498,8 +538,11 @@ const loadScripts = async () => {
       category: filter.category || undefined,
       keyword: filter.keyword || undefined,
       include_regression: true,
+      page: scriptPage.value,
+      page_size: scriptPageSize,
     })
     scripts.value = resp.data || []
+    scriptTotal.value = resp.total ?? (resp.data || []).length
   } catch (e) { ElMessage.error('脚本列表加载失败'); scripts.value = [] }
 }
 
@@ -543,6 +586,19 @@ const handleBatchRun = async () => {
 }
 
 const viewScript = (row) => { window.open(`/api/v1/scripts/${row.id}`, '_blank') }
+
+const delScript = async (row) => {
+  const displayName = row.bound_case || row.name
+  const refHint = row.test_set_refs ? `该脚本被 ${row.test_set_refs} 个测试集引用，删除后引用将失效。` : ''
+  try {
+    await ElMessageBox.confirm(`确定删除脚本「${displayName}」？${refHint}`, '删除确认', { type: 'warning' })
+  } catch { return }
+  try {
+    await axios.delete(`/scripts/${row.id}`)
+    ElMessage.success('已删除')
+    loadScripts()
+  } catch (e) { ElMessage.error(e?.response?.data?.detail || '删除失败') }
+}
 
 const confirmScript = async (row) => {
   await scriptAPI.confirm(row.id)
@@ -700,6 +756,24 @@ const handleIdentify = async () => {
 onMounted(async () => {
   const presp = await projectAPI.list()
   projects.value = presp.items || presp.data || presp || []
+  if (projects.value.length) form.projectId = projects.value[0].id
+  // 转脚本页跳转定位：/auto/ui?caseId=xx → 脚本库按用例过滤
+  const route = useRoute()
+  const router = useRouter()
+  const caseId = route.query.caseId
+  if (caseId && projects.value.length) {
+    activeTab.value = 'library'
+    loadScripts()
+    try {
+      const resp = await scriptAPI.list({ project_id: form.projectId, case_id: caseId, include_regression: true })
+      scripts.value = resp.data || []
+      scriptTotal.value = resp.total ?? (resp.data || []).length
+    } catch { ElMessage.error('脚本定位失败') }
+    // 定位完成后清理 query，避免刷新/切换时残留过滤
+    router.replace({ query: {} })
+  } else if (form.projectId) {
+    loadSets(); loadScripts()
+  }
 })
 </script>
 

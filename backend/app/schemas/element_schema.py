@@ -385,6 +385,13 @@ class LocatorVerifyRequest(BaseModel):
     score: Optional[int] = Field(None, ge=0, le=150)
 
 
+class ElementMoveRequest(BaseModel):
+    """批量迁移元素到目标页面"""
+
+    element_ids: List[str] = Field(..., min_length=1)
+    target_page_id: str = Field(..., min_length=1)
+
+
 class ElementAssetImportRequest(BaseModel):
     """元素资产导入请求（可移植 JSON）"""
 

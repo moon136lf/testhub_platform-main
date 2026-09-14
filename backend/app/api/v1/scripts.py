@@ -9,7 +9,7 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 import uuid
@@ -129,7 +129,7 @@ async def list_scripts(
         page_size = page_size if isinstance(page_size, int) else 20
     if not reg_flag:
         # 既有单实体路径 (零破坏)
-        stmt = select(ScriptAsset)
+        stmt = select(ScriptAsset).where(ScriptAsset.is_deleted.is_(False))
         if project_uuid:
             stmt = stmt.where(ScriptAsset.project_id == project_uuid)
         if case_uuid:
@@ -138,16 +138,18 @@ async def list_scripts(
             stmt = stmt.where(ScriptAsset.category == category)
         if keyword:
             stmt = stmt.where(ScriptAsset.name.ilike(f"%{keyword}%"))
-        stmt = stmt.order_by(ScriptAsset.created_at.desc())
+        stmt = stmt.order_by(ScriptAsset.updated_at.desc())
+        total = (await db.execute(
+            select(func.count()).select_from(stmt.subquery()))).scalar() or 0
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(stmt)
         scripts = result.scalars().all()
-        return {"code": 0, "data": await _enrich_scripts(db, scripts)}
+        return {"code": 0, "data": await _enrich_scripts(db, scripts), "total": total}
     # include_regression=True: 双实体联查 (ScriptAsset LEFT JOIN RegressionSet)
     from app.models.regression import RegressionSet
     stmt = select(ScriptAsset, RegressionSet).outerjoin(
         RegressionSet, RegressionSet.script_id == ScriptAsset.id
-    )
+    ).where(ScriptAsset.is_deleted.is_(False))
     if project_uuid:
         stmt = stmt.where(ScriptAsset.project_id == project_uuid)
     if case_uuid:
@@ -156,12 +158,16 @@ async def list_scripts(
         stmt = stmt.where(ScriptAsset.category == category)
     if keyword:
         stmt = stmt.where(ScriptAsset.name.ilike(f"%{keyword}%"))
-    stmt = stmt.order_by(ScriptAsset.created_at.desc())
+    stmt = stmt.order_by(ScriptAsset.updated_at.desc())
+    total = (await db.execute(
+        select(func.count()).select_from(stmt.subquery()))).scalar() or 0
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(stmt)
+    pairs = result.all()
+    # include_regression 路径此前漏调 _enrich_scripts，bound_case/test_set_refs 恒缺失
+    enriched = await _enrich_scripts(db, [s for s, _ in pairs])
     items = []
-    for s, reg in result.all():
-        d = s.to_dict()
+    for (s, reg), d in zip(pairs, enriched):
         d.update({
             "ai_suggested": bool(reg.ai_suggested) if reg else False,
             "ai_reason": reg.ai_reason if reg else None,
@@ -170,7 +176,7 @@ async def list_scripts(
             "include_source": reg.include_source if reg else None,
         })
         items.append(d)
-    return {"code": 0, "data": items}
+    return {"code": 0, "data": items, "total": total}
 
 
 @router.get("/stats")
@@ -335,3 +341,19 @@ async def update_script_content(script_id: str, request: ScriptContentUpdateRequ
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"code": 0, "data": asset.to_dict()}
+
+
+@router.delete("/{script_id}", status_code=200)
+async def delete_script(script_id: str, db: AsyncSession = Depends(get_db)):
+    """删除脚本资产（软删，IA改造T1: 脚本库操作列）。"""
+    try:
+        sid = uuid.UUID(script_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+    asset = await db.get(ScriptAsset, sid)
+    if not asset:
+        raise HTTPException(status_code=404, detail="脚本不存在")
+    asset.is_deleted = True
+    db.add(asset)
+    await db.commit()
+    return {"code": 0, "message": "deleted"}

@@ -90,17 +90,17 @@ class ScriptConvertService:
                                    progress=0.9)
 
         status = "generated" if report.all_pass() else "draft"
-        # #case-batch T4: 命名联动 — 有批次名用 批次名-自动化脚本HHmmss, 否则回退用例标题;
+        # IA改造T1: 命名联动 — 用例名优先(无用例名回退 批次名-自动化脚本HHMMSS);
         # project_id+name 唯一约束, 撞名追加 -2/-3 (逐个查重)
         batch_name = case.get("batch_name")
         taken = set()
         if case.get("project_id"):
-            base = (f"{batch_name}-自动化脚本{datetime.now().strftime('%H%M%S')}"
-                    if batch_name else normalized.title)
+            base_title = normalized.title or (
+                f"{batch_name}-自动化脚本" if batch_name else "自动化脚本")
             r = await self.db.execute(
                 select(ScriptAsset.name).where(
                     ScriptAsset.project_id == case["project_id"],
-                    ScriptAsset.name.like(f"{base}%")))
+                    ScriptAsset.name.like(f"{base_title}%")))
             taken = set(r.scalars().all())
         name = build_script_name(batch_name, normalized.title,
                                  datetime.now(), taken=taken)

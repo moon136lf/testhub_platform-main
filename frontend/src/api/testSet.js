@@ -33,6 +33,20 @@ export const testSetAPI = {
     })
     return response.data
   },
+  async getSet(setId) {
+    const response = await axios.get(`/test-sets/${setId}`)
+    return response.data
+  },
+  async getRecords(setId, { page = 1, pageSize = 20, result = 'all' } = {}) {
+    const response = await axios.get(`/test-sets/${setId}/records`, {
+      params: { page, page_size: pageSize, result },
+    })
+    return response.data
+  },
+  async getTrend(setId, limit = 10) {
+    const response = await axios.get(`/test-sets/${setId}/trend`, { params: { limit } })
+    return response.data
+  },
   async getReport(setId) {
     const response = await axios.get(`/test-sets/${setId}/report`)
     return response.data

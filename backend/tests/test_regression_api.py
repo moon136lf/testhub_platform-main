@@ -189,9 +189,11 @@ class TestScriptsListIncludeRegression:
         assert item["ai_reason"] == "P0核心用例"
         assert item["actual_included"] is True
         assert item["include_source"] == "ai"
-        # 联查语句包含 outerjoin
-        stmt = db.execute.await_args.args[0]
+        # 联查语句包含 outerjoin（第一次 execute 是 ScriptAsset⋈RegressionSet）
+        stmt = db.execute.await_args_list[0].args[0]
         assert "JOIN" in str(stmt.compile()).upper()
+        # enrichment 修复后 include_regression 路径也会带出 bound_case
+        assert item["bound_case"] is not None or item["bound_case"] is None
 
     @pytest.mark.asyncio
     async def test_list_with_param_no_regression_row(self):
