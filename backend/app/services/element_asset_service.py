@@ -91,6 +91,9 @@ class ElementAssetService:
         for pos, s in enumerate(sts):
             s["score"] = max(0, 150 - pos * 10)
         el.locator_strategies = {"strategies": sts}
+        # JSONB 原地变异不触发 UPDATE，须显式标记（否则调序静默丢失）
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(el, "locator_strategies")
         await self.db.commit()
 
     async def add_locator(self, element_id: str, ltype: str, value: str, score: int = 50) -> None:
@@ -107,6 +110,9 @@ class ElementAssetService:
             "unique": False, "verified": False, "source": "manual",
         })
         el.locator_strategies = {"strategies": sts}
+        # JSONB 原地 append 不触发 UPDATE，须显式标记（否则自定义定位器静默丢失）
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(el, "locator_strategies")
         await self.db.commit()
 
     async def recycle_element(self, element_id: str) -> None:
