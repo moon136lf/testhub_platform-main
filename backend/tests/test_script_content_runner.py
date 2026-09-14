@@ -146,6 +146,39 @@ class TestDispatch:
             await dispatch_editor_action(MagicMock(), {"action": "hack", "target": "", "value": ""}, None)
 
 
+class TestCaptchaRefMarker:
+    """验证码引用统一为 {captcha_text} 标记，不再认魔法串"识别结果"。"""
+
+    @pytest.mark.asyncio
+    async def test_literal_recognized_text_fills_literally(self):
+        """值="识别结果" 不再特判——静默 fill 字面文本（旧魔法串语义已删除）"""
+        page = MagicMock()
+        loc = MagicMock(); loc.fill = AsyncMock()
+        page.locator.return_value = loc
+        await dispatch_editor_action(page, {"action": "input", "target": "#c", "value": "识别结果"}, None)
+        loc.fill.assert_awaited_with("识别结果")
+
+    @pytest.mark.asyncio
+    async def test_captcha_ref_fills_var(self):
+        page = MagicMock()
+        loc = MagicMock(); loc.fill = AsyncMock()
+        page.locator.return_value = loc
+        page._script_vars = {"captcha_text": "ab12"}
+        await dispatch_editor_action(page, {"action": "input", "target": "#c", "value": " {captcha_text} "}, None)
+        loc.fill.assert_awaited_with("ab12")
+
+    @pytest.mark.asyncio
+    async def test_captcha_ref_without_recognize_fails(self):
+        """{captcha_text} 引用但无前置识别步骤 → 步骤失败带明确错误，不静默填字面"""
+        page = MagicMock()
+        loc = MagicMock(); loc.fill = AsyncMock()
+        page.locator.return_value = loc
+        page._script_vars = {}
+        with pytest.raises(RuntimeError, match="前置步骤未识别验证码"):
+            await dispatch_editor_action(page, {"action": "input", "target": "#c", "value": "{captcha_text}"}, None)
+        loc.fill.assert_not_awaited()
+
+
 class TestAssertDbReadOnlyGuard:
     @pytest.mark.asyncio
     async def test_assert_db_read_only_guard(self):

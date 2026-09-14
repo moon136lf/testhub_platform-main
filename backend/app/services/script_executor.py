@@ -97,9 +97,14 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
         return None
     if action == "input":
         fill_value = value
-        if fill_value == "识别结果" or fill_value == "{captcha_text}":
+        if fill_value.strip() == "{captcha_text}":
             # 需求②：引用上一步 captcha_recognize 的识别输出
-            fill_value = getattr(page, "_script_vars", {}).get("captcha_text", "")
+            text = (getattr(page, "_script_vars", None) or {}).get("captcha_text", "")
+            if not text:
+                raise RuntimeError(
+                    "值 {captcha_text} 引用失败：前置步骤未识别验证码"
+                    "（需在输入前先执行 captcha_recognize 识别验证码步骤）")
+            fill_value = text
         await page.locator(target).fill(fill_value)
         return None
     if action == "input_captcha":

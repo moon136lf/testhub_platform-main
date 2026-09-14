@@ -48,7 +48,7 @@ STEP1_PROMPT = """你是测试脚本转换器。把测试步骤转成结构化�
 - 目标含"地址栏"或"URL"且值为 http 开头 → navigate, target 可为空, value=URL
 - 步骤的 目标[]/数据[]/预期[] 分别对应 target/value/断言依据, 不得遗漏或编造
 - 识别验证码 → captcha_recognize, target=验证码图片元素
-- 输入/填写 验证码到输入框 → fill, target=验证码输入框, value=识别结果(引用上一步识别输出)
+- 输入/填写 验证码到输入框 → fill, target=验证码输入框, value={{captcha_text}}(引用上一步识别输出, 必须原样输出此标记)
 - 识别验证码与输入验证码是两个独立步骤，不得合并为一步
 只输出 JSON 数组, 不要解释文字。
 

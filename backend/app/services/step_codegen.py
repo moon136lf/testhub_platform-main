@@ -53,7 +53,11 @@ def _gen_step(step: Dict) -> str:
     elif action == "input":
         if not target:
             raise ValueError("input 需要 target（元素定位）")
-        line = f'    {_loc(target)}.fill({_escape(value)})'
+        if (value or "").strip() == "{captcha_text}":
+            # 验证码引用标记 → 生成 captcha_text 变量引用（由前置 captcha_recognize 步骤赋值）
+            line = f"    {_loc(target)}.fill(captcha_text)"
+        else:
+            line = f'    {_loc(target)}.fill({_escape(value)})'
     elif action == "select":
         if not target:
             raise ValueError("select 需要 target（元素定位）")

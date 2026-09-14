@@ -48,16 +48,16 @@ _SYSTEM_PROMPT = """你是测试用例标准化助手。用户给出的步骤描
 第2步（输入）：
 - action = 「输入」
 - target = 验证码输入框
-- data = 「识别结果」（引用上一步识别输出）
+- data = 「{captcha_text}」（引用上一步识别输出，必须原样输出此标记）
 - expected = 「验证码输入框显示识别出的验证码」
 
 输入描述："4.识别图形验证码，输入验证码"
 输出步骤：{"step":4, "action":"识别验证码", "target":"图形验证码图片", "data":"", "expected":"识别出验证码"}
-输出步骤：{"step":5, "action":"输入", "target":"验证码输入框", "data":"识别结果", "expected":"验证码输入框显示识别出的验证码"}
+输出步骤：{"step":5, "action":"输入", "target":"验证码输入框", "data":"{captcha_text}", "expected":"验证码输入框显示识别出的验证码"}
 
 输入描述："6.在验证码输入框输入图片中的验证码"
 输出步骤：{"step":6, "action":"识别验证码", "target":"图形验证码图片", "data":"", "expected":"识别出验证码"}
-输出步骤：{"step":7, "action":"输入", "target":"验证码输入框", "data":"识别结果", "expected":"验证码输入框显示识别出的验证码"}
+输出步骤：{"step":7, "action":"输入", "target":"验证码输入框", "data":"{captcha_text}", "expected":"验证码输入框显示识别出的验证码"}
 
 ## 约束
 

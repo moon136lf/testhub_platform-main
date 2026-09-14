@@ -22,7 +22,7 @@ class TestPipelineTwoStep:
                 {"step": 3, "action": "识别验证码", "target": "图形验证码图片",
                  "expected": "识别出验证码"},
                 {"step": 4, "action": "输入", "target": "验证码输入框",
-                 "data": "识别结果", "expected": "输入框显示识别出的验证码"},
+                 "data": "{captcha_text}", "expected": "输入框显示识别出的验证码"},
             ],
             expected_result="进入首页",
         )
@@ -30,7 +30,7 @@ class TestPipelineTwoStep:
     def test_two_steps_convert_to_two_intents(self):
         gw = FakeGateway(
             '[{"step":3,"action":"captcha_recognize","target":"#captcha-img","value":""},'
-            '{"step":4,"action":"fill","target":"#captcha-input","value":"识别结果"}]'
+            '{"step":4,"action":"fill","target":"#captcha-input","value":"{captcha_text}"}]'
         )
         actions = asyncio.run(step1_to_actions(self._case(), gw))
         assert len(actions) == 2
@@ -61,6 +61,24 @@ class TestCodegenCaptchaRecognize:
         assert "captcha_text = _recognize_captcha(" in code
         assert "#captcha-img" in code
         assert ".fill(" not in code
+
+    def test_input_captcha_ref_generates_variable_reference(self):
+        """input + {captcha_text} → 生成变量引用 .fill(captcha_text)，不是字面文本"""
+        code = generate_script("t", [
+            {"seq": 1, "action": "captcha_recognize", "target": "#captcha-img",
+             "value": "", "expected": ""},
+            {"seq": 2, "action": "input", "target": "#captcha-input",
+             "value": "{captcha_text}", "expected": ""},
+        ])
+        assert "captcha_text = _recognize_captcha(" in code
+        assert ".fill(captcha_text)" in code
+        assert "'{captcha_text}'" not in code and '"{captcha_text}"' not in code
+
+    def test_input_captcha_ref_with_whitespace(self):
+        code = generate_script("t", [
+            {"seq": 1, "action": "input", "target": "#c", "value": " {captcha_text} ", "expected": ""},
+        ])
+        assert ".fill(captcha_text)" in code
 
     def test_requires_target(self):
         with pytest.raises(ValueError):
