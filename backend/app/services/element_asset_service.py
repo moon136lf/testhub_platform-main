@@ -194,8 +194,8 @@ class ElementAssetService:
         await self.db.commit()
         return page
 
-    async def rename_page(self, page_id: str, page_name: str) -> None:
-        """重命名页面。"""
+    async def rename_page(self, page_id: str, page_name: str, page_url: Optional[str] = None) -> None:
+        """编辑页面（名称必填，URL 可选更新）。"""
         if not page_name or not page_name.strip():
             raise ValueError("页面名称不能为空")
         from app.models.element import PageRepository
@@ -203,6 +203,8 @@ class ElementAssetService:
         if not page:
             raise ValueError("页面不存在")
         page.page_name = page_name.strip()[:100]
+        if page_url is not None:
+            page.page_url = page_url.strip()
         await self.db.commit()
 
     async def move_page(self, page_id: str, direction: str) -> None:
@@ -275,6 +277,26 @@ class ElementAssetService:
             )
         await self.db.delete(page)
         await self.db.commit()
+
+    async def move_elements_to_page(self, element_ids: List[str], target_page_id: str) -> int:
+        """批量迁移元素到目标页面（返回迁移数）。全局元素跳过（无页面归属）。"""
+        from app.models.element import ElementRepository, PageRepository
+        target = _uuid.UUID(target_page_id)
+        t = await self.db.execute(
+            select(PageRepository.id).where(PageRepository.id == target)
+        )
+        if not t.scalar():
+            raise ValueError("目标页面不存在")
+        moved = 0
+        for eid in element_ids:
+            uid = _uuid.UUID(eid)
+            el = await self.db.get(ElementRepository, uid)
+            if el is None or el.scope == "global":
+                continue
+            el.page_id = target
+            moved += 1
+        await self.db.commit()
+        return moved
 
     async def _count_page_elements(self, page_id: str) -> int:
         from app.models.element import ElementRepository

@@ -101,6 +101,11 @@ export const elementAPI = {
     const response = await axios.delete(`/elements/${elementId}/locators/${index}`)
     return response.data
   },
+  async moveElementsToPage(elementIds, targetPageId) {
+    const response = await axios.post('/elements-asset/move-to-page', {
+      element_ids: elementIds, target_page_id: targetPageId })
+    return response.data
+  },
   async reorderLocator(elementId, index, direction) {
     const response = await axios.post(`/elements/${elementId}/locators/reorder`, { index, direction })
     return response.data
@@ -130,8 +135,8 @@ export const elementAPI = {
     const response = await axios.post('/pages-tree', data)
     return response.data
   },
-  async renamePage(pageId, pageName) {
-    const response = await axios.put(`/pages-tree/${pageId}`, { page_name: pageName })
+  async renamePage(pageId, pageName, pageUrl) {
+    const response = await axios.put(`/pages-tree/${pageId}`, { page_name: pageName, page_url: pageUrl || undefined })
     return response.data
   },
   async movePage(pageId, direction) {

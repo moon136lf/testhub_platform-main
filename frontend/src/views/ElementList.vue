@@ -20,6 +20,8 @@
         <el-button :icon="Upload" @click="importDialogVisible = true">导入</el-button>
         <el-button :icon="Download" @click="handleExport">导出</el-button>
         <el-button :icon="Delete" @click="openRecycleBin">回收站</el-button>
+        <el-button type="warning" plain :disabled="!selectedRows.length"
+          @click="openBulkMigrate">迁移（{{ selectedRows.length }}）</el-button>
         <el-button type="primary" :icon="Plus" @click="showCreateDialog">新建元素</el-button>
       </div>
     </div>
@@ -58,7 +60,8 @@
       </el-card>
 
       <el-card shadow="never" class="table-card">
-        <el-table :data="elements" v-loading="loading" stripe>
+        <el-table :data="elements" v-loading="loading" stripe @selection-change="onSelectionChange">
+          <el-table-column type="selection" width="42" />
           <el-table-column type="index" :index="indexOffset" label="序号" width="70" align="center" />
           <el-table-column prop="element_name" label="元素名" min-width="160" show-overflow-tooltip />
           <el-table-column prop="element_type" label="类型" width="90">
@@ -101,10 +104,9 @@
           <el-table-column label="更新时间" width="160">
             <template #default="{ row }">{{ formatTime(row.updated_at || row.created_at) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="180" fixed="right">
+          <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
-              <el-button type="primary" link :icon="View" @click="openDetail(row)">详情</el-button>
               <el-button type="danger" link :icon="Delete" @click="deleteElement(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -128,7 +130,7 @@
       <div v-if="ctxMenu.visible" class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
         <div class="ctx-item" @click="openPageCreate('sub')">新建子级页面</div>
         <div class="ctx-item" @click="openPageCreate('sibling')">新建同级页面</div>
-        <div class="ctx-item" @click="renamePage">重命名</div>
+        <div class="ctx-item" @click="openPageEdit">编辑</div>
         <div class="ctx-item" @click="moveCtxPage('up')">上移</div>
         <div class="ctx-item" @click="moveCtxPage('down')">下移</div>
         <div class="ctx-item danger" @click="deleteCtxPage">删除</div>
@@ -223,7 +225,7 @@
     </el-dialog>
 
     <!-- 新建元素弹窗 -->
-    <el-dialog v-model="createDialogVisible" title="新建元素" width="480px">
+    <el-dialog v-model="createDialogVisible" title="新建元素" width="560px">
       <el-form label-width="80px">
         <el-form-item label="名称" required>
           <el-input v-model="createForm.name" />
@@ -244,13 +246,13 @@
         </el-form-item>
         <el-form-item v-if="createForm.scope === 'page'" label="所属页面" required>
           <el-select v-model="createForm.page_id" style="width: 100%" placeholder="选择页面">
-            <el-option v-for="p in pages" :key="p.id" :label="p.page_name" :value="p.id" />
+            <el-option v-for="p in flattenTree(pages)" :key="p.id" :label="p.page_name" :value="p.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="定位器">
           <div style="width:100%">
             <div v-for="(loc, i) in createForm.locators" :key="i" style="display:flex; gap:6px; margin-bottom:6px">
-              <el-select v-model="loc.type" style="width:140px">
+              <el-select v-model="loc.type" style="width:150px">
                 <el-option v-for="t in ['id', 'css', 'data-testid', 'text', 'xpath']" :key="t" :label="t" :value="t" />
               </el-select>
               <el-input v-model="loc.value" placeholder="定位表达式" style="flex:1" />
@@ -268,7 +270,7 @@
     </el-dialog>
 
     <!-- 编辑元素弹窗（字段与新建一致） -->
-    <el-dialog v-model="editDialogVisible" title="编辑元素" width="480px">
+    <el-dialog v-model="editDialogVisible" title="编辑元素" width="560px">
       <el-form label-width="80px">
         <el-form-item label="名称" required>
           <el-input v-model="editForm.name" />
@@ -294,12 +296,18 @@
         </el-form-item>
         <el-form-item label="定位器">
           <div style="width:100%">
-            <div v-for="(loc, i) in editForm.locators" :key="i" style="display:flex; gap:6px; margin-bottom:6px">
-              <el-select v-model="loc.type" style="width:140px">
+            <div v-for="(loc, i) in editForm.locators" :key="i" style="display:flex; gap:6px; margin-bottom:6px; align-items:center">
+              <el-select v-model="loc.type" style="width:150px">
                 <el-option v-for="t in ['id', 'css', 'data-testid', 'text', 'xpath']" :key="t" :label="t" :value="t" />
               </el-select>
               <el-input v-model="loc.value" placeholder="定位表达式" style="flex:1" />
               <el-input-number v-model="loc.score" :min="0" :max="150" style="width:110px" />
+              <span style="display:inline-flex; flex-direction:column; line-height:1">
+                <el-button text type="primary" style="padding:0 2px; height:auto"
+                  :disabled="i === 0" @click="moveEditLocator(i, -1)">▲</el-button>
+                <el-button text type="primary" style="padding:0 2px; height:auto"
+                  :disabled="i === editForm.locators.length - 1" @click="moveEditLocator(i, 1)">▼</el-button>
+              </span>
               <el-button type="danger" text @click="editForm.locators.splice(i, 1)">删除</el-button>
             </div>
             <el-button text type="primary" @click="editForm.locators.push({ type: 'css', value: '', score: 50 })">+ 添加定位器</el-button>
@@ -352,16 +360,34 @@
         <el-button @click="importDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
-    <!-- 迁移元素：双页面树选择目标 -->
-    <el-dialog v-model="migrateVisible" title="迁移元素到目标页面" width="640px">
+    <!-- 页面编辑弹窗（名称+URL） -->
+    <el-dialog v-model="pageEditVisible" title="编辑页面" width="440px">
+      <el-form label-width="80px">
+        <el-form-item label="页面名称" required>
+          <el-input v-model="pageEditForm.name" @keyup.enter="submitPageEdit" />
+        </el-form-item>
+        <el-form-item label="页面 URL">
+          <el-input v-model="pageEditForm.url" placeholder="完整 URL，如 http://host/path" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="pageEditVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitPageEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 迁移元素：双页面树选择目标（删页迁移 / 批量迁移共用） -->
+    <el-dialog v-model="migrateVisible" :title="bulkMigrateMode ? '迁移元素到目标页面' : '迁移元素到'" width="640px">
       <div class="migrate-tip">
-        左侧为可选目标页面树（已排除被删页面及其子级），点击选中目标后确认。
+        {{ bulkMigrateMode
+          ? `将 ${selectedRows.length} 个元素迁移到左侧选中目标页面（已排除所选元素当前所在页面）。`
+          : '左侧为可选目标页面树（已排除被删页面及其子级），点击选中目标后确认。' }}
       </div>
       <div class="migrate-body">
         <div class="migrate-pane">
           <div class="migrate-pane-title">目标页面树</div>
           <el-tree
-            :data="migrateTreeData"
+            :data="bulkMigrateMode ? bulkMigrateTreeData : migrateTreeData"
             node-key="id"
             :props="{ label: 'page_name', children: 'children' }"
             default-expand-all
@@ -387,7 +413,7 @@
       </div>
       <template #footer>
         <el-button @click="cancelMigrate">取消</el-button>
-        <el-button type="primary" @click="confirmMigrate">确认迁移</el-button>
+        <el-button type="primary" @click="bulkMigrateMode ? confirmBulkMigrate() : confirmMigrate()">确认迁移</el-button>
       </template>
     </el-dialog>
   </div>
@@ -648,16 +674,31 @@ const submitPageCreate = async () => {
   }
 }
 
-const renamePage = async () => {
+// ---- 页面编辑弹窗（名称+URL，问题17） ----
+const pageEditVisible = ref(false)
+const pageEditForm = ref({ id: null, name: '', url: '' })
+
+const openPageEdit = () => {
   const page = ctxMenu.page
   closeCtxMenu()
+  if (!page) return
+  pageEditForm.value = { id: page.id, name: page.page_name, url: page.page_url || '' }
+  pageEditVisible.value = true
+}
+
+const submitPageEdit = async () => {
+  const form = pageEditForm.value
+  if (!(form.name || '').trim()) {
+    ElMessage.warning('请输入页面名称')
+    return
+  }
   try {
-    const { value } = await ElMessageBox.prompt('输入新名称', '重命名页面', { inputValue: page.page_name, inputPattern: /\S+/ })
-    await elementAPI.renamePage(page.id, value)
-    ElMessage.success('已重命名')
+    await elementAPI.renamePage(form.id, form.name.trim(), (form.url || '').trim())
+    ElMessage.success('页面已保存')
+    pageEditVisible.value = false
     loadPages()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error('重命名失败: ' + (e.message || e))
+    ElMessage.error('保存失败: ' + (e.message || e))
   }
 }
 
@@ -749,6 +790,7 @@ const migrateTreeData = computed(() => {
 })
 
 const pickTargetPage = (sourcePage) => {
+  bulkMigrateMode.value = false
   migrateSourcePage.value = sourcePage
   migrateTargetId.value = null
   migrateVisible.value = true
@@ -769,6 +811,51 @@ const cancelMigrate = () => {
   migrateVisible.value = false
   migrateResolve.value?.(null)
   migrateResolve.value = null
+}
+
+// ---- 批量迁移元素（问题19：勾选单个/多个 → 迁移按钮 → 双树选目标） ----
+const selectedRows = ref([])
+const onSelectionChange = (rows) => { selectedRows.value = rows }
+const bulkMigrateTargetId = ref(null)
+const bulkMigrateMode = ref(false)
+
+// 批量迁移目标树：排除已选元素所在页面（迁到同页无意义）
+const bulkMigrateTreeData = computed(() => {
+  const srcIds = new Set(selectedRows.value.map((r) => r.page_id).filter(Boolean))
+  const exclude = (nodes) => nodes
+    .filter((n) => !srcIds.has(n.id))
+    .map((n) => ({ ...n, children: n.children?.length ? exclude(n.children) : [] }))
+  return exclude(pages.value)
+})
+
+const openBulkMigrate = () => {
+  if (!selectedRows.value.length) return
+  if (selectedRows.value.every((r) => r.scope === 'global')) {
+    ElMessage.warning('所选元素均为全局元素（无页面归属），无需迁移')
+    return
+  }
+  bulkMigrateMode.value = true
+  migrateTargetId.value = null
+  migrateVisible.value = true
+}
+
+const confirmBulkMigrate = async () => {
+  const target = flattenTree(pages.value).find((p) => p.id === migrateTargetId.value)
+  if (!target) {
+    ElMessage.warning('请先在左侧选择目标页面')
+    return
+  }
+  try {
+    const ids = selectedRows.value.filter((r) => r.scope !== 'global').map((r) => r.id)
+    const r = await elementAPI.moveElementsToPage(ids, target.id)
+    ElMessage.success(`已迁移 ${r.data?.moved ?? ids.length} 个元素到「${target.page_name}」`)
+    migrateVisible.value = false
+    selectedRows.value = []
+    loadElements()
+    loadPages()
+  } catch (e) {
+    ElMessage.error('迁移失败: ' + (e.response?.data?.detail || e.message || e))
+  }
 }
 
 // ---- 详情 ----
@@ -883,6 +970,14 @@ const openEditDialog = (row) => {
     locators: raw.map((s) => ({ type: s.type, value: s.value, score: s.score })),
   }
   editDialogVisible.value = true
+}
+
+// 编辑弹窗内定位器行上移/下移（本地数组交换，保存时统一按差异同步）
+const moveEditLocator = (i, dir) => {
+  const arr = editForm.value.locators
+  const j = i + dir
+  if (j < 0 || j >= arr.length) return
+  ;[arr[i], arr[j]] = [arr[j], arr[i]]
 }
 
 const submitEdit = async () => {
