@@ -235,6 +235,12 @@ class ElementAssetService:
                 .where(ElementRepository.page_id == page.id)
                 .values(page_id=target)
             )
+            # 迁移先落库再删页面：db.get 取 page 时 selectin 已把 elements 载入
+            # session，cascade="all, delete-orphan" 会在 db.delete(page) 时把
+            # identity map 里的旧集合当孤儿删除（迁移=元素凭空消失的根因）。
+            # expire 后重取，elements 集合为空（元素已迁走），级联无对象可删。
+            await self.db.commit()
+            self.db.expire(page)
         elif n > 0 and force:
             await self.db.execute(
                 ElementRepository.__table__.update()
