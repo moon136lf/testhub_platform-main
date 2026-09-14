@@ -16,7 +16,7 @@
           </el-select>
         </template>
       </el-table-column>
-      <el-table-column label="元素" min-width="220">
+      <el-table-column label="元素（目标）" min-width="220">
         <template #default="{ row }">
           <span v-if="row.action === 'navigate'" class="hint">—</span>
           <template v-else>
@@ -45,7 +45,7 @@
           </template>
         </template>
       </el-table-column>
-      <el-table-column label="值 / SQL" min-width="240">
+      <el-table-column label="值 / SQL（测试数据）" min-width="240">
         <template #default="{ row }">
           <el-input v-if="row.action !== 'assert_db'" v-model="row.value" size="small"
             :placeholder="valuePlaceholder(row.action)" />
@@ -53,10 +53,10 @@
             placeholder="SQL，如 SELECT count(*) FROM test_case" />
         </template>
       </el-table-column>
-      <el-table-column label="期望值" width="160">
+      <el-table-column label="期望值（预期结果）" width="170">
         <template #default="{ row }">
           <!-- 断言期望：所有动作行均可填（非空时执行完该步断言文本）；assert_db 为 DB 比对 -->
-          <el-input v-model="row.expected" size="small" placeholder="期望文本(可选)" />
+          <el-input v-model="row.expected" size="small" placeholder="预期结果" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="110" align="center">
