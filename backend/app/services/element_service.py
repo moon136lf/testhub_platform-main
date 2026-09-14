@@ -149,6 +149,13 @@ class ElementService:
                 "element_name": el.element_name,
                 "locator": best.get("value", ""),
                 "confidence": el.confidence or 0,
+                # 全量定位策略（选择器展开用）：[{type,value,confidence}]
+                "strategies": [
+                    {"type": s.get("type", ""),
+                     "value": s.get("value", ""),
+                     "confidence": s.get("confidence", s.get("score", 0)) or 0}
+                    for s in strategies
+                ],
             })
         return {"pages": list(pages.values())}
 

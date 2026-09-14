@@ -40,3 +40,44 @@ def test_picker_returns_grouped_elements(client):
 def test_picker_requires_project(client):
     r = client.get("/api/v1/elements/picker")
     assert r.status_code == 422
+
+
+def test_picker_data_includes_strategies():
+    """picker_data 需返回全量定位策略 strategies（与 locator_strategies 一致）。"""
+    from unittest.mock import MagicMock
+
+    import app.services.element_service as mod
+
+    page = MagicMock()
+    page.id = "11111111-1111-1111-1111-111111111111"
+    page.project_id = PID
+    page.page_name = "登录页"
+    el = MagicMock()
+    el.id = "22222222-2222-2222-2222-222222222222"
+    el.project_id = PID
+    el.page_id = page.id
+    el.status = "active"
+    el.element_name = "账号框"
+    el.element_text = "请输入账号"
+    el.confidence = 0.9
+    el.locator_strategies = {"strategies": [
+        {"type": "id", "value": "#username", "confidence": 0.9},
+        {"type": "css", "value": "input[name='user']", "confidence": 0.6},
+    ]}
+
+    svc = mod.ElementService.__new__(mod.ElementService)
+    result = MagicMock()
+    result.all.return_value = [(page, el)]
+    svc.db = MagicMock()
+
+    async def fake_execute(_):
+        return result
+    svc.db.execute = fake_execute
+
+    import asyncio
+    data = asyncio.run(svc.picker_data(PID))
+    elem = data["pages"][0]["elements"][0]
+    assert elem["locator"] == "#username"
+    assert [s["type"] for s in elem["strategies"]] == ["id", "css"]
+    assert elem["strategies"][0]["value"] == "#username"
+    assert elem["strategies"][0]["confidence"] == 0.9
