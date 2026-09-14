@@ -1,31 +1,53 @@
 """
 Server-Sent Events (SSE) Stream Handler
+
+跨循环安全设计（重要）：
+redis.asyncio 连接池的连接绑定创建它的循环。本项目同一进程内有多个事件循环：
+  - FastAPI 宿主 loop（Windows --reload 下是 Selector）
+  - pw-bridge 专用 Proactor loop（会话抓取 on_progress 回调在此执行）
+  - Celery worker 每任务 asyncio.run 的新循环
+共享一个全局 client 会报 'got Future attached to a different loop'。
+因此 SSE 模块用 _loop_local_client() 按「当前运行的循环」取用独立 client
+（每个循环一个连接池，互不污染；不再复用全局 redis_client）。
 """
 
 import asyncio
 import json
+import logging
+import weakref
 from datetime import datetime
 from typing import AsyncGenerator, Optional
-import logging
 
-from app.core.redis import redis_client
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# 每个（存活的）事件循环一个独立 redis client；loop 结束后条目自动清理
+_clients_by_loop: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
 
-async def _ensure_redis():
-    """确保 redis 连接绑定在当前事件循环上。
 
-    Celery worker 用 asyncio.run(每个任务一次) 执行协程，每次都是新循环；
-    redis.asyncio 连接绑定创建它的循环，跨循环复用会报 'Event loop is closed'。
-    检测到连接不存在或绑定的循环已关闭时重建连接。
-    """
-    r = redis_client.redis
-    if r is None or getattr(r, "_closed", False) or (
-        getattr(r, "_loop", None) is not None and r._loop.is_closed()
-    ):
-        await redis_client.connect()
+async def _loop_local_client():
+    """取当前运行循环专属的 redis client（无则创建）。"""
+    loop = asyncio.get_running_loop()
+    client = _clients_by_loop.get(loop)
+    if client is None or getattr(client, "connection_pool", None) is None:
+        client = _make_client()
+        _clients_by_loop[loop] = client
+    return client
+
+
+def _make_client():
+    import redis.asyncio as aioredis
+    return aioredis.from_url(
+        settings.REDIS_URL,
+        encoding="utf-8",
+        decode_responses=True,
+    )
+
+
+async def get_loop_client():
+    """取当前运行循环专属的 redis client（无则创建）。外部需要直连时用。"""
+    return await _loop_local_client()
 
 
 class SSEStream:
@@ -71,17 +93,11 @@ class SSEStream:
             message["data"] = data
 
         try:
-            # 推送到 Redis List（先确保连接绑定当前事件循环，见 _ensure_redis）
-            try:
-                await _ensure_redis()
-                await redis_client.redis.lpush(self.redis_key, json.dumps(message))
-            except RuntimeError:
-                # 跨事件循环复用连接池首击必败（redis-py 池自动重建，第二次成功）——
-                # 重试一次即可，避免刷 'Event loop is closed' 噪音
-                await redis_client.connect()
-                await redis_client.redis.lpush(self.redis_key, json.dumps(message))
+            client = await _loop_local_client()
+            # 推送到 Redis List（当前循环专属 client，见模块 docstring）
+            await client.lpush(self.redis_key, json.dumps(message))
             # 设置过期时间
-            await redis_client.redis.expire(self.redis_key, self.ttl)
+            await client.expire(self.redis_key, self.ttl)
             logger.debug(f"SSE message sent: {self.session_id} - {content}")
         except Exception as e:
             logger.error(f"Failed to send SSE message: {e}")
@@ -94,14 +110,14 @@ class SSEStream:
             JSON 格式的消息字符串
         """
         try:
-            last_id = 0
+            last_id = -1  # -1：index 0 的首条消息也要产出（0 会吞掉第一条）
             timeout_count = 0
             max_timeout = 60  # 最多等待 60 次（约 5 分钟）
 
             while timeout_count < max_timeout:
-                # 从 Redis List 中获取消息（先确保连接绑定当前事件循环，见 _ensure_redis）
-                await _ensure_redis()
-                messages = await redis_client.redis.lrange(self.redis_key, 0, -1)
+                # 从 Redis List 中获取消息（当前循环专属 client，见模块 docstring）
+                client = await _loop_local_client()
+                messages = await client.lrange(self.redis_key, 0, -1)
 
                 if messages:
                     # 反转列表（Redis lpush 是倒序的）
@@ -143,7 +159,8 @@ class SSEStream:
     async def clear_messages(self):
         """清除会话消息"""
         try:
-            await redis_client.redis.delete(self.redis_key)
+            client = await _loop_local_client()
+            await client.delete(self.redis_key)
             logger.info(f"Cleared SSE messages: {self.session_id}")
         except Exception as e:
             logger.error(f"Failed to clear SSE messages: {e}")
@@ -157,7 +174,8 @@ class SSEStream:
         """
         try:
             result_key = f"task_result:{self.session_id}"
-            result_json = await redis_client.redis.get(result_key)
+            client = await _loop_local_client()
+            result_json = await client.get(result_key)
 
             if result_json:
                 return json.loads(result_json)
@@ -175,7 +193,8 @@ class SSEStream:
         """
         try:
             result_key = f"task_result:{self.session_id}"
-            await redis_client.redis.setex(
+            client = await _loop_local_client()
+            await client.setex(
                 result_key,
                 self.ttl,
                 json.dumps(result)
