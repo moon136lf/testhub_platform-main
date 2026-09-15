@@ -4,7 +4,6 @@
 - POST /convert   触发批量转脚本 (异步 Celery 任务 + SSE 文字直播)
 - GET  /          脚本列表 (可选 project_id / case_id 过滤)
 - GET  /{id}      脚本详情
-- PUT  /{id}/confirm    TRANS-02 用户确认入库 (status->confirmed)
 - POST /{id}/diagnose   调试修复 (四分类归因 + 失败步骤重生成)
 """
 
@@ -269,33 +268,6 @@ async def get_script(script_id: str, db: AsyncSession = Depends(get_db)):
     if not asset:
         raise HTTPException(status_code=404, detail="Script not found")
     return {"code": 0, "data": asset.to_dict()}
-
-
-@router.put("/{script_id}/confirm")
-async def confirm_script(script_id: str, db: AsyncSession = Depends(get_db)):
-    """TRANS-02 用户确认入库: ScriptAsset.status->confirmed。"""
-    try:
-        sid = uuid.UUID(script_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID")
-    result = await db.execute(select(ScriptAsset).where(ScriptAsset.id == sid))
-    asset = result.scalar_one_or_none()
-    if not asset:
-        raise HTTPException(status_code=404, detail="Script not found")
-    asset.status = "confirmed"
-    # #8: TRANS-02 确认入库 → 触发回归识别 (spec 偏差 H; 异常隔离不阻塞 confirm)
-    # savepoint 隔离: hook 失败时只回滚识别写入, asset.status 与 session 状态不受污染
-    try:
-        async with db.begin_nested():
-            from app.services.regression_service import RegressionService
-            await RegressionService(db).identify_for_script(str(asset.project_id), script_id)
-        await db.flush()
-    except Exception as e:
-        import logging as _logging
-        _logging.getLogger(__name__).warning(f"regression identify hook failed (non-blocking): {e}")
-    await db.commit()
-    return {"code": 0, "message": "Script confirmed",
-            "data": {"script_id": script_id, "status": "confirmed"}}
 
 
 @router.post("/{script_id}/diagnose")
