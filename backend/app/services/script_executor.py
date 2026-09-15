@@ -109,10 +109,7 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
     if action == "navigate":
         await page.goto(value)
         return None
-    if action == "click":
-        await page.locator(target).click()
-        return None
-    if action == "input":
+    if action in ("input", "fill"):
         fill_value = value
         if fill_value.strip() == "{captcha_text}":
             # 需求②：引用上一步 captcha_recognize 的识别输出
@@ -123,6 +120,9 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
                     "（需在输入前先执行 captcha_recognize 识别验证码步骤）")
             fill_value = text
         await page.locator(target).fill(fill_value)
+        return None
+    if action in ("click", "tap"):
+        await page.locator(target).click()
         return None
     if action == "input_captcha":
         # 复合动作：截图验证码图片(target) → ddddocr 识别 → 自动填入输入框(value)
@@ -357,7 +357,9 @@ class ScriptExecutor:
         start = time.time()
         step_mapping = script_asset.step_mapping or []
         steps = parse_editor_steps(step_mapping)
-        # 阶段3 T0: 编辑器行式步骤（含 seq 键或含 navigate/wait/assert 类动作）走编辑器执行链路
+        # 阶段3 T0: 编辑器行式步骤（含 seq 键或含 navigate/wait/assert 类动作）走编辑器执行链路。
+        # 注意 fill/input/click 不在此列：纯 fill 的 pipeline 脚本走乙路径（元素库+自愈）。
+        # dispatch_editor_action 仍兜底支持 fill/tap（有 navigate 的混合脚本 editor 分支可执行）
         is_editor_format = any(
             s.get("seq") or s.get("action") in (
                 "navigate", "wait", "assert_text", "assert_visible", "assert_db",
