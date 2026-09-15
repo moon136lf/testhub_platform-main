@@ -74,7 +74,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-pagination style="margin-top: 12px" v-model:current-page="recPage" :page-size="recPageSize"
+        <el-pagination style="margin-top: 12px; justify-content: flex-end" v-model:current-page="recPage" :page-size="recPageSize"
                        :total="recTotal" layout="total, prev, pager, next" @current-change="loadRecords" />
       </el-tab-pane>
     </el-tabs>

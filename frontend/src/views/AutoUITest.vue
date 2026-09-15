@@ -25,6 +25,9 @@
             <el-button type="warning" :disabled="!selected.length" :loading="batching" @click="openRunCfgDialog('batch')">
               批量运行 ({{ selected.length }})
             </el-button>
+            <el-button type="primary" plain :disabled="!selected.length" @click="saveSetVisible = true">
+              保存为测试集 ({{ selected.length }})
+            </el-button>
             <el-button type="success" @click="quickVisible = true">⚡ 快速运行</el-button>
           </div>
 
@@ -38,9 +41,8 @@
             <el-table-column label="来源批次" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">{{ row.batch_name || '—' }}</template>
             </el-table-column>
-            <el-table-column prop="category" label="分类" width="110" />
-            <el-table-column prop="status" label="状态" width="100">
-              <template #default="{ row }">{{ SCRIPT_STATUS_CN[row.status] || row.status }}</template>
+            <el-table-column label="分类" width="110">
+              <template #default="{ row }">{{ (CATEGORIES.find(c => c.value === row.category) || {}).label || row.category }}</template>
             </el-table-column>
             <el-table-column prop="last_status" label="上次结果" width="100">
               <template #default="{ row }">
@@ -49,23 +51,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="AI建议" width="90">
-              <template #default="{ row }">
-                <el-tooltip v-if="row.ai_reason" :content="row.ai_reason">
-                  <el-tag :type="row.ai_suggested ? 'warning' : 'info'" size="small">{{ row.ai_suggested ? '是' : '否' }}</el-tag>
-                </el-tooltip>
-                <span v-else>—</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="是否纳入" width="100">
-              <template #default="{ row }">
-                <el-tag :type="row.actual_included ? 'success' : 'info'" size="small">{{ row.actual_included ? '已纳入' : '未纳入' }}</el-tag>
-              </template>
-            </el-table-column>
             <el-table-column prop="run_count" label="运行次数" width="90" />
-            <el-table-column prop="locator_source" label="定位来源" width="110">
-              <template #default="{ row }">{{ LOCATOR_SOURCE_CN[row.locator_source] || row.locator_source }}</template>
-            </el-table-column>
             <el-table-column label="绑定用例" min-width="140" show-overflow-tooltip>
               <template #default="{ row }">{{ row.bound_case || '—' }}</template>
             </el-table-column>
@@ -75,12 +61,10 @@
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="320">
+            <el-table-column label="操作" width="240">
               <template #default="{ row }">
                 <el-button type="primary" link :loading="runningId === row.id" @click="openRunCfgDialog(row)">运行</el-button>
-                <el-button type="primary" link @click="viewScript(row)">查看</el-button>
                 <el-button type="primary" link @click="openStepEditor(row)">编辑脚本</el-button>
-                <el-button type="primary" link :disabled="row.status === 'confirmed'" @click="confirmScript(row)">确认入库</el-button>
                 <el-button type="primary" link @click="openDiagnose(row)">调试修复</el-button>
                 <el-button v-if="row.last_status === 'failed'" type="primary" link
                   :loading="diagLoadingId === row.id" @click="handleAiDiagnose(row)">诊断</el-button>
@@ -88,7 +72,7 @@
               </template>
             </el-table-column>
           </el-table>
-          <el-pagination style="margin-top: 12px" v-model:current-page="scriptPage" :page-size="scriptPageSize"
+          <el-pagination style="margin-top: 12px; justify-content: flex-end" v-model:current-page="scriptPage" :page-size="scriptPageSize"
             :total="scriptTotal" layout="total, prev, pager, next" @current-change="loadScripts" />
         </el-card>
       </el-tab-pane>
@@ -129,17 +113,30 @@
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 文字直播区（脚本库运行共用） -->
-    <el-card v-if="libLogs.length || runningId || batching" style="margin-top: 16px">
-      <h3>执行过程文字直播</h3>
-      <el-progress v-if="libLogs.length" :percentage="Math.round((libProgress || 0) * 100)"
-        :status="libProgress >= 1 ? 'success' : undefined" style="margin-bottom: 8px" />
-      <div class="log-box">
-        <div v-for="(msg, i) in libLogs" :key="i" class="log-line">
-          [{{ msg.timestamp }}] {{ msg.content }}
-        </div>
+    <!-- 执行直播弹窗（关闭不中断，SSE 订阅独立于弹窗显隐） -->
+    <el-dialog v-model="liveVisible" title="执行直播" width="640px" :close-on-click-modal="false">
+      <el-progress v-if="libProgress > 0" :percentage="Math.round(libProgress * 100)"
+        :status="libProgress >= 1 ? 'success' : undefined" style="margin-bottom: 10px" />
+      <div class="live-box">
+        <div v-for="(msg, i) in libLogs" :key="i" class="live-line">[{{ msg.timestamp }}] {{ msg.content }}</div>
       </div>
-    </el-card>
+      <template #footer>
+        <el-button @click="liveVisible = false">{{ libProgress >= 1 ? '关闭' : '后台运行' }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 保存为测试集弹窗 -->
+    <el-dialog v-model="saveSetVisible" title="保存为测试集" width="420px">
+      <el-form label-width="80px">
+        <el-form-item label="名称" required>
+          <el-input v-model="saveSetName" placeholder="测试集名称" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="saveSetVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingSet" @click="handleSaveSet">确认</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 运行配置弹窗（脚本库单条/批量运行共用） -->
     <el-dialog v-model="runCfgVisible" title="运行配置" width="420px">
@@ -291,8 +288,6 @@ const statusCn = (s) => ({ pending: '待执行', running: '执行中', done: '�
 // locator_source=element_library/ai_generated/mixed/none_draft；status=generated/confirmed）
 const LAST_STATUS_CN = { never_run: '未运行', passed: '成功', failed: '失败', affected: '受影响' }
 const LAST_STATUS_TAG = { never_run: 'info', passed: 'success', failed: 'danger', affected: 'warning' }
-const LOCATOR_SOURCE_CN = { element_library: '元素库', ai_generated: 'AI生成', mixed: '混合', none_draft: '草稿' }
-const SCRIPT_STATUS_CN = { generated: '已生成', confirmed: '已入库' }
 
 const SOURCE_LABELS = {
   manual: '手工',
@@ -386,6 +381,7 @@ const batching = ref(false)
 const runConfig = reactive({ headless: true, timeout: 60, max_failures: 8 })
 const libLogs = ref([])
 const libProgress = ref(0)
+const liveVisible = ref(false)
 
 const onSelectionChange = (rows) => { selected.value = rows }
 
@@ -445,6 +441,7 @@ const handleRun = async (row) => {
   try {
     const resp = await scriptAPI.run(row.id, { ...runConfig })
     runCfgVisible.value = false
+    liveVisible.value = true
     startLibSSE(resp.data.session_id, { onDone: () => { runningId.value = null } })
   } catch (e) { ElMessage.error('运行失败'); runningId.value = null }
 }
@@ -456,11 +453,10 @@ const handleBatchRun = async () => {
     const ids = selected.value.map(s => s.id)
     const resp = await scriptAPI.batchRun(ids, { ...runConfig })
     runCfgVisible.value = false
+    liveVisible.value = true
     startLibSSE(resp.data.session_id, { onDone: () => { batching.value = false } })
   } catch (e) { ElMessage.error('批量运行失败'); batching.value = false }
 }
-
-const viewScript = (row) => { window.open(`/api/v1/scripts/${row.id}`, '_blank') }
 
 const delScript = async (row) => {
   const displayName = row.bound_case || row.name
@@ -475,9 +471,27 @@ const delScript = async (row) => {
   } catch (e) { ElMessage.error(e?.response?.data?.detail || '删除失败') }
 }
 
-const confirmScript = async (row) => {
-  await scriptAPI.confirm(row.id)
-  ElMessage.success('已确认入库'); loadScripts()
+// ---- 勾选保存为测试集 ----
+const saveSetVisible = ref(false)
+const saveSetName = ref('')
+const savingSet = ref(false)
+
+const handleSaveSet = async () => {
+  const name = (saveSetName.value || '').trim()
+  if (!name) { ElMessage.warning('请填写测试集名称'); return }
+  const caseIds = selected.value.map(r => r.case_id).filter(Boolean)
+  if (!caseIds.length) { ElMessage.warning('选中项不含关联用例'); return }
+  savingSet.value = true
+  try {
+    await testSetAPI.createSet(form.projectId, name, caseIds, 'manual')
+    ElMessage.success('已创建，可到测试集 Tab 查看')
+    saveSetVisible.value = false
+    saveSetName.value = ''
+    selected.value = []
+    loadScripts()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '创建失败')
+  } finally { savingSet.value = false }
 }
 
 // ---- 步骤化编辑（StepEditor）----
@@ -656,8 +670,8 @@ onMounted(async () => {
 .page-header { display: flex; justify-content: space-between; align-items: center; }
 .page-subtitle { font-size: 13px; color: var(--mt-text-secondary); margin-top: 4px; }
 .toolbar { display: flex; align-items: center; gap: 12px; }
-.log-box { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; }
-.log-line { margin-bottom: 4px; }
+.live-box { max-height: 320px; overflow-y: auto; background: var(--el-fill-color-lighter, #f5f7fa); border-radius: 6px; padding: 8px 12px; }
+.live-line { font-size: 12px; line-height: 1.7; color: var(--mt-text, #0f172a); }
 .code-box { max-height: 480px; overflow: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; white-space: pre; }
 .diag-card { margin-top: 12px; padding: 12px; background: #f5f7fa; border-radius: 4px; }
 .lib-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
