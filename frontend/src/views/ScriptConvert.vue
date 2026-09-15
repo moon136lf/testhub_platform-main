@@ -28,7 +28,7 @@
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :disabled="converting" @click="convertOne(row)">转脚本</el-button>
-            <el-button link @click="showDetail(row)">详情</el-button>
+            <el-button link type="primary" @click="showDetail(row)">详情</el-button>
             <el-button v-if="['converted','automated','partial_automated'].includes(row.automation_status)" link type="primary" @click="gotoScript(row)">查看脚本</el-button>
             <el-button link type="danger" @click="delCase(row)">删除</el-button>
           </template>

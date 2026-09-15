@@ -57,7 +57,7 @@
       <el-table-column label="操作" width="140">
         <template #default="{ row }">
           <el-button link type="primary" :loading="runningId === row.script.id" @click="runOne(row)">运行</el-button>
-          <el-button link @click="viewReport(row)">报告</el-button>
+          <el-button link type="primary" @click="viewReport(row)">报告</el-button>
         </template>
       </el-table-column>
     </el-table>
