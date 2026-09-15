@@ -16,7 +16,7 @@
       <div class="trend-title">最近 {{ trend.length }} 次通过率</div>
       <div class="trend-bar">
         <div v-for="(t, i) in trend" :key="i" class="trend-col"
-             :title="`${t.started_at} ${t.status} ${t.pass_rate}%`">
+             :title="`${formatTime(t.started_at)} ${t.status} ${t.pass_rate}%`">
           <div class="trend-fill" :class="t.status === 'done' && t.pass_rate >= 100 ? 'ok' : 'bad'"
                :style="{ height: Math.max(t.pass_rate, 4) + '%' }" />
         </div>
@@ -42,7 +42,9 @@
           <el-radio-button value="failed">有失败</el-radio-button>
         </el-radio-group>
         <el-table :data="records" style="margin-top: 12px" border size="small">
-          <el-table-column prop="started_at" label="触发时间" width="170" />
+          <el-table-column label="触发时间" width="170">
+            <template #default="{ row }">{{ formatTime(row.started_at) }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="110">
             <template #default="{ row }">
               <el-tag :type="recTagType(row)" size="small">{{ recCn(row) }}</el-tag>
@@ -83,6 +85,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { formatTime } from '@/utils/formatTime'
 import { testSetAPI } from '@/api/testSet'
 import { testCaseAPI } from '@/api/testCase'
 

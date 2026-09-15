@@ -210,9 +210,9 @@
                 <el-button type="primary" link :loading="runningId === row.id" @click="handleRun(row)">运行</el-button>
                 <el-button type="primary" link @click="viewScript(row)">查看</el-button>
                 <el-button type="primary" link @click="openStepEditor(row)">编辑脚本</el-button>
-                <el-button type="success" link :disabled="row.status === 'confirmed'" @click="confirmScript(row)">确认入库</el-button>
-                <el-button type="warning" link @click="openDiagnose(row)">调试修复</el-button>
-                <el-button v-if="row.last_status === 'failed'" type="danger" link
+                <el-button type="primary" link :disabled="row.status === 'confirmed'" @click="confirmScript(row)">确认入库</el-button>
+                <el-button type="primary" link @click="openDiagnose(row)">调试修复</el-button>
+                <el-button v-if="row.last_status === 'failed'" type="primary" link
                   :loading="diagLoadingId === row.id" @click="handleAiDiagnose(row)">诊断</el-button>
                 <el-button type="danger" link @click="delScript(row)">删除</el-button>
               </template>

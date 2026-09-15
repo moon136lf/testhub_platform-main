@@ -22,12 +22,14 @@
             <el-tag :type="statusTagType(row.automation_status)" size="small">{{ statusCn(row.automation_status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="updated_at" label="更新时间" width="170" />
+        <el-table-column label="更新时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :disabled="converting" @click="convertOne(row)">转脚本</el-button>
             <el-button link @click="showDetail(row)">详情</el-button>
-            <el-button v-if="['converted','automated','partial_automated'].includes(row.automation_status)" link type="success" @click="gotoScript(row)">查看脚本</el-button>
+            <el-button v-if="['converted','automated','partial_automated'].includes(row.automation_status)" link type="primary" @click="gotoScript(row)">查看脚本</el-button>
             <el-button link type="danger" @click="delCase(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -72,6 +74,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { formatTime } from '@/utils/formatTime'
 import { scriptAPI } from '@/api/script'
 import { projectAPI } from '@/api/project'
 import { testCaseAPI } from '@/api/testCase'
