@@ -151,7 +151,13 @@ async def _fetch_elements_async(
         context = await pw_service.browser.new_context()
         page = await context.new_page()
         page.set_default_timeout(30000)
-        await page.goto(url, wait_until="networkidle", timeout=30000)
+        # networkidle 可能永不达成（页面持续轮询，如被测后端挂时前端无限重试），
+        # 超时降级 load 继续抓取（DOM ready 即可扫描）
+        try:
+            await page.goto(url, wait_until="networkidle", timeout=30000)
+        except Exception:
+            logger.warning(f"goto networkidle timeout, fallback to load | url={url}")
+            await page.goto(url, wait_until="load", timeout=30000)
 
         # 阶段 3: 可选登录 (25%)
         if username and password:

@@ -181,7 +181,18 @@ class BrowserSessionManager:
             sess.page = await _bridge.run(ctx.new_page())
             await _bridge.run(_call(sess.page.set_default_timeout, 30000))
 
-        await _bridge.run(sess.page.goto(url, wait_until="networkidle", timeout=60000))
+        # networkidle 是理想同步点，但被测页面可能有持续轮询/重试请求（如后端挂了
+        # 前端无限重试）→ 永不 idle → goto 30s 超时整个打开流程失败。
+        # 容错：networkidle 超时后降级 "load"（DOM+load 事件即返回），页面照常可用。
+        try:
+            await _bridge.run(sess.page.goto(url, wait_until="networkidle", timeout=60000))
+        except Exception as e:
+            logger.warning(f"goto networkidle timeout, fallback to load | url={url}: {str(e)[:120]}")
+            try:
+                await _bridge.run(sess.page.goto(url, wait_until="load", timeout=30000))
+            except Exception as e2:
+                # 二次也失败（页面彻底不可达）才抛
+                raise e2
         sess.touch()
         return sess.session_id
 
