@@ -153,79 +153,8 @@
       </template>
     </el-dialog>
 
-    <!-- 详情抽屉 -->
-    <el-drawer v-model="detailVisible" :title="detailRow?.element_name || '元素详情'" size="480px">
-      <div v-if="detailRow" class="detail-body">
-        <div class="detail-tags">
-          <el-tag type="info">{{ detailRow.element_type }}</el-tag>
-          <el-tag :type="detailRow.scope === 'global' ? 'warning' : 'info'">
-            {{ detailRow.scope === 'global' ? '全局' : '页面' }}
-          </el-tag>
-          <el-tag :type="statusTag(detailRow.status)">{{ detailRow.status }}</el-tag>
-        </div>
-        <div v-if="detailRow.element_text" class="detail-text">显示文本：{{ detailRow.element_text }}</div>
-
-        <div class="section-title">
-          定位器 ({{ drawerLocators.length }})
-          <el-button size="small" text type="primary" :icon="Plus" @click="locatorDialogVisible = true">自定义定位器</el-button>
-        </div>
-        <div v-if="primaryIndex >= 0" class="detail-text">
-          首选定位：<code class="locator-code">{{ drawerLocators[primaryIndex].type }}: {{ drawerLocators[primaryIndex].value }}</code>
-        </div>
-        <div v-for="(loc, idx) in drawerLocators" :key="idx" class="locator-row">
-          <span class="star" v-if="idx === primaryIndex">★</span>
-          <code class="locator-code">{{ loc.type }}: {{ loc.value }}</code>
-          <el-tag size="small" type="success">{{ loc.score }}</el-tag>
-          <el-tag v-if="loc.source" size="small" type="info">{{ loc.source }}</el-tag>
-          <span class="locator-ops">
-            <el-button size="small" text :disabled="idx === 0" @click="reorder(idx, 'up')">↑</el-button>
-            <el-button size="small" text :disabled="idx === drawerLocators.length - 1" @click="reorder(idx, 'down')">↓</el-button>
-          </span>
-        </div>
-        <div v-if="!drawerLocators.length" class="tree-empty">暂无定位器</div>
-
-        <div class="section-title">
-          校验
-          <el-button size="small" type="primary" plain :loading="verifying" @click="verifyPrimary">校验首选定位</el-button>
-        </div>
-        <div v-if="verifyResult" class="verify-result">
-          <template v-if="verifyResult.error">
-            <div class="verify-error">校验失败：{{ verifyResult.error }}</div>
-          </template>
-          <template v-else>
-            命中 <b>{{ verifyResult.hit_count }}</b> 个 · score {{ verifyResult.score }}
-          </template>
-        </div>
-
-        <div class="section-title">引用脚本（{{ refCounts[detailRow.id] ?? '-' }}）</div>
-        <div v-for="s in refScripts" :key="s.id" class="ref-script">{{ s.name }}</div>
-        <div v-if="refsLoaded && !refScripts.length" class="tree-empty">暂无脚本引用</div>
-      </div>
-    </el-drawer>
-
-    <!-- 自定义定位器弹窗 -->
-    <el-dialog v-model="locatorDialogVisible" title="添加自定义定位器" width="440px">
-      <el-form label-width="70px">
-        <el-form-item label="类型">
-          <el-select v-model="newLocator.type" style="width: 100%">
-            <el-option v-for="t in ['id', 'css', 'data-testid', 'text', 'xpath', '自定义']" :key="t" :label="t" :value="t" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="值">
-          <el-input v-model="newLocator.value" placeholder="定位表达式" />
-        </el-form-item>
-        <el-form-item label="置信度">
-          <el-input-number v-model="newLocator.score" :min="0" :max="100" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="locatorDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitLocator">添加</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 新建元素弹窗 -->
-    <el-dialog v-model="createDialogVisible" title="新建元素" width="560px">
+    <!-- 新建元素（全屏大弹窗，容纳定位器编辑） -->
+    <el-dialog v-model="createDialogVisible" title="新建元素" width="860px" top="6vh">
       <el-form label-width="80px">
         <el-form-item label="名称" required>
           <el-input v-model="createForm.name" />
@@ -251,12 +180,18 @@
         </el-form-item>
         <el-form-item label="定位器">
           <div style="width:100%">
-            <div v-for="(loc, i) in createForm.locators" :key="i" style="display:flex; gap:6px; margin-bottom:6px">
-              <el-select v-model="loc.type" style="width:150px">
+            <div v-for="(loc, i) in createForm.locators" :key="i" class="locator-edit-row">
+              <el-select v-model="loc.type" style="width:170px">
                 <el-option v-for="t in ['id', 'css', 'data-testid', 'text', 'xpath']" :key="t" :label="t" :value="t" />
               </el-select>
               <el-input v-model="loc.value" placeholder="定位表达式" style="flex:1" />
-              <el-input-number v-model="loc.score" :min="0" :max="150" style="width:110px" />
+              <el-input-number v-model="loc.score" :min="0" :max="150" style="width:120px" />
+              <span class="locator-move-btns">
+                <el-button text type="primary" class="locator-move-btn"
+                  :disabled="i === 0" @click="moveCreateLocator(i, -1)">▲</el-button>
+                <el-button text type="primary" class="locator-move-btn"
+                  :disabled="i === createForm.locators.length - 1" @click="moveCreateLocator(i, 1)">▼</el-button>
+              </span>
               <el-button type="danger" text @click="createForm.locators.splice(i, 1)">删除</el-button>
             </div>
             <el-button text type="primary" @click="createForm.locators.push({ type: 'css', value: '', score: 50 })">+ 添加定位器</el-button>
@@ -269,8 +204,8 @@
       </template>
     </el-dialog>
 
-    <!-- 编辑元素弹窗（字段与新建一致） -->
-    <el-dialog v-model="editDialogVisible" title="编辑元素" width="560px">
+    <!-- 编辑元素（全屏大弹窗：字段+定位器增删调序+校验，详情并入此处） -->
+    <el-dialog v-model="editDialogVisible" title="编辑元素" width="860px" top="6vh">
       <el-form label-width="80px">
         <el-form-item label="名称" required>
           <el-input v-model="editForm.name" />
@@ -296,21 +231,35 @@
         </el-form-item>
         <el-form-item label="定位器">
           <div style="width:100%">
-            <div v-for="(loc, i) in editForm.locators" :key="i" style="display:flex; gap:6px; margin-bottom:6px; align-items:center">
-              <el-select v-model="loc.type" style="width:150px">
+            <div v-for="(loc, i) in editForm.locators" :key="i" class="locator-edit-row">
+              <el-select v-model="loc.type" style="width:170px">
                 <el-option v-for="t in ['id', 'css', 'data-testid', 'text', 'xpath']" :key="t" :label="t" :value="t" />
               </el-select>
               <el-input v-model="loc.value" placeholder="定位表达式" style="flex:1" />
-              <el-input-number v-model="loc.score" :min="0" :max="150" style="width:110px" />
-              <span style="display:inline-flex; flex-direction:column; line-height:1">
-                <el-button text type="primary" style="padding:0 2px; height:auto"
+              <el-input-number v-model="loc.score" :min="0" :max="150" style="width:120px" />
+              <span class="locator-move-btns">
+                <el-button text type="primary" class="locator-move-btn"
                   :disabled="i === 0" @click="moveEditLocator(i, -1)">▲</el-button>
-                <el-button text type="primary" style="padding:0 2px; height:auto"
+                <el-button text type="primary" class="locator-move-btn"
                   :disabled="i === editForm.locators.length - 1" @click="moveEditLocator(i, 1)">▼</el-button>
               </span>
               <el-button type="danger" text @click="editForm.locators.splice(i, 1)">删除</el-button>
             </div>
             <el-button text type="primary" @click="editForm.locators.push({ type: 'css', value: '', score: 50 })">+ 添加定位器</el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="校验">
+          <div class="verify-section">
+            <el-button type="primary" plain :loading="verifying" @click="verifyEditPrimary">校验首选定位</el-button>
+            <span class="locator-count-hint">校验列表中 score 最高的定位器（真实页面跑一次）</span>
+          </div>
+          <div v-if="editVerifyResult" class="verify-result" style="width:100%">
+            <template v-if="editVerifyResult.error">
+              <div class="verify-error">校验失败：{{ editVerifyResult.error }}</div>
+            </template>
+            <template v-else>
+              命中 <b>{{ editVerifyResult.hit_count }}</b> 个 · score {{ editVerifyResult.score }}
+            </template>
           </div>
         </el-form-item>
       </el-form>
@@ -422,7 +371,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, View, Upload, Download, Edit } from '@element-plus/icons-vue'
+import { Plus, Delete, Upload, Download, Edit } from '@element-plus/icons-vue'
 import { elementAPI } from '@/api/element.js'
 import { projectAPI } from '@/api/project.js'
 
@@ -445,16 +394,9 @@ const total = ref(0)
 const indexOffset = (index) => (page.value - 1) * pageSize.value + index + 1
 
 // ---- 详情抽屉 ----
-const detailVisible = ref(false)
-const detailRow = ref(null)
-const refScripts = ref([])
-const refsLoaded = ref(false)
 const verifying = ref(false)
-const verifyResult = ref(null)
 
 // ---- 弹窗 ----
-const locatorDialogVisible = ref(false)
-const newLocator = ref({ type: 'css', value: '', score: 50 })
 const createDialogVisible = ref(false)
 const createForm = ref({ name: '', element_type: 'button', element_text: '', scope: 'page', page_id: null, locators: [] })
 const recycleDialogVisible = ref(false)
@@ -479,18 +421,6 @@ const primaryLocator = (row) => {
   const locs = extractLocators(row).slice()
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
   return locs[0] || null
-}
-
-// 抽屉定位器：按 score 倒序展示（★首选=第一行）；↑↓ 用原序 index 换算提交
-const drawerLocators = computed(() =>
-  extractLocators(detailRow.value).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-)
-
-// score 倒序视图 index → 数组原序 index（后端按原序交换）
-const originalIndex = (sortedIdx) => {
-  const raw = extractLocators(detailRow.value)
-  const target = drawerLocators.value[sortedIdx]
-  return raw.indexOf(target)
 }
 
 const statusTag = (status) => {
@@ -858,99 +788,6 @@ const confirmBulkMigrate = async () => {
   }
 }
 
-// ---- 详情 ----
-const openDetail = async (row) => {
-  detailRow.value = row
-  verifyResult.value = null
-  refScripts.value = []
-  refsLoaded.value = false
-  detailVisible.value = true
-  try {
-    const response = await elementAPI.elementReferences(row.id, projectId.value)
-    const data = (response && response.data) || response || {}
-    refScripts.value = data.scripts || []
-    refCounts[row.id] = data.count ?? 0
-    refsLoaded.value = true
-  } catch {
-    refsLoaded.value = true
-  }
-}
-
-const reorder = async (sortedIdx, direction) => {
-  const el = detailRow.value
-  if (!el) return
-  // score 倒序视图 index → 数组原序 index（后端按原序交换），以后端为准重拉
-  const rawIdx = originalIndex(sortedIdx)
-  if (rawIdx < 0) return
-  try {
-    await elementAPI.reorderLocator(el.id, rawIdx, direction)
-    await reloadElement(el.id)
-  } catch (e) {
-    ElMessage.error('调序失败: ' + (e.message || e))
-  }
-}
-
-const submitLocator = async () => {
-  const el = detailRow.value
-  if (!newLocator.value.value) {
-    ElMessage.warning('请输入定位值')
-    return
-  }
-  try {
-    await elementAPI.addLocator(el.id, newLocator.value.type, newLocator.value.value, newLocator.value.score)
-    ElMessage.success('定位器已添加')
-    locatorDialogVisible.value = false
-    newLocator.value = { type: 'css', value: '', score: 50 }
-    await reloadElement(el.id)
-  } catch (e) {
-    ElMessage.error('添加定位器失败: ' + (e.message || e))
-  }
-}
-
-// 按 id 重查单个元素更新抽屉（分页信封与平铺两形态兼容；修添加定位器后不刷新）
-const reloadElement = async (elId) => {
-  try {
-    const response = await elementAPI.listElementsAsset(projectId.value, {
-      scope: treeFilter.value.mode === 'page' ? undefined : (scopeFilter.value || undefined),
-      pageId: treeFilter.value.mode === 'page' ? treeFilter.value.pageId : undefined,
-      keyword: keyword.value || undefined,
-      page: 1, pageSize: 100,
-    })
-    const data = (response && response.data) || {}
-    const items = data.items || (Array.isArray(data) ? data : [])
-    elements.value = items
-    const fresh = items.find((e) => e.id === elId)
-    if (fresh) {
-      detailRow.value = fresh
-    } else {
-      ElMessage.warning('已保存，列表分页未包含该元素，请刷新查看')
-      loadElements()
-    }
-  } catch {
-    loadElements()
-  }
-}
-
-const verifyPrimary = async () => {
-  const el = detailRow.value
-  const loc = primaryLocator(el)
-  if (!loc) {
-    ElMessage.warning('该元素暂无定位器')
-    return
-  }
-  verifying.value = true
-  try {
-    const response = await elementAPI.verifyLocator(el.id, loc.type, loc.value)
-    const data = (response && response.data) || response || {}
-    // 后端可能 code:0 但 data.error 非空（校验失败），需展示
-    verifyResult.value = data
-  } catch (e) {
-    verifyResult.value = { error: e.message || String(e) }
-  } finally {
-    verifying.value = false
-  }
-}
-
 // ---- 编辑元素（字段与新建一致，弹窗展示） ----
 const editDialogVisible = ref(false)
 const editForm = ref({ id: null, name: '', element_type: 'button', element_text: '', scope: 'page', page_id: null, locators: [] })
@@ -969,6 +806,7 @@ const openEditDialog = (row) => {
     page_id: row.page_id || null,
     locators: raw.map((s) => ({ type: s.type, value: s.value, score: s.score })),
   }
+  editVerifyResult.value = null  // 重置上次校验结果
   editDialogVisible.value = true
 }
 
@@ -978,6 +816,37 @@ const moveEditLocator = (i, dir) => {
   const j = i + dir
   if (j < 0 || j >= arr.length) return
   ;[arr[i], arr[j]] = [arr[j], arr[i]]
+}
+
+// 新建弹窗内定位器行上移/下移（同编辑）
+const moveCreateLocator = (i, dir) => {
+  const arr = createForm.value.locators
+  const j = i + dir
+  if (j < 0 || j >= arr.length) return
+  ;[arr[i], arr[j]] = [arr[j], arr[i]]
+}
+
+// 编辑弹窗内校验首选定位（详情页校验能力并入编辑，问题8/15）
+const editVerifyResult = ref(null)
+const verifyEditPrimary = async () => {
+  const locs = editForm.value.locators || []
+  if (!locs.length) {
+    ElMessage.warning('该元素暂无定位器，请先添加')
+    return
+  }
+  // score 最高者为首选（与详情页 drawerLocators 排序一致）
+  const loc = locs.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0]
+  verifying.value = true
+  editVerifyResult.value = null
+  try {
+    const response = await elementAPI.verifyLocator(editForm.value.id, loc.type, loc.value)
+    const data = (response && response.data) || response || {}
+    editVerifyResult.value = data
+  } catch (e) {
+    editVerifyResult.value = { error: e.response?.data?.detail || e.message || String(e) }
+  } finally {
+    verifying.value = false
+  }
 }
 
 const submitEdit = async () => {
@@ -1422,5 +1291,35 @@ onBeforeUnmount(() => {
   color: #c0c4cc;
   font-size: 13px;
   padding: 8px 4px;
+}
+/* 编辑/新建弹窗定位器行：对齐 + 统一尺寸 */
+.locator-edit-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+.locator-move-btns {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1;
+  gap: 0;
+}
+.locator-move-btn {
+  padding: 0 4px !important;
+  height: 14px !important;
+  font-size: 10px;
+  line-height: 14px !important;
+}
+.locator-count-hint {
+  font-size: 12px;
+  color: #909399;
+}
+.verify-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 </style>
