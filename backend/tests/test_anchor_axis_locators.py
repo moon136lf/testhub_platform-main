@@ -138,3 +138,65 @@ class TestSiblingLabelStrategy:
         assert axis, "应有 sibling-label 策略候选"
         assert "/parent::*/following-sibling::input" in axis[0]["value"]
         assert "//label[contains(., '用户名')]" in axis[0]["value"]
+
+
+from app.services.playwright_locator_core import verify_and_score_locator
+
+
+class TestVerifyNthExemption:
+    """锚点路径自带 1-2 层 nth 是相对段定位所需，锚点已提供结构稳定性，非唯一时不应再扣 15。"""
+
+    @pytest.mark.asyncio
+    async def test_anchor_nth_not_penalized_when_not_unique(self):
+        """锚点路径含 nth-of-type 且非唯一命中 → 只扣非唯一 30，不扣 nth 15。"""
+        page = MagicMock()
+        # 命中 2 个元素，目标是第一个（首个命中才有效，但非唯一）
+        def make_found(is_target):
+            f = MagicMock()
+            async def _eval(js, arg=None):
+                return is_target
+            f.evaluate = _eval
+            return f
+        found = [make_found(True), make_found(False)]
+        async def _all():
+            return found
+        page.locator = MagicMock(return_value=MagicMock(all=_all))
+        target = MagicMock()
+        async def _eh(js):
+            return "handle"
+        target.evaluate_handle = _eh
+
+        result = await verify_and_score_locator(page, {
+            "type": "anchor",
+            "value": "#toolbar > div:nth-of-type(2) > button",
+            "base_score": 75,
+        }, target)
+        # 75 - 30(非唯一) = 45；若无豁免则再 -15 = 30
+        assert result["score"] == 45
+
+    @pytest.mark.asyncio
+    async def test_plain_css_nth_still_penalized_when_not_unique(self):
+        """普通 css 全路径 nth 且非唯一 → 照扣（回归保护）。"""
+        page = MagicMock()
+        def make_found(is_target):
+            f = MagicMock()
+            async def _eval(js, arg=None):
+                return is_target
+            f.evaluate = _eval
+            return f
+        found = [make_found(True), make_found(False)]
+        async def _all():
+            return found
+        page.locator = MagicMock(return_value=MagicMock(all=_all))
+        target = MagicMock()
+        async def _eh(js):
+            return "handle"
+        target.evaluate_handle = _eh
+
+        result = await verify_and_score_locator(page, {
+            "type": "css",
+            "value": "div:nth-of-type(1) > span:nth-of-type(2)",
+            "base_score": 50,
+        }, target)
+        # 50 - 30(非唯一) - 15(nth非唯一) = 5
+        assert result["score"] == 5
