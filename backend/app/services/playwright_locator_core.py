@@ -153,6 +153,41 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
             "base_score": 88,
         })
 
+    # 策略 10: 祖先锚点（缺口1）——找最近的有稳定 id/testid 的祖先，从它往下 1-2 层相对路径。
+    # 全路径 8 层在页面中间插元素即断；锚点路径短且锚在稳定结构上。
+    anchor_info = await element.evaluate("""
+        el => {
+            const MAX_UP = 5, MAX_REL = 2;
+            let relative = [];
+            let node = el;
+            for (let depth = 0; depth < MAX_UP; depth++) {
+                if (!node.parentElement) break;
+                node = node.parentElement;
+                const aid = node.getAttribute('id');
+                const atestid = node.getAttribute('data-testid');
+                if ((aid && document.querySelectorAll(`[id='${aid}']`).length === 1) || atestid) {
+                    const anchor = atestid ? `[data-testid='${atestid}']` : `#${aid}`;
+                    return {anchor, rel: relative.join(' > ')};
+                }
+                const siblings = Array.from(node.parentElement.children).filter(
+                    e => e.tagName === node.tagName);
+                let seg = node.tagName.toLowerCase();
+                if (siblings.length > 1) seg += `:nth-of-type(${siblings.indexOf(node) + 1})`;
+                relative.unshift(seg);
+                if (relative.length >= MAX_REL) break;
+            }
+            return null;
+        }
+    """)
+    if anchor_info and anchor_info.get("anchor"):
+        rel = anchor_info.get("rel") or ""
+        anchor_value = anchor_info["anchor"] + (f" > {rel}" if rel else "")
+        candidates.append({
+            "type": "anchor",
+            "value": anchor_value,
+            "base_score": 75,
+        })
+
     return candidates
 
 
