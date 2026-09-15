@@ -64,6 +64,21 @@ async def collect_failure(page, step: int, error: Exception, storage=None) -> di
     }
 
 
+def _impl_to_locator(impl: str) -> str:
+    """impl（page.locator("#zh") / get_by_xxx("v") / 裸 css）→ 可执行定位串。
+
+    与前端 scriptMapping.js extractLocator 同逻辑：get_by_xxx/locator 取引号内，
+    page. 前缀与尾括号剥掉，裸 css 兜底。"""
+    if not impl:
+        return ""
+    s = str(impl).strip()
+    import re as _re
+    m = _re.search(r'"([^"]+)"', s)
+    if m:
+        return m.group(1)
+    return s.replace("page.", "").rstrip("()") if s.startswith("page.") else s
+
+
 def parse_editor_steps(step_mapping):
     """解析编辑器行式步骤（seq 键）与旧 pipeline 步骤（step 键），统一为可执行列表。"""
     rows = [s for s in (step_mapping or []) if isinstance(s, dict)]
@@ -86,7 +101,9 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
 
     expect_mod: playwright.async_api.expect（由调用方传入，便于测试注入）"""
     action = step.get("action", "")
-    target = step.get("target", "")
+    # target 为空时回退 impl（AI 转脚本 pipeline 产出的 mapping 只有 impl 无 target，
+    # 空 selector 会报 "Unexpected token while parsing selector" script_error）
+    target = step.get("target") or _impl_to_locator(step.get("impl") or "") or ""
     value = step.get("value", "")
 
     if action == "navigate":
