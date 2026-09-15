@@ -747,9 +747,20 @@ async def browser_session_status(sid: str):
         png = await _bridge.run(sess.page.screenshot(
             timeout=8000, animations="disabled", caret="hide"))
         screenshot_b64 = base64.b64encode(png).decode()
-    except Exception as e:
-        logger.warning(f"status screenshot timeout/failed | sid={sid}: {str(e)[:150]}")
-        screenshot_b64 = None
+    except Exception:
+        # Playwright 截图路径卡在 fonts/稳定等待 → 走 CDP 原生截图完全绕开
+        try:
+            cdp = await _bridge.run(_call(sess.page.context.new_cdp_session, sess.page))
+            result = await _bridge.run(_call(
+                cdp.send, "Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False}))
+            screenshot_b64 = result.get("data")  # 已是 base64
+            if screenshot_b64:
+                logger.info(f"status screenshot via CDP fallback | sid={sid}")
+            else:
+                screenshot_b64 = None
+        except Exception as e2:
+            logger.warning(f"status screenshot failed (playwright+cdp) | sid={sid}: {str(e2)[:120]}")
+            screenshot_b64 = None
     try:
         title = await _bridge.run(sess.page.title())
     except Exception:
