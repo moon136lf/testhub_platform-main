@@ -28,6 +28,7 @@
             <el-button type="primary" plain :disabled="!selected.length" @click="saveSetVisible = true">
               保存为测试集 ({{ selected.length }})
             </el-button>
+            <el-button v-if="!liveVisible && (runningId || batching)" type="warning" @click="liveVisible = true">▶ 查看直播</el-button>
             <el-button type="success" @click="quickVisible = true">⚡ 快速运行</el-button>
           </div>
 
