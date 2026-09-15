@@ -1,13 +1,16 @@
 <template>
   <div class="page-container">
-    <el-card class="header-card">
-      <div class="page-header">
-        <div>
-          <h2 class="page-title">UI自动化测试</h2>
-          <div class="page-subtitle">测试集规划与执行 · 失败截图自动留存</div>
-        </div>
+    <div class="page-header">
+      <div>
+        <h2>UI自动化测试</h2>
+        <div class="page-subtitle">管理已转换的自动化脚本与测试集，支持脚本编辑、执行与结果报告</div>
       </div>
-    </el-card>
+      <div class="header-actions">
+        <el-select v-model="form.projectId" filterable placeholder="选择项目" style="width: 220px" @change="onProjectChange">
+          <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+        </el-select>
+      </div>
+    </div>
 
     <el-tabs v-model="activeTab" style="margin-top: 16px">
       <!-- ============ Tab1 脚本库 ============ -->
@@ -19,14 +22,10 @@
             </el-select>
             <el-input v-model="filter.keyword" placeholder="关键词搜索脚本名" clearable style="width: 220px" @change="loadScripts" />
             <el-button @click="loadScripts" :icon="Refresh">刷新</el-button>
-            <el-button type="warning" :disabled="!selected.length" :loading="batching" @click="handleBatchRun">
+            <el-button type="warning" :disabled="!selected.length" :loading="batching" @click="openRunCfgDialog('batch')">
               批量运行 ({{ selected.length }})
             </el-button>
             <el-button type="success" @click="quickVisible = true">⚡ 快速运行</el-button>
-            <span class="run-cfg-label">运行配置：</span>
-            <el-checkbox v-model="runConfig.headless">headless</el-checkbox>
-            <el-input-number v-model="runConfig.timeout" :min="10" :max="600" controls-position="right" style="width: 110px" />s
-            <el-input-number v-model="runConfig.max_failures" :min="1" :max="100" controls-position="right" style="width: 110px" />最大失败
           </div>
 
           <el-table :data="scripts" stripe style="margin-top: 12px" @selection-change="onSelectionChange">
@@ -78,7 +77,7 @@
             </el-table-column>
             <el-table-column label="操作" width="320">
               <template #default="{ row }">
-                <el-button type="primary" link :loading="runningId === row.id" @click="handleRun(row)">运行</el-button>
+                <el-button type="primary" link :loading="runningId === row.id" @click="openRunCfgDialog(row)">运行</el-button>
                 <el-button type="primary" link @click="viewScript(row)">查看</el-button>
                 <el-button type="primary" link @click="openStepEditor(row)">编辑脚本</el-button>
                 <el-button type="primary" link :disabled="row.status === 'confirmed'" @click="confirmScript(row)">确认入库</el-button>
@@ -98,9 +97,6 @@
       <el-tab-pane label="测试集" name="sets">
         <el-card>
           <div class="toolbar">
-            <el-select v-model="form.projectId" placeholder="选择项目" style="width: 220px" @change="onProjectChange">
-              <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
-            </el-select>
             <el-input v-model="setFilter" placeholder="测试集名称" clearable style="width: 200px" @input="loadSets" />
             <el-button :icon="Refresh" @click="loadSets">刷新</el-button>
             <el-button type="warning" :loading="identifying" @click="handleIdentify">AI识别回归</el-button>
@@ -144,6 +140,25 @@
         </div>
       </div>
     </el-card>
+
+    <!-- 运行配置弹窗（脚本库单条/批量运行共用） -->
+    <el-dialog v-model="runCfgVisible" title="运行配置" width="420px">
+      <el-form label-width="100px">
+        <el-form-item label="无头模式">
+          <el-checkbox v-model="runConfig.headless">headless（默认开启）</el-checkbox>
+        </el-form-item>
+        <el-form-item label="超时(秒)">
+          <el-input-number v-model="runConfig.timeout" :min="10" :max="600" controls-position="right" style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="最大失败数">
+          <el-input-number v-model="runConfig.max_failures" :min="1" :max="100" controls-position="right" style="width: 160px" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="runCfgVisible = false">取消</el-button>
+        <el-button type="primary" :loading="runningId !== null || batching" @click="confirmRunCfg">开始运行</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 执行配置弹窗 -->
     <el-dialog v-model="runDialogVisible" title="执行配置" width="440px">
@@ -267,6 +282,7 @@ import axios from '@/api/axios.js'
 
 const projects = ref([])
 const form = reactive({ projectId: '' })
+const activeTab = ref('library')
 
 const statusTagType = (s) => ({ pending: 'info', running: 'warning', done: 'success' }[s] || 'info')
 const statusCn = (s) => ({ pending: '待执行', running: '执行中', done: '已完成' }[s] || s || '待执行')
@@ -410,10 +426,25 @@ const startLibSSE = (sessionId, { onDone }) => {
   })
 }
 
+// ---- 运行配置弹窗（单条/批量共用）----
+const runCfgVisible = ref(false)
+const runCfgTarget = ref(null) // row 或 'batch'
+
+const openRunCfgDialog = (target) => {
+  runCfgTarget.value = target
+  runCfgVisible.value = true
+}
+
+const confirmRunCfg = () => {
+  if (runCfgTarget.value === 'batch') handleBatchRun()
+  else if (runCfgTarget.value) handleRun(runCfgTarget.value)
+}
+
 const handleRun = async (row) => {
   runningId.value = row.id
   try {
     const resp = await scriptAPI.run(row.id, { ...runConfig })
+    runCfgVisible.value = false
     startLibSSE(resp.data.session_id, { onDone: () => { runningId.value = null } })
   } catch (e) { ElMessage.error('运行失败'); runningId.value = null }
 }
@@ -424,6 +455,7 @@ const handleBatchRun = async () => {
   try {
     const ids = selected.value.map(s => s.id)
     const resp = await scriptAPI.batchRun(ids, { ...runConfig })
+    runCfgVisible.value = false
     startLibSSE(resp.data.session_id, { onDone: () => { batching.value = false } })
   } catch (e) { ElMessage.error('批量运行失败'); batching.value = false }
 }
@@ -621,11 +653,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.page-header { display: flex; justify-content: space-between; align-items: center; }
+.page-subtitle { font-size: 13px; color: var(--mt-text-secondary); margin-top: 4px; }
 .toolbar { display: flex; align-items: center; gap: 12px; }
 .log-box { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; }
 .log-line { margin-bottom: 4px; }
 .code-box { max-height: 480px; overflow: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; white-space: pre; }
 .diag-card { margin-top: 12px; padding: 12px; background: #f5f7fa; border-radius: 4px; }
 .lib-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.run-cfg-label { color: #909399; font-size: 13px; margin-left: 8px; }
 </style>
