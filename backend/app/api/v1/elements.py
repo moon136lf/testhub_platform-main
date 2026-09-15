@@ -742,7 +742,10 @@ async def browser_session_status(sid: str):
     # 截图可能因页面动画/渲染挂起而超时（Playwright 默认 30s）——失败不应炸整个
     # status 端点（前端轮询会因 500 中断），降级返回旧截图提示
     try:
-        png = await _bridge.run(sess.page.screenshot(timeout=8000))
+        # animations="disabled"：页面有持续 CSS 动画时截图会等到稳定超时（call log
+        # 停在 fonts loaded 之后即此症）；禁用动画强制快照。仍失败则降级 None。
+        png = await _bridge.run(sess.page.screenshot(
+            timeout=8000, animations="disabled", caret="hide"))
         screenshot_b64 = base64.b64encode(png).decode()
     except Exception as e:
         logger.warning(f"status screenshot timeout/failed | sid={sid}: {str(e)[:150]}")
@@ -869,7 +872,8 @@ async def capture_browser_page(
     # 截图上传 MinIO → 批次截图 URL
     screenshot_url = ""
     try:
-        png = await _bridge.run(page.screenshot())
+        png = await _bridge.run(page.screenshot(
+            timeout=15000, animations="disabled", caret="hide"))
         key = f"screenshots/{sess.project_id}/{uuid.uuid4().hex}.png"
         from app.core.storage import storage_client
         screenshot_url = await storage_client.upload_bytes(png, key)
