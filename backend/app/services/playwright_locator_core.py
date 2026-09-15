@@ -300,10 +300,9 @@ async def verify_and_score_locator(page, locator_candidate: Dict[str, Any], targ
         # 依赖位置，页面加个元素就失效）。但注意：对重复属性元素（页面 id 重复），
         # nth 路径是唯一能区分的手段，且路径唯一命中时 unique=True 已有加分，
         # 双重惩罚会把唯一可用策略压到阈值之下（点选补抓 404 的根因）。
-        # 改为：nth 路径且唯一命中 → 不扣；nth 路径且非唯一 → 照扣。
-        # 改为：nth 路径且唯一命中 → 不扣；nth 路径且非唯一 → 照扣。
-        # 豁免：锚点路径（value 以 #id / [data-testid= 开头）自带 1-2 层 nth 是相对段
-        # 定位所需，锚点已提供结构稳定性，非唯一时不照扣。
+        # 规则：nth 路径且唯一命中 → 不扣；nth 路径且非唯一 → 照扣。
+        # 豁免：锚点策略生成的路径（value 以 #id / [data-testid= 开头）自带 1-2 层
+        # nth 是相对段定位所需（MAX_REL=2），锚点已提供结构稳定性，非唯一时不照扣。
         is_anchored = value.startswith("#") or value.startswith("[data-testid=")
         if ("nth-of-type" in value or "nth-child" in value) and not unique and not is_anchored:
             score -= 15
