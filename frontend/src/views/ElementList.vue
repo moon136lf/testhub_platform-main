@@ -104,7 +104,7 @@
           <el-table-column label="更新时间" width="160">
             <template #default="{ row }">{{ formatTime(row.updated_at || row.created_at) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="230" fixed="right">
+          <el-table-column label="操作" width="130" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" link :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
               <el-button type="danger" link :icon="Delete" @click="deleteElement(row)">删除</el-button>
@@ -1303,14 +1303,20 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
   line-height: 1;
   gap: 0;
+  width: 24px;
+  flex: none;
+  align-self: stretch;
 }
 .locator-move-btn {
-  padding: 0 4px !important;
-  height: 14px !important;
-  font-size: 10px;
-  line-height: 14px !important;
+  padding: 0 !important;
+  height: 15px !important;
+  width: 24px !important;
+  font-size: 11px;
+  line-height: 15px !important;
+  margin: 0 !important;
 }
 .locator-count-hint {
   font-size: 12px;
