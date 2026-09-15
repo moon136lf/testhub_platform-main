@@ -51,7 +51,7 @@
           <template #default="{ row }">
             <el-popover v-if="row.stack_trace" trigger="click" width="600">
               <pre style="max-height: 300px; overflow: auto">{{ row.stack_trace }}</pre>
-              <template #reference><el-button link>查看</el-button></template>
+              <template #reference><el-button link type="primary">查看</el-button></template>
             </el-popover>
             <span v-else>-</span>
           </template>

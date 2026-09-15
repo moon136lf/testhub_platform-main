@@ -70,7 +70,7 @@
           <el-table-column label="操作" width="160" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="viewReport(row)">查看报告</el-button>
-              <el-button link @click="rerun(row)">再跑一次</el-button>
+              <el-button link type="primary" @click="rerun(row)">再跑一次</el-button>
             </template>
           </el-table-column>
         </el-table>
