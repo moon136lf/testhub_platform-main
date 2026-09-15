@@ -22,11 +22,6 @@ export const scriptAPI = {
     return response.data
   },
 
-  async confirm(scriptId) {
-    const response = await axios.put(`${API_BASE}/${scriptId}/confirm`)
-    return response.data
-  },
-
   async diagnose(scriptId, payload) {
     const response = await axios.post(`${API_BASE}/${scriptId}/diagnose`, payload)
     return response.data

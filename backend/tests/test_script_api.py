@@ -290,56 +290,6 @@ class TestGetScriptEndpoint:
         assert exc_info.value.status_code == 400
 
 
-class TestConfirmScriptEndpoint:
-    """Test PUT /api/v1/scripts/{script_id}/confirm (TRANS-02)"""
-
-    @pytest.mark.asyncio
-    async def test_confirm_sets_status_to_confirmed(self, mock_db):
-        """Asset found -> status set to confirmed, committed, return shape."""
-        from app.api.v1.scripts import confirm_script
-
-        mock_asset = MagicMock()
-        mock_asset.status = "generated"
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none = MagicMock(return_value=mock_asset)
-        mock_db.execute.return_value = mock_result
-
-        sid = str(uuid4())
-        response = await confirm_script(sid, mock_db)
-
-        assert response["code"] == 0
-        assert response["message"] == "Script confirmed"
-        assert response["data"]["script_id"] == sid
-        assert response["data"]["status"] == "confirmed"
-        assert mock_asset.status == "confirmed"
-        mock_db.commit.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_confirm_not_found(self, mock_db):
-        """Asset missing -> 404."""
-        from app.api.v1.scripts import confirm_script
-
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none = MagicMock(return_value=None)
-        mock_db.execute.return_value = mock_result
-
-        with pytest.raises(HTTPException) as exc_info:
-            await confirm_script(str(uuid4()), mock_db)
-
-        assert exc_info.value.status_code == 404
-        assert "Script not found" in str(exc_info.value.detail)
-
-    @pytest.mark.asyncio
-    async def test_confirm_invalid_uuid(self, mock_db):
-        """Invalid UUID -> 400."""
-        from app.api.v1.scripts import confirm_script
-
-        with pytest.raises(HTTPException) as exc_info:
-            await confirm_script("not-a-uuid", mock_db)
-
-        assert exc_info.value.status_code == 400
-
-
 class TestDiagnoseScriptEndpoint:
     """Test POST /api/v1/scripts/{script_id}/diagnose"""
 

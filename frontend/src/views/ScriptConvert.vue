@@ -34,7 +34,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination style="margin-top: 12px" v-model:current-page="page" :page-size="pageSize"
+      <el-pagination style="margin-top: 12px; justify-content: flex-end" v-model:current-page="page" :page-size="pageSize"
         :total="total" layout="total, prev, pager, next" @current-change="loadCases" />
     </el-card>
 
