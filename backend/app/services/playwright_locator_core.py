@@ -188,8 +188,10 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
             "base_score": 75,
         })
 
-    # 策略 11: 相邻兄弟 + label（缺口2，轴定位）——label 和 input 是兄弟、input 无 id/name 时，
-    # 用 label 文本锚定：//label[contains(., '用户名')]/following-sibling::input
+    # 策略 11: 相邻兄弟 + label（缺口2，轴定位）——input 无 id/name 时用 label 文本锚定。
+    # 两种结构：a) label 与 input 直接相邻 → //label[...]/following-sibling::input
+    #          b) label 包在前一兄弟的容器内（<div><label>..</label></div><input/>）→
+    #             input 是容器的兄弟而非 label 的兄弟 → //label[...]/parent::*/following-sibling::input
     if tag_name in ("input", "select", "textarea"):
         sib_info = await element.evaluate("""
             el => {
@@ -200,11 +202,11 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
                         const t = (node.textContent || '').trim();
                         if (t) return {label_text: t.slice(0, 30), tag: el.tagName.toLowerCase()};
                     }
-                    // label 可能包在前一兄弟的容器里（如 <div><label>..</label><input/></div> 外层结构）
+                    // 容器内 label：命中时轴要用 parent::* 从容器层接 following-sibling
                     const inner = node.querySelector ? node.querySelector('label') : null;
                     if (inner) {
                         const t = (inner.textContent || '').trim();
-                        if (t) return {label_text: t.slice(0, 30), tag: el.tagName.toLowerCase()};
+                        if (t) return {label_text: t.slice(0, 30), tag: el.tagName.toLowerCase(), via_container: true};
                     }
                     node = node.previousElementSibling;
                     hops++;
@@ -214,10 +216,19 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
         """)
         # isinstance 守卫与策略 10 anchor 相同：防 legacy mock / evaluate 返回非 dict
         if isinstance(sib_info, dict) and sib_info.get("label_text"):
-            lt = sib_info["label_text"].replace("'", "\\'")
+            lt = sib_info["label_text"]
+            if "'" in lt:
+                # XPath 1.0 无反斜杠转义：含单引号的文本用双引号字面量
+                # （两类引号都含的极端情况保持单引号形式，verify 阶段安全剔除）
+                value = f'//label[contains(., "{lt}")]/following-sibling::{sib_info["tag"]}'
+            else:
+                value = f"//label[contains(., '{lt}')]/following-sibling::{sib_info['tag']}"
+            if sib_info.get("via_container"):
+                value = value.replace("/following-sibling::", "/parent::*/following-sibling::", 1)
+            # value 以 // 开头，page.locator() 会自动识别为 XPath（同 verify/smart_locator 的类型无关路由）
             candidates.append({
                 "type": "sibling-label",
-                "value": f"//label[contains(., '{lt}')]/following-sibling::{sib_info['tag']}",
+                "value": value,
                 "base_score": 78,
             })
 

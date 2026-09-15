@@ -100,3 +100,41 @@ class TestSiblingLabelStrategy:
         el.evaluate = _evaluate
         candidates = await generate_locators_for_element(make_page(), el)
         assert not [c for c in candidates if c["type"] == "sibling-label"]
+
+    @pytest.mark.asyncio
+    async def test_apostrophe_label_uses_double_quoted_literal(self):
+        """label 文本含单引号 → XPath 无反斜杠转义，应改用双引号字面量。"""
+        async def _evaluate(js, arg=None):
+            if "MAX_UP" in js:
+                return None
+            if "tagName" in js and "previousElementSibling" not in js:
+                return "input"
+            if "previousElementSibling" in js:
+                return {"label_text": "it's 用户名", "tag": "input"}
+            return None
+        el = make_element(attrs={"_text": "", "type": "text"})
+        el.evaluate = _evaluate
+        candidates = await generate_locators_for_element(make_page(), el)
+        axis = [c for c in candidates if c["type"] == "sibling-label"]
+        assert axis, "应有 sibling-label 策略候选"
+        assert 'contains(., "it\'s 用户名")' in axis[0]["value"]
+        assert "\\" not in axis[0]["value"]
+
+    @pytest.mark.asyncio
+    async def test_container_label_uses_parent_axis(self):
+        """label 包在前兄弟容器内 → 用 parent::*/following-sibling:: 轴。"""
+        async def _evaluate(js, arg=None):
+            if "MAX_UP" in js:
+                return None
+            if "tagName" in js and "previousElementSibling" not in js:
+                return "input"
+            if "previousElementSibling" in js:
+                return {"label_text": "用户名", "tag": "input", "via_container": True}
+            return None
+        el = make_element(attrs={"_text": "", "type": "text"})
+        el.evaluate = _evaluate
+        candidates = await generate_locators_for_element(make_page(), el)
+        axis = [c for c in candidates if c["type"] == "sibling-label"]
+        assert axis, "应有 sibling-label 策略候选"
+        assert "/parent::*/following-sibling::input" in axis[0]["value"]
+        assert "//label[contains(., '用户名')]" in axis[0]["value"]
