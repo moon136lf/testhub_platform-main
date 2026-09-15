@@ -358,7 +358,8 @@ class ElementService:
         project_id: uuid.UUID,
         page_name: str,
         page_url: str,
-        screenshot_url: str
+        screenshot_url: str,
+        parent_id: Optional[uuid.UUID] = None
     ) -> PageRepository:
         """
         创建页面记录
@@ -369,6 +370,7 @@ class ElementService:
             page_name: 页面名称
             page_url: 页面 URL
             screenshot_url: 截图 URL
+            parent_id: 父页面 ID（None=根级；会话抓取入库时选上级页面用）
 
         Returns:
             创建的页面对象
@@ -376,6 +378,7 @@ class ElementService:
         try:
             page = PageRepository(
                 project_id=project_id,
+                parent_id=parent_id,
                 page_name=page_name,
                 page_url=page_url,
                 screenshot_url=screenshot_url,

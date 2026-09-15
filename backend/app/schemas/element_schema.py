@@ -136,6 +136,7 @@ class ElementImportRequest(BaseModel):
     )
     page_name: Optional[str] = Field(None, description="新建页面名称")
     page_url: Optional[str] = Field(None, description="新建页面 URL")
+    parent_id: Optional[str] = Field(None, description="新建页面的上级页面 ID（留空=根级）")
     screenshot_url: Optional[str] = Field(None, description="页面截图 URL")
     selected_element_ids: List[str] = Field(
         ..., description="用户勾选的元素临时 ID 列表"
@@ -299,6 +300,7 @@ class CaptureImportRequest(BaseModel):
     page_id: Optional[str] = Field(None, description="已有页面 ID（与 page_name 二选一）")
     page_name: Optional[str] = Field(None, description="新建页面名称")
     page_url: Optional[str] = Field(None, description="新建页面 URL")
+    parent_id: Optional[str] = Field(None, description="新建页面的上级页面 ID（留空=根级）")
     screenshot_url: Optional[str] = Field(
         None, description="页面截图 URL（缺省取最后批次的截图）"
     )

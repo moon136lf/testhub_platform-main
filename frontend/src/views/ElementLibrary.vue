@@ -146,6 +146,19 @@
         </el-form-item>
 
         <template v-if="importForm.pageMode === 'new'">
+          <el-form-item label="上级页面">
+            <el-tree-select
+              v-model="importForm.parent_id"
+              :data="parentTreeOptions"
+              :props="{ label: 'page_name', children: 'children' }"
+              node-key="id"
+              check-strictly
+              clearable
+              placeholder="留空=根级页面"
+              style="width: 100%"
+              default-expand-all
+            />
+          </el-form-item>
           <el-form-item label="页面名称">
             <el-input v-model="importForm.page_name" placeholder="如：登录页" />
           </el-form-item>
@@ -156,14 +169,15 @@
 
         <template v-else>
           <el-form-item label="选择页面">
-            <el-select v-model="importForm.page_id" placeholder="选择已有页面" style="width: 100%">
-              <el-option
-                v-for="page in pages"
-                :key="page.id"
-                :label="`${page.page_name} (${page.page_url})`"
-                :value="page.id"
-              />
-            </el-select>
+            <el-tree-select
+              v-model="importForm.page_id"
+              :data="pages"
+              :props="{ label: 'page_name', children: 'children' }"
+              node-key="id"
+              placeholder="选择已有页面（按层级展示）"
+              style="width: 100%"
+              default-expand-all
+            />
           </el-form-item>
         </template>
 
@@ -342,7 +356,8 @@ const importForm = ref({
   pageMode: 'new',
   page_id: '',
   page_name: '',
-  page_url: ''
+  page_url: '',
+  parent_id: null
 })
 
 const selectAll = computed({
@@ -514,11 +529,11 @@ const showImportDialog = async () => {
     return
   }
 
-  // 加载已有页面供下拉
+  // 加载已有页面树供下拉（层级展示 + 上级页面选择）
   if (fetchForm.value.project_id) {
     try {
-      const res = await elementAPI.listPages(fetchForm.value.project_id)
-      pages.value = res.data || res || []
+      await loadPageTree()
+      pages.value = pageTree.value
     } catch (err) {
       console.error('Failed to load pages:', err)
       pages.value = []
@@ -529,7 +544,8 @@ const showImportDialog = async () => {
     pageMode: 'new',
     page_id: '',
     page_name: '',
-    page_url: fetchForm.value.url
+    page_url: fetchForm.value.url,
+    parent_id: null
   }
   importDialogVisible.value = true
 }
@@ -564,6 +580,7 @@ const confirmImport = async () => {
     if (importForm.value.pageMode === 'new') {
       requestData.page_name = importForm.value.page_name
       requestData.page_url = importForm.value.page_url
+      requestData.parent_id = importForm.value.parent_id || undefined
     } else {
       requestData.page_id = importForm.value.page_id
     }

@@ -73,20 +73,22 @@
                   <el-switch v-model="pickMenu" size="small" active-text="抓菜单栏" />
                   <el-switch v-model="pickText" size="small" active-text="抓展示文本" />
                   <el-switch v-model="pickMode" size="small" active-text="点选补抓" />
-                  <el-input-number
-                    v-model="listRows"
-                    size="small"
-                    :min="1" :max="50"
-                    placeholder="列表行数"
-                    style="width: 110px"
-                    :controls="false"
-                  />
-                  <el-button size="small" type="primary" :loading="capturing" :disabled="browserReleased" @click="captureNow">
-                    开始抓取元素
-                  </el-button>
                 </div>
               </div>
             </template>
+            <div class="shot-toolbar">
+              <el-input-number
+                v-model="listRows"
+                size="small"
+                :min="1" :max="50"
+                placeholder="列表行数"
+                style="width: 110px"
+                :controls="false"
+              />
+              <el-button size="small" type="primary" :loading="capturing" :disabled="browserReleased" @click="captureNow">
+                开始抓取元素
+              </el-button>
+            </div>
             <div class="shot-container" :class="{ picking: pickMode && !browserReleased }" @click="onShotClick">
               <ElementHighlight
                 v-if="screenshotSrc && !pickMode"
@@ -101,6 +103,19 @@
               <div v-else class="no-screenshot">{{ browserReleased ? '浏览器已释放' : '暂无截图，点击「刷新截图」' }}</div>
             </div>
             <div v-if="pickMode" class="pick-hint">点选模式已开启：点击截图中目标元素即可补抓单个元素</div>
+
+            <!-- 抓取进度直播（截图下方一横条） -->
+            <div v-if="liveMessages.length" class="wb-live">
+              <el-progress v-if="captureProgress > 0 && captureProgress < 1" :percentage="Math.round(captureProgress * 100)" :stroke-width="6" style="margin-bottom: 6px" />
+              <div class="wb-live-scroll">
+                <div
+                  v-for="(m, i) in liveMessages"
+                  :key="i"
+                  class="wb-live-line"
+                  :class="'wb-live-' + m.type"
+                >{{ m.time }} {{ m.content }}</div>
+              </div>
+            </div>
           </el-card>
         </el-col>
 
@@ -122,18 +137,7 @@
               </div>
             </template>
 
-            <!-- 抓取进度直播 -->
-            <div v-if="liveMessages.length" class="wb-live">
-              <el-progress v-if="captureProgress > 0 && captureProgress < 1" :percentage="Math.round(captureProgress * 100)" :stroke-width="6" style="margin-bottom: 6px" />
-              <div
-                v-for="(m, i) in liveMessages.slice(-8)"
-                :key="i"
-                class="wb-live-line"
-                :class="'wb-live-' + m.type"
-              >{{ m.time }} {{ m.content }}</div>
-            </div>
-
-            <el-empty v-if="!stagingState || stagingState.total_elements === 0" description="尚未抓取，点击左侧「开始抓取元素」" :image-size="60" />
+            <el-empty v-if="!stagingState || stagingState.total_elements === 0" description="尚未抓取，点击「开始抓取元素」" :image-size="60" />
             <div v-else class="wb-elements">
               <div
                 v-for="el in stagingState.elements"
@@ -179,12 +183,32 @@
                 <el-option label="已有页面" value="existing" :disabled="pages.length === 0" />
               </el-select>
               <template v-if="pageMode === 'new'">
-                <el-input v-model="pageName" placeholder="页面名称（留空取 URL）" size="small" style="width: 170px" />
-                <el-input v-model="pageUrl" placeholder="页面 URL（留空取抓取页）" size="small" style="width: 190px" />
+                <el-tree-select
+                  v-model="newPageParentId"
+                  :data="parentTreeOptions"
+                  :props="{ label: 'page_name', children: 'children' }"
+                  node-key="id"
+                  check-strictly
+                  clearable
+                  placeholder="上级页面（留空=根级）"
+                  size="small"
+                  style="width: 180px"
+                  default-expand-all
+                />
+                <el-input v-model="pageName" placeholder="页面名称（留空取 URL）" size="small" style="width: 160px" />
+                <el-input v-model="pageUrl" placeholder="页面 URL（留空取抓取页）" size="small" style="width: 180px" />
               </template>
-              <el-select v-else v-model="pageId" placeholder="选择已有页面" size="small" style="width: 200px">
-                <el-option v-for="p in pages" :key="p.id" :label="p.page_name" :value="p.id" />
-              </el-select>
+              <el-tree-select
+                v-else
+                v-model="pageId"
+                :data="pages"
+                :props="{ label: 'page_name', children: 'children' }"
+                node-key="id"
+                placeholder="选择已有页面（按层级）"
+                size="small"
+                style="width: 240px"
+                default-expand-all
+              />
               <el-button type="primary" size="small" :loading="importing" @click="importSelected">
                 一键入库 ({{ stagingState.included_count }})
               </el-button>
@@ -212,10 +236,9 @@
             <span class="pick-card-text">{{ pickCard.element_text || '(无文本)' }}</span>
           </div>
           <div class="pick-card-row" v-if="bestStrategy">
-            <span class="pick-label">最优策略：</span>
-            <el-tag size="small" type="success" effect="plain">
-              {{ bestStrategy.type }}: {{ bestStrategy.value }} (score {{ bestStrategy.score }})
-            </el-tag>
+            <span class="pick-label">最优策略</span>
+            <code class="best-strategy-code">{{ bestStrategy.type }}: {{ bestStrategy.value }}</code>
+            <el-tag size="small" type="success">score {{ bestStrategy.score }}</el-tag>
           </div>
           <div class="pick-card-row" v-else>
             <el-tag size="small" type="warning">未生成有效定位策略</el-tag>
@@ -541,11 +564,19 @@ const refreshStaging = async () => {
 const loadPages = async () => {
   if (!projectId.value) return
   try {
-    pages.value = await elementAPI.listPages(projectId.value)
+    // 页面树（嵌套），供「选择已有页面」与「上级页面」树形下拉
+    const res = await elementAPI.getPageTree(projectId.value)
+    pages.value = (res && res.data) || []
   } catch {
     pages.value = []
   }
 }
+
+// 上级页面树下拉选项：根级虚拟节点（留空=根级）+ 页面树
+const newPageParentId = ref(null)
+const parentTreeOptions = computed(() => [
+  { id: '__root__', page_name: '根级页面（无上级）', children: pages.value },
+])
 
 // ---- ready：staging 元素操作（沿用 P3 交互） ----
 const toggleElement = async (tempId, included) => {
@@ -715,7 +746,9 @@ const importSelected = async () => {
     session_id: stagingSessionId.value,
     page_name: pageName.value || undefined,
     page_url: pageUrl.value || (statusUrl.value || undefined),
-    page_id: pageMode.value === 'existing' ? pageId.value : undefined
+    page_id: pageMode.value === 'existing' ? pageId.value : undefined,
+    parent_id: (pageMode.value === 'new' && newPageParentId.value && newPageParentId.value !== '__root__')
+      ? newPageParentId.value : undefined
   }
   if (pageMode.value === 'existing' && !data.page_id) {
     ElMessage.warning('请选择已有页面')
@@ -731,6 +764,7 @@ const importSelected = async () => {
     pageName.value = ''
     pageUrl.value = ''
     pageId.value = ''
+    newPageParentId.value = null
     emit('imported', result)
     ElMessage.info('已入库，可继续抓取或释放页面')
   } catch (err) {
@@ -824,6 +858,12 @@ defineExpose({ phase, start })
   align-items: center;
   gap: 10px;
 }
+.shot-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
 .shot-container {
   background: #f5f7fa;
   border-radius: 6px;
@@ -851,11 +891,13 @@ defineExpose({ phase, start })
   color: var(--mt-text-secondary, #909399);
 }
 .wb-live {
-  margin-bottom: 8px;
+  margin-top: 10px;
   padding: 6px 10px;
   background: var(--el-fill-color-lighter, #f5f7fa);
   border-radius: 6px;
-  max-height: 140px;
+}
+.wb-live-scroll {
+  max-height: 110px;
   overflow-y: auto;
 }
 .wb-live-line {
@@ -909,6 +951,17 @@ defineExpose({ phase, start })
 .pick-label {
   font-size: 13px;
   color: var(--mt-text-secondary, #606266);
+  flex-shrink: 0;
+}
+.best-strategy-code {
+  font-size: 12px;
+  word-break: break-all;
+  white-space: normal;
+  line-height: 1.6;
+  flex: 1;
+  background: var(--el-fill-color-light, #f5f7fa);
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 .pick-breadcrumb {
   display: flex;

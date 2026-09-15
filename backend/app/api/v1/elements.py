@@ -202,12 +202,19 @@ async def import_elements(
             await db.commit()
             await db.refresh(page)
         else:
+            parent_uuid = None
+            if request.parent_id:
+                try:
+                    parent_uuid = uuid.UUID(request.parent_id)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Invalid parent page ID format")
             page = await ElementService.create_page(
                 db,
                 project_id=project_uuid,
                 page_name=request.page_name,
                 page_url=request.page_url,
                 screenshot_url=request.screenshot_url,
+                parent_id=parent_uuid,
             )
         page_id = page.id
 
@@ -646,9 +653,17 @@ async def import_from_capture_session(
             page_name = page_url or "unnamed page"
         if not page_url:
             raise HTTPException(status_code=400, detail="page_url required (no batches to infer)")
+        # 新建页面可挂上级页面（工作台入库时选「上级页面」）
+        parent_uuid = None
+        if request.parent_id:
+            try:
+                parent_uuid = uuid.UUID(request.parent_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid parent page ID format")
         page = await ElementService.create_page(
             db, project_id=project_uuid, page_name=page_name,
             page_url=page_url, screenshot_url=screenshot_url,
+            parent_id=parent_uuid,
         )
         page_id = page.id
 
@@ -739,28 +754,41 @@ async def browser_session_status(sid: str):
             state = "ready"
             sess.state = "ready"
     import base64
+    import asyncio as _asyncio
     # 截图可能因页面动画/渲染挂起而超时（Playwright 默认 30s）——失败不应炸整个
-    # status 端点（前端轮询会因 500 中断），降级返回旧截图提示
+    # status 端点（前端轮询会因 500 中断），降级返回旧截图提示。
+    # 页面已关（用户手关窗口/target crashed）直接短路，不空耗 8s+CDP 挂起
     try:
-        # animations="disabled"：页面有持续 CSS 动画时截图会等到稳定超时（call log
-        # 停在 fonts loaded 之后即此症）；禁用动画强制快照。仍失败则降级 None。
-        png = await _bridge.run(sess.page.screenshot(
-            timeout=8000, animations="disabled", caret="hide"))
-        screenshot_b64 = base64.b64encode(png).decode()
+        page_closed = await _bridge.run(sess.page.is_closed())
     except Exception:
-        # Playwright 截图路径卡在 fonts/稳定等待 → 走 CDP 原生截图完全绕开
+        page_closed = False
+    if page_closed:
+        screenshot_b64 = None
+    else:
         try:
-            cdp = await _bridge.run(_call(sess.page.context.new_cdp_session, sess.page))
-            result = await _bridge.run(_call(
-                cdp.send, "Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False}))
-            screenshot_b64 = result.get("data")  # 已是 base64
-            if screenshot_b64:
-                logger.info(f"status screenshot via CDP fallback | sid={sid}")
-            else:
+            # animations="disabled"：页面有持续 CSS 动画时截图会等到稳定超时（call log
+            # 停在 fonts loaded 之后即此症）；禁用动画强制快照。仍失败则降级 None。
+            png = await _bridge.run(sess.page.screenshot(
+                timeout=8000, animations="disabled", caret="hide"))
+            screenshot_b64 = base64.b64encode(png).decode()
+        except Exception:
+            # Playwright 截图路径卡在 fonts/稳定等待 → 走 CDP 原生截图完全绕开。
+            # CDP send 必须限时：target 卡死时会无限挂起（曾卡 129s 直到 target closed）
+            try:
+                cdp = await _bridge.run(_call(sess.page.context.new_cdp_session, sess.page))
+                result = await _asyncio.wait_for(
+                    _bridge.run(_call(
+                        cdp.send, "Page.captureScreenshot",
+                        {"format": "png", "captureBeyondViewport": False})),
+                    timeout=6.0)
+                screenshot_b64 = result.get("data")  # 已是 base64
+                if screenshot_b64:
+                    logger.info(f"status screenshot via CDP fallback | sid={sid}")
+                else:
+                    screenshot_b64 = None
+            except Exception as e2:
+                logger.warning(f"status screenshot failed (playwright+cdp) | sid={sid}: {str(e2)[:120]}")
                 screenshot_b64 = None
-        except Exception as e2:
-            logger.warning(f"status screenshot failed (playwright+cdp) | sid={sid}: {str(e2)[:120]}")
-            screenshot_b64 = None
     try:
         title = await _bridge.run(sess.page.title())
     except Exception:
