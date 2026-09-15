@@ -179,7 +179,7 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
             return null;
         }
     """)
-    if anchor_info and anchor_info.get("anchor"):
+    if isinstance(anchor_info, dict) and anchor_info.get("anchor"):
         rel = anchor_info.get("rel") or ""
         anchor_value = anchor_info["anchor"] + (f" > {rel}" if rel else "")
         candidates.append({

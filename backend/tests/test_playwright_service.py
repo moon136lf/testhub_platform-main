@@ -45,6 +45,9 @@ def _make_element(attrs=None, text="登录", tag="button", box=None):
         # CSS path / XPath 脚本
         if "path = []" in s or "let path" in s:
             return f"{tag} > .container"
+        # 祖先锚点 JS（MAX_UP 标记）：mock 场景无锚点，返回 None
+        if "MAX_UP" in s:
+            return None
         return tag
 
     element.evaluate = evaluate
