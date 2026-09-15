@@ -1,16 +1,16 @@
 <template>
   <div class="script-convert">
-    <el-card>
-      <h2>用例转自动化脚本</h2>
-      <el-form inline>
-        <el-form-item label="项目">
-          <el-select v-model="form.projectId" placeholder="选择项目" style="width: 200px" @change="loadCases">
-            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <div class="head-hint">列出已定稿用例，单条转换为 Playwright 脚本；脚本管理与执行请到「UI自动化测试」页。</div>
-    </el-card>
+    <div class="page-header">
+      <div>
+        <h2>用例转自动化脚本</h2>
+        <div class="page-subtitle">列出已定稿用例，单条转换为 Playwright 脚本；脚本管理与执行请到「UI自动化测试」页</div>
+      </div>
+      <div class="header-actions">
+        <el-select v-model="form.projectId" filterable placeholder="选择项目" style="width: 220px" @change="loadCases">
+          <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+        </el-select>
+      </div>
+    </div>
 
     <!-- 定稿用例列表 -->
     <el-card style="margin-top: 16px">
@@ -197,7 +197,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.head-hint { color: #909399; font-size: 13px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; }
+.page-subtitle { font-size: 13px; color: var(--mt-text-secondary); margin-top: 4px; }
 .log-box { max-height: 100%; overflow-y: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; }
 .log-line { margin-bottom: 4px; }
 </style>
