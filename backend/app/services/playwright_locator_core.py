@@ -188,6 +188,39 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
             "base_score": 75,
         })
 
+    # 策略 11: 相邻兄弟 + label（缺口2，轴定位）——label 和 input 是兄弟、input 无 id/name 时，
+    # 用 label 文本锚定：//label[contains(., '用户名')]/following-sibling::input
+    if tag_name in ("input", "select", "textarea"):
+        sib_info = await element.evaluate("""
+            el => {
+                let node = el.previousElementSibling;
+                let hops = 0;
+                while (node && hops < 3) {
+                    if (node.tagName === 'LABEL') {
+                        const t = (node.textContent || '').trim();
+                        if (t) return {label_text: t.slice(0, 30), tag: el.tagName.toLowerCase()};
+                    }
+                    // label 可能包在前一兄弟的容器里（如 <div><label>..</label><input/></div> 外层结构）
+                    const inner = node.querySelector ? node.querySelector('label') : null;
+                    if (inner) {
+                        const t = (inner.textContent || '').trim();
+                        if (t) return {label_text: t.slice(0, 30), tag: el.tagName.toLowerCase()};
+                    }
+                    node = node.previousElementSibling;
+                    hops++;
+                }
+                return null;
+            }
+        """)
+        # isinstance 守卫与策略 10 anchor 相同：防 legacy mock / evaluate 返回非 dict
+        if isinstance(sib_info, dict) and sib_info.get("label_text"):
+            lt = sib_info["label_text"].replace("'", "\\'")
+            candidates.append({
+                "type": "sibling-label",
+                "value": f"//label[contains(., '{lt}')]/following-sibling::{sib_info['tag']}",
+                "base_score": 78,
+            })
+
     return candidates
 
 

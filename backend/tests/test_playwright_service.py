@@ -48,6 +48,9 @@ def _make_element(attrs=None, text="登录", tag="button", box=None):
         # 祖先锚点 JS（MAX_UP 标记）：mock 场景无锚点，返回 None
         if "MAX_UP" in s:
             return None
+        # 兄弟+label JS（previousElementSibling 标记）：mock 场景无 label 兄弟，返回 None
+        if "previousElementSibling" in s:
+            return None
         return tag
 
     element.evaluate = evaluate

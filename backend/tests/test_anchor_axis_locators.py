@@ -60,3 +60,43 @@ class TestAnchorStrategy:
         el = make_element(attrs={"_text": "x", "class": "c"}, path_chain=None)
         candidates = await generate_locators_for_element(make_page(), el)
         assert not [c for c in candidates if c["type"] == "anchor"]
+
+
+class TestSiblingLabelStrategy:
+    @pytest.mark.asyncio
+    async def test_generates_sibling_label_for_input(self):
+        """input 无 id/name，前兄弟 label 有文本 → 生成 sibling-label 轴定位。"""
+        def make_eval(tag_holder):
+            async def _evaluate(js, arg=None):
+                if "MAX_UP" in js:
+                    return None  # 无锚点
+                if "tagName" in js and "previousElementSibling" not in js:
+                    return "input"
+                if "previousElementSibling" in js:
+                    return {"label_text": "用户名", "tag": "input"}
+                return None
+            return _evaluate
+        el = make_element(attrs={"_text": "", "type": "text"})
+        el.evaluate = make_eval(el)
+        candidates = await generate_locators_for_element(make_page(), el)
+        axis = [c for c in candidates if c["type"] == "sibling-label"]
+        assert axis, "应有 sibling-label 策略候选"
+        assert "following-sibling::input" in axis[0]["value"]
+        assert "用户名" in axis[0]["value"]
+        assert axis[0]["base_score"] == 78
+
+    @pytest.mark.asyncio
+    async def test_no_sibling_label_for_button(self):
+        """button 不生成 sibling-label（text 策略已覆盖）。"""
+        async def _evaluate(js, arg=None):
+            if "MAX_UP" in js:
+                return None
+            if "tagName" in js and "previousElementSibling" not in js:
+                return "button"
+            if "previousElementSibling" in js:
+                return {"label_text": "按钮", "tag": "button"}
+            return None
+        el = make_element(attrs={"_text": "按钮", "type": "button"})
+        el.evaluate = _evaluate
+        candidates = await generate_locators_for_element(make_page(), el)
+        assert not [c for c in candidates if c["type"] == "sibling-label"]
