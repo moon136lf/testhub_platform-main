@@ -732,5 +732,12 @@ def strategy_to_playwright(s: dict) -> Optional[str]:
         return None
     if t == "xpath":
         return f'page.locator("xpath={v}")'
+    if t == "anchor":
+        # value 形如 "#toolbar > div:nth-of-type(2) > button"（CSS 相对路径）或
+        # "[data-testid='x'] > …"；// 开头的 XPath 由 sibling-label 分支处理
+        return f'page.locator("{v}")'
+    if t == "sibling-label":
+        # value 形如 "//label[contains(., '用户名')]/following-sibling::input"（XPath）
+        return f'page.locator("xpath={v}")'
     # label/placeholder 等无生成端产出的类型：无可靠映射，交给 fallback
     return None

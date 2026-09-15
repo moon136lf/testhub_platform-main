@@ -153,6 +153,85 @@ async def generate_locators_for_element(page, element) -> List[Dict[str, Any]]:
             "base_score": 88,
         })
 
+    # 策略 10: 祖先锚点（缺口1）——找最近的有稳定 id/testid 的祖先，从它往下 1-2 层相对路径。
+    # 全路径 8 层在页面中间插元素即断；锚点路径短且锚在稳定结构上。
+    anchor_info = await element.evaluate("""
+        el => {
+            const MAX_UP = 5, MAX_REL = 2;
+            let relative = [];
+            let node = el;
+            for (let depth = 0; depth < MAX_UP; depth++) {
+                if (!node.parentElement) break;
+                node = node.parentElement;
+                const aid = node.getAttribute('id');
+                const atestid = node.getAttribute('data-testid');
+                if ((aid && document.querySelectorAll(`[id='${aid}']`).length === 1) || atestid) {
+                    const anchor = atestid ? `[data-testid='${atestid}']` : `#${aid}`;
+                    return {anchor, rel: relative.join(' > ')};
+                }
+                const siblings = Array.from(node.parentElement.children).filter(
+                    e => e.tagName === node.tagName);
+                let seg = node.tagName.toLowerCase();
+                if (siblings.length > 1) seg += `:nth-of-type(${siblings.indexOf(node) + 1})`;
+                relative.unshift(seg);
+                if (relative.length >= MAX_REL) break;
+            }
+            return null;
+        }
+    """)
+    if isinstance(anchor_info, dict) and anchor_info.get("anchor"):
+        rel = anchor_info.get("rel") or ""
+        anchor_value = anchor_info["anchor"] + (f" > {rel}" if rel else "")
+        candidates.append({
+            "type": "anchor",
+            "value": anchor_value,
+            "base_score": 75,
+        })
+
+    # 策略 11: 相邻兄弟 + label（缺口2，轴定位）——input 无 id/name 时用 label 文本锚定。
+    # 两种结构：a) label 与 input 直接相邻 → //label[...]/following-sibling::input
+    #          b) label 包在前一兄弟的容器内（<div><label>..</label></div><input/>）→
+    #             input 是容器的兄弟而非 label 的兄弟 → //label[...]/parent::*/following-sibling::input
+    if tag_name in ("input", "select", "textarea"):
+        sib_info = await element.evaluate("""
+            el => {
+                let node = el.previousElementSibling;
+                let hops = 0;
+                while (node && hops < 3) {
+                    if (node.tagName === 'LABEL') {
+                        const t = (node.textContent || '').trim();
+                        if (t) return {label_text: t.slice(0, 30), tag: el.tagName.toLowerCase()};
+                    }
+                    // 容器内 label：命中时轴要用 parent::* 从容器层接 following-sibling
+                    const inner = node.querySelector ? node.querySelector('label') : null;
+                    if (inner) {
+                        const t = (inner.textContent || '').trim();
+                        if (t) return {label_text: t.slice(0, 30), tag: el.tagName.toLowerCase(), via_container: true};
+                    }
+                    node = node.previousElementSibling;
+                    hops++;
+                }
+                return null;
+            }
+        """)
+        # isinstance 守卫与策略 10 anchor 相同：防 legacy mock / evaluate 返回非 dict
+        if isinstance(sib_info, dict) and sib_info.get("label_text"):
+            lt = sib_info["label_text"]
+            if "'" in lt:
+                # XPath 1.0 无反斜杠转义：含单引号的文本用双引号字面量
+                # （两类引号都含的极端情况保持单引号形式，verify 阶段安全剔除）
+                value = f'//label[contains(., "{lt}")]/following-sibling::{sib_info["tag"]}'
+            else:
+                value = f"//label[contains(., '{lt}')]/following-sibling::{sib_info['tag']}"
+            if sib_info.get("via_container"):
+                value = value.replace("/following-sibling::", "/parent::*/following-sibling::", 1)
+            # value 以 // 开头，page.locator() 会自动识别为 XPath（同 verify/smart_locator 的类型无关路由）
+            candidates.append({
+                "type": "sibling-label",
+                "value": value,
+                "base_score": 78,
+            })
+
     return candidates
 
 
@@ -221,8 +300,11 @@ async def verify_and_score_locator(page, locator_candidate: Dict[str, Any], targ
         # 依赖位置，页面加个元素就失效）。但注意：对重复属性元素（页面 id 重复），
         # nth 路径是唯一能区分的手段，且路径唯一命中时 unique=True 已有加分，
         # 双重惩罚会把唯一可用策略压到阈值之下（点选补抓 404 的根因）。
-        # 改为：nth 路径且唯一命中 → 不扣；nth 路径且非唯一 → 照扣。
-        if ("nth-of-type" in value or "nth-child" in value) and not unique:
+        # 规则：nth 路径且唯一命中 → 不扣；nth 路径且非唯一 → 照扣。
+        # 豁免：锚点策略生成的路径（value 以 #id / [data-testid= 开头）自带 1-2 层
+        # nth 是相对段定位所需（MAX_REL=2），锚点已提供结构稳定性，非唯一时不照扣。
+        is_anchored = value.startswith("#") or value.startswith("[data-testid=")
+        if ("nth-of-type" in value or "nth-child" in value) and not unique and not is_anchored:
             score -= 15
 
         return {
