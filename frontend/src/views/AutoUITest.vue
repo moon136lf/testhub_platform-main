@@ -10,136 +10,7 @@
     </el-card>
 
     <el-tabs v-model="activeTab" style="margin-top: 16px">
-      <!-- ============ Tab1 测试集 ============ -->
-      <el-tab-pane label="测试集" name="sets">
-        <el-card>
-          <div class="toolbar">
-            <el-select v-model="form.projectId" placeholder="选择项目" style="width: 220px" @change="onProjectChange">
-              <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
-            </el-select>
-            <el-button :icon="Refresh" @click="loadSets">刷新</el-button>
-            <el-button type="warning" :loading="identifying" @click="handleIdentify">AI识别回归</el-button>
-          </div>
-
-          <div class="sets-layout" v-if="form.projectId">
-            <!-- 左：测试集列表 -->
-            <div class="set-list">
-              <div class="set-list-title">测试集 ({{ sets.length }})</div>
-              <div v-for="s in sets" :key="s.id" class="set-item"
-                :class="{ active: currentSet?.id === s.id }" @click="selectSet(s)">
-                <div class="set-item-name">{{ s.name }}</div>
-                <div class="set-item-meta">
-                  <el-tag size="small" :type="sourceTagType(s.source)">
-                    {{ sourceLabel(s.source) }}
-                  </el-tag>
-                  <span class="meta-text">{{ (s.case_ids || []).length }} 用例</span>
-                  <span class="meta-text" v-if="s.pass_rate != null">通过率 {{ s.pass_rate }}%</span>
-                  <span style="margin-left: auto">
-                    <el-button link type="primary" size="small" @click.stop="$router.push('/auto/ui/set/' + s.id)">详情</el-button>
-                    <el-button link type="danger" size="small" @click.stop="delSet(s)">删除</el-button>
-                  </span>
-                </div>
-              </div>
-              <el-empty v-if="!sets.length" description="暂无测试集" :image-size="60" />
-            </div>
-
-            <!-- 右：详情 -->
-            <div class="set-detail">
-              <el-empty v-if="!currentSet" description="选择左侧测试集查看详情" :image-size="80" />
-              <template v-else>
-                <div class="detail-head">
-                  <h3 class="detail-name">
-                    {{ currentSet.name }}
-                    <el-tag :type="statusTagType(currentSet.status)" size="small" style="margin-left: 8px">
-                      {{ currentSet.status || 'pending' }}
-                    </el-tag>
-                  </h3>
-                  <div class="detail-desc" v-if="currentSet.description">{{ currentSet.description }}</div>
-                  <div class="detail-actions">
-                    <el-button type="primary" :loading="running" :disabled="currentSet.status === 'running'"
-                      @click="runDialogVisible = true">▶ 执行测试集</el-button>
-                  </div>
-                </div>
-
-                <!-- 用例表 -->
-                <el-table :data="setCases" border size="small" style="margin-top: 12px">
-                  <el-table-column type="index" label="#" width="55" />
-                  <el-table-column prop="name" label="用例名" min-width="240" show-overflow-tooltip />
-                  <el-table-column prop="priority" label="优先级" width="90" />
-                  <el-table-column label="操作" width="90">
-                    <template #default="{ row }">
-                      <el-button type="danger" link :loading="removingCaseId === row.id"
-                        @click="handleRemoveCase(row)">移除</el-button>
-                    </template>
-                  </el-table-column>
-                </el-table>
-
-                <!-- SSE 直播区（执行中显示） -->
-                <el-card v-if="execLogs.length || running" style="margin-top: 16px">
-                  <h3>执行直播</h3>
-                  <el-progress v-if="execLogs.length" :percentage="Math.round((execProgress || 0) * 100)"
-                    :status="execProgress >= 1 ? 'success' : undefined" style="margin-bottom: 8px" />
-                  <div class="log-box">
-                    <div v-for="(msg, i) in execLogs" :key="i" class="log-line">
-                      [{{ msg.timestamp }}] {{ msg.content }}
-                    </div>
-                  </div>
-                </el-card>
-
-                <!-- 报告区 -->
-                <el-card v-if="report" style="margin-top: 16px">
-                  <h3>执行报告</h3>
-                  <div class="report-summary">
-                    <div class="badge badge-rate">通过率 {{ report.pass_rate ?? 0 }}%</div>
-                    <div class="badge">总数 {{ report.record?.total_cases ?? 0 }}</div>
-                    <div class="badge badge-pass">通过 {{ report.record?.passed ?? 0 }}</div>
-                    <div class="badge badge-fail">失败 {{ report.record?.failed ?? 0 }}</div>
-                    <div class="badge">耗时 {{ ((report.record?.duration_ms ?? 0) / 1000).toFixed(1) }}s</div>
-                  </div>
-                  <el-table :data="report.details || []" border size="small" style="margin-top: 12px">
-                    <el-table-column type="index" label="序号" width="55" />
-                    <el-table-column label="结果" width="90">
-                      <template #default="{ row }">
-                        <el-tag :type="row.status === 'pass' ? 'success' : 'danger'" size="small">
-                          {{ row.status === 'pass' ? '✅ 通过' : '❌ 失败' }}
-                        </el-tag>
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="错误类型" width="120">
-                      <template #default="{ row }">{{ errorTypeLabel(row.error_type) }}</template>
-                    </el-table-column>
-                    <el-table-column label="耗时" width="90">
-                      <template #default="{ row }">{{ ((row.duration_ms ?? 0) / 1000).toFixed(1) }}s</template>
-                    </el-table-column>
-                    <el-table-column label="失败截图" width="140">
-                      <template #default="{ row }">
-                        <el-image v-if="row.screenshot_url" :src="row.screenshot_url"
-                          :preview-src-list="[row.screenshot_url]" fit="cover"
-                          style="width: 110px; height: 62px; border-radius: 4px" hide-on-click-modal>
-                          <template #error>
-                            <div class="img-error">截图加载失败</div>
-                          </template>
-                        </el-image>
-                        <span v-else>-</span>
-                      </template>
-                    </el-table-column>
-                    <el-table-column type="expand" width="40">
-                      <template #default="{ row }">
-                        <div v-if="row.error_message" class="error-msg-box">{{ row.error_message }}</div>
-                        <div v-else style="padding: 8px; color: #909399">无错误信息</div>
-                      </template>
-                    </el-table-column>
-                  </el-table>
-                </el-card>
-                <el-empty v-else-if="reportLoaded" description="该测试集从未执行" :image-size="60" style="margin-top: 16px" />
-              </template>
-            </div>
-          </div>
-          <el-empty v-else description="请先选择项目" :image-size="80" />
-        </el-card>
-      </el-tab-pane>
-
-      <!-- ============ Tab2 脚本库 ============ -->
+      <!-- ============ Tab1 脚本库 ============ -->
       <el-tab-pane label="脚本库" name="library">
         <el-card>
           <div class="lib-toolbar">
@@ -158,7 +29,7 @@
             <el-input-number v-model="runConfig.max_failures" :min="1" :max="100" controls-position="right" style="width: 110px" />最大失败
           </div>
 
-          <el-table :data="scripts" border style="margin-top: 12px" @selection-change="onSelectionChange">
+          <el-table :data="scripts" stripe style="margin-top: 12px" @selection-change="onSelectionChange">
             <el-table-column type="selection" width="45" />
             <el-table-column label="名称" min-width="160" show-overflow-tooltip>
               <template #default="{ row }">
@@ -220,6 +91,44 @@
           </el-table>
           <el-pagination style="margin-top: 12px" v-model:current-page="scriptPage" :page-size="scriptPageSize"
             :total="scriptTotal" layout="total, prev, pager, next" @current-change="loadScripts" />
+        </el-card>
+      </el-tab-pane>
+
+      <!-- ============ Tab2 测试集 ============ -->
+      <el-tab-pane label="测试集" name="sets">
+        <el-card>
+          <div class="toolbar">
+            <el-select v-model="form.projectId" placeholder="选择项目" style="width: 220px" @change="onProjectChange">
+              <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+            </el-select>
+            <el-input v-model="setFilter" placeholder="测试集名称" clearable style="width: 200px" @input="loadSets" />
+            <el-button :icon="Refresh" @click="loadSets">刷新</el-button>
+            <el-button type="warning" :loading="identifying" @click="handleIdentify">AI识别回归</el-button>
+          </div>
+
+          <el-table v-if="form.projectId" :data="filteredSets" v-loading="loadingSets" stripe style="margin-top: 12px">
+            <el-table-column prop="name" label="测试集名称" min-width="220" show-overflow-tooltip />
+            <el-table-column label="来源" width="120">
+              <template #default="{ row }"><el-tag size="small" :type="sourceTagType(row.source)">{{ sourceLabel(row.source) }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="用例数" width="90">
+              <template #default="{ row }">{{ (row.case_ids || []).length }}</template>
+            </el-table-column>
+            <el-table-column label="最近通过率" width="110">
+              <template #default="{ row }">{{ row.pass_rate != null ? row.pass_rate + '%' : '—' }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }"><el-tag size="small" :type="statusTagType(row.status)">{{ statusCn(row.status) }}</el-tag></template>
+            </el-table-column>
+            <el-table-column label="操作" width="220" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" :disabled="row.status === 'running'" @click="openRunDialog(row)">执行</el-button>
+                <el-button link type="primary" size="small" @click="$router.push('/auto/ui/set/' + row.id)">详情</el-button>
+                <el-button link type="danger" size="small" @click="delSet(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-else description="请先选择项目" :image-size="80" />
         </el-card>
       </el-tab-pane>
     </el-tabs>
@@ -343,14 +252,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { scriptAPI } from '@/api/script'
 import { testSetAPI } from '@/api/testSet'
 import { projectAPI } from '@/api/project'
-import { testCaseAPI } from '@/api/testCase'
 import { diagnosticsAPI } from '@/api/diagnostics'
 import { toEditorRows } from '@/utils/scriptMapping'
 import DiagnosisCard from '@/components/DiagnosisCard.vue'
@@ -360,14 +268,8 @@ import axios from '@/api/axios.js'
 const projects = ref([])
 const form = reactive({ projectId: '' })
 
-const ERROR_TYPE_MAP = {
-  locate_failed: '定位失败',
-  timeout: '超时',
-  assertion_failed: '断言失败',
-  script_error: '脚本错误',
-}
-const errorTypeLabel = (t) => ERROR_TYPE_MAP[t] || t || '-'
 const statusTagType = (s) => ({ pending: 'info', running: 'warning', done: 'success' }[s] || 'info')
+const statusCn = (s) => ({ pending: '待执行', running: '执行中', done: '已完成' }[s] || s || '待执行')
 
 // 脚本库枚举中文映射（实际值域：last_status=never_run/passed/failed/affected；
 // locator_source=element_library/ai_generated/mixed/none_draft；status=generated/confirmed）
@@ -386,51 +288,29 @@ const SOURCE_LABELS = {
 const sourceLabel = (s) => SOURCE_LABELS[s] || s || '手工'
 const sourceTagType = (s) => ({ convert_page: 'success', ai_regression: 'warning', manual_regression: 'warning' }[s] || 'info')
 
-// ================= Tab1 测试集 =================
+// ================= Tab2 测试集 =================
 const sets = ref([])
-const currentSet = ref(null)
-const setCases = ref([])
-const report = ref(null)
-const reportLoaded = ref(false)
-const removingCaseId = ref(null)
+const setFilter = ref('')
+const loadingSets = ref(false)
+const pendingRunSet = ref(null)
 const running = ref(false)
 const runDialogVisible = ref(false)
 const runOpts = reactive({ headless: true, fail_fast: false, timeout: 60 })
-const execLogs = ref([])
-const execProgress = ref(0)
+
+const filteredSets = computed(() => {
+  const kw = (setFilter.value || '').trim().toLowerCase()
+  if (!kw) return sets.value
+  return sets.value.filter(s => (s.name || '').toLowerCase().includes(kw))
+})
 
 const loadSets = async () => {
   if (!form.projectId) { sets.value = []; return }
+  loadingSets.value = true
   try {
     const resp = await testSetAPI.listSets(form.projectId)
     sets.value = resp.data || []
   } catch { ElMessage.error('测试集列表加载失败'); sets.value = [] }
-}
-
-const loadReport = async (setId) => {
-  report.value = null
-  reportLoaded.value = false
-  try {
-    const resp = await testSetAPI.getReport(setId)
-    // data 为 null 表示从未执行
-    report.value = resp.data || null
-    reportLoaded.value = true
-  } catch (e) {
-    report.value = null
-    reportLoaded.value = false
-    ElMessage.error(e?.response?.data?.detail || '报告加载失败')
-  }
-}
-
-const loadSetCases = async (setId) => {
-  setCases.value = []
-  const ids = currentSet.value?.case_ids || []
-  if (!ids.length) return
-  // testCaseAPI 无批量接口，逐个拉
-  const results = await Promise.allSettled(ids.map(id => testCaseAPI.get(id)))
-  setCases.value = results
-    .filter(r => r.status === 'fulfilled' && r.value)
-    .map(r => r.value.data || r.value)
+  finally { loadingSets.value = false }
 }
 
 const delSet = async (s) => {
@@ -440,70 +320,33 @@ const delSet = async (s) => {
   try {
     await testSetAPI.deleteSet(s.id)
     ElMessage.success('已删除')
-    if (currentSet.value?.id === s.id) currentSet.value = null
     loadSets()
   } catch (e) { ElMessage.error(e?.response?.data?.detail || '删除失败') }
 }
 
-const selectSet = async (s) => {
-  currentSet.value = s
-  report.value = null
-  await Promise.all([loadSetCases(s.id), loadReport(s.id)])
+// 行内执行：弹执行配置，确认后启动并提示到详情页看记录
+const openRunDialog = (row) => {
+  pendingRunSet.value = row
+  runDialogVisible.value = true
 }
 
-const handleRemoveCase = async (row) => {
-  removingCaseId.value = row.id
-  try {
-    await testSetAPI.removeCase(currentSet.value.id, row.id)
-    ElMessage.success('已移除')
-    currentSet.value = { ...currentSet.value, case_ids: (currentSet.value.case_ids || []).filter(id => id !== row.id) }
-    await loadSetCases(currentSet.value.id)
-  } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '移除失败')
-  } finally { removingCaseId.value = null }
-}
-
-// 测试集执行：SSE 直播 + 完成后加载报告
-let execES = null
 const handleRunSet = async () => {
-  if (!currentSet.value) return
+  if (!pendingRunSet.value) return
   running.value = true
-  runDialogVisible.value = false
   try {
-    const resp = await testSetAPI.runSet(currentSet.value.id, {
+    await testSetAPI.runSet(pendingRunSet.value.id, {
       headless: runOpts.headless, failFast: runOpts.fail_fast, timeout: runOpts.timeout,
     })
-    const sessionId = resp.data?.session_id
-    if (!sessionId) { ElMessage.error('执行启动失败：无 session_id'); running.value = false; return }
-    currentSet.value = { ...currentSet.value, status: 'running' }
-    execLogs.value = []
-    execProgress.value = 0
-    if (execES) execES.close()
-    execES = scriptAPI.subscribe(sessionId, (msg) => {
-      execLogs.value.push(msg)
-      if (typeof msg.progress === 'number') execProgress.value = msg.progress
-      if (msg.progress >= 1) {
-        execES.close()
-        running.value = false
-        currentSet.value = { ...currentSet.value, status: 'done' }
-        loadSets()
-        loadReport(currentSet.value.id)
-      }
-    }, () => {
-      running.value = false
-      ElMessage.warning('直播连接中断，请稍后刷新查看报告')
-      loadSets()
-    })  } catch (e) {
+    runDialogVisible.value = false
+    ElMessage.success('执行已启动，请到详情页查看记录')
+    pendingRunSet.value = { ...pendingRunSet.value, status: 'running' }
+    loadSets()
+  } catch (e) {
     ElMessage.error(e?.response?.data?.detail || '执行启动失败')
-    running.value = false
-  }
+  } finally { running.value = false }
 }
 
 const onProjectChange = () => {
-  currentSet.value = null
-  setCases.value = []
-  report.value = null
-  reportLoaded.value = false
   loadSets()
   loadScripts()
 }
@@ -779,30 +622,9 @@ onMounted(async () => {
 
 <style scoped>
 .toolbar { display: flex; align-items: center; gap: 12px; }
-.sets-layout { display: flex; gap: 16px; margin-top: 16px; align-items: flex-start; }
-.set-list { width: 300px; flex-shrink: 0; border: 1px solid #ebeef5; border-radius: 4px; padding: 8px; max-height: 640px; overflow-y: auto; }
-.set-list-title { font-size: 13px; color: #909399; margin-bottom: 8px; }
-.set-item { padding: 8px 10px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; border: 1px solid transparent; }
-.set-item:hover { background: #f5f7fa; }
-.set-item.active { background: #ecf5ff; border-color: #b3d8ff; }
-.set-item-name { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
-.set-item-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.meta-text { font-size: 12px; color: #909399; }
-.set-detail { flex: 1; min-width: 0; }
-.detail-head { padding-bottom: 8px; border-bottom: 1px solid #ebeef5; }
-.detail-name { margin: 0 0 6px; font-size: 17px; }
-.detail-desc { color: #606266; font-size: 13px; margin-bottom: 10px; }
-.detail-actions { margin-top: 6px; }
 .log-box { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; }
 .log-line { margin-bottom: 4px; }
 .code-box { max-height: 480px; overflow: auto; font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ddd; padding: 12px; border-radius: 4px; white-space: pre; }
-.report-summary { display: flex; gap: 12px; flex-wrap: wrap; }
-.badge { padding: 6px 14px; background: #f5f7fa; border-radius: 4px; font-size: 13px; color: #606266; }
-.badge-rate { background: #ecf5ff; color: #409eff; font-weight: 600; }
-.badge-pass { background: #f0f9eb; color: #67c23a; }
-.badge-fail { background: #fef0f0; color: #f56c6c; }
-.img-error { width: 110px; height: 62px; display: flex; align-items: center; justify-content: center; background: #f5f7fa; color: #c0c4cc; font-size: 12px; border-radius: 4px; }
-.error-msg-box { padding: 10px 14px; background: #fef0f0; color: #c45656; font-size: 13px; border-radius: 4px; white-space: pre-wrap; }
 .diag-card { margin-top: 12px; padding: 12px; background: #f5f7fa; border-radius: 4px; }
 .lib-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .run-cfg-label { color: #909399; font-size: 13px; margin-left: 8px; }
