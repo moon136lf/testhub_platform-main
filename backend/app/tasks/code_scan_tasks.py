@@ -99,3 +99,20 @@ def run_scan_task(scan_id: str, project_id: str, repo_url: str, branch: str = "m
         raise
     finally:
         shutil.rmtree(repo_path, ignore_errors=True)
+
+
+# ---------------- 源码定位器链路（缺口3）: Task 5 API 分发占位 ----------------
+
+@celery_app.task(name="code_scan.run_locator_scan")
+def run_locator_scan_task(scan_id: str, project_id: str, zip_path: str):
+    """Celery 薄壳：B 支路静态定位器链路（Task 6 实现完整双支路编排）。"""
+    logger.info(f"【源码定位器】任务触发 | scan={scan_id} zip={zip_path}")
+    try:
+        # Task 5 占位：避免报错直接标记失败；Task 6 将替换为 _locator_branch 编排
+        async def _mark():
+            async with AsyncSessionLocal() as db:
+                await CodeScanService(db).update_progress(scan_id, 10, "locating")
+        _run_async(_mark())
+    except Exception as e:
+        logger.error(f"【源码定位器】占位执行失败 | scan={scan_id}: {e}")
+        raise

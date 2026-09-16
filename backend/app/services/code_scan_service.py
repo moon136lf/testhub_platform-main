@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.whitescan import CodeScan, CodeIssue
+from app.models.whitescan import CodeScan, CodeIssue, StaticScanComponent
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,15 @@ class CodeScanService:
             q = q.where(CodeIssue.status == status)
         rows = (await self.db.execute(q)).scalars().all()
         return [r.to_dict() for r in rows]
+
+    async def list_static_elements(self, scan_id: str) -> dict:
+        """本次扫描静态定位器产出（组件粒度）。"""
+        q = (select(StaticScanComponent)
+             .where(StaticScanComponent.scan_id == UUID(scan_id))
+             .order_by(StaticScanComponent.file_path))
+        rows = (await self.db.execute(q)).scalars().all()
+        items = [r.to_dict() for r in rows]
+        return {"total": len(items), "items": items}
 
     async def update_issue(self, issue_id: str, status: str,
                            handled_by: str = "system") -> Optional[dict]:

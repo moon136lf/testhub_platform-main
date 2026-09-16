@@ -1,7 +1,12 @@
 """Whitescan API endpoints (prefix /whitescan). semgrep scan + AI fix + regression cases."""
+import io
+import os
+import shutil
+import tempfile
+import zipfile
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -131,3 +136,55 @@ async def export_scan(scan_id: str, format: str = Query("xlsx", pattern="^(xlsx|
                  f"attachment; filename=\"buglist-{scan_id[:8]}{filename[-4:]}\"; "
                  f"filename*=UTF-8''{quoted}"},
     )
+
+
+MAX_ZIP_BYTES = 50 * 1024 * 1024
+
+
+def _validate_zip(data: bytes) -> None:
+    """zip 校验：可解析 + 条目无路径穿越 + 无绝对路径。"""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="not a valid zip file")
+    for name in zf.namelist():
+        if name.startswith("/") or name.startswith("\\"):
+            raise HTTPException(status_code=400, detail=f"absolute path in zip: {name}")
+        # 归一化后不得逃逸
+        norm = os.path.normpath(name)
+        if norm.startswith("..") or ":/" in norm or ":\\" in norm:
+            raise HTTPException(status_code=400, detail=f"path traversal in zip: {name}")
+
+
+@router.post("/locator-scan")
+async def trigger_locator_scan(project_id: str = Form(...),
+                               file: UploadFile = File(...),
+                               svc: CodeScanService = Depends(get_scan_service)):
+    """源码 zip 上传 → 静态提取 + AI 定位器生成（与 semgrep 并行）。"""
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="only .zip files accepted")
+    data = await file.read()
+    if len(data) > MAX_ZIP_BYTES:
+        raise HTTPException(status_code=400, detail="zip exceeds 50MB limit")
+    _validate_zip(data)
+
+    # 落盘暂存（Celery worker 异步消费；本进程随即清理）
+    tmp_dir = tempfile.mkdtemp(prefix="static_scan_")
+    zip_path = os.path.join(tmp_dir, "upload.zip")
+    with open(zip_path, "wb") as f:
+        f.write(data)
+
+    scan = await svc.create_scan(project_id, f"zip:{file.filename}", branch="zip")
+    try:
+        from app.tasks import code_scan_tasks
+        code_scan_tasks.run_locator_scan_task.delay(str(scan["id"]), project_id, zip_path)
+    except Exception as e:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=503, detail=f"task broker unavailable: {e}")
+    return {"code": 0, "data": {"scan_id": scan["id"], "status": scan["status"]}}
+
+
+@router.get("/scans/{scan_id}/static-elements")
+async def list_static_elements(scan_id: str,
+                               svc: CodeScanService = Depends(get_scan_service)):
+    return {"code": 0, "data": await svc.list_static_elements(scan_id)}
