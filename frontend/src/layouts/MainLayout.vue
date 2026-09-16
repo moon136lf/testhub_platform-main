@@ -81,10 +81,8 @@
         <div class="header-left">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-            <el-breadcrumb-item
-              v-for="(c, i) in crumbTitles" :key="i"
-              :to="i < crumbTitles.length - 1 && crumbPaths[i] ? { path: crumbPaths[i] } : undefined"
-            >{{ c }}</el-breadcrumb-item>
+            <el-breadcrumb-item v-for="(c, i) in trail" :key="c.key"
+              :to="c.path ? { path: c.path } : undefined">{{ c.title }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
         <div class="header-right">
@@ -101,34 +99,51 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 
 const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => route.meta?.title || '首页')
 
-// 面包屑完整路径：meta.crumbs 为中间层级标题链（如 测试集详情 = ['UI自动化', 'UI自动化测试']），
-// 中间层若能对应到菜单路由则可点击跳转，最后一节为当前页（不可点）
-const crumbTitles = computed(() => {
-  const crumbs = route.meta?.crumbs || []
-  return [...crumbs, currentTitle.value]
-})
-const crumbPaths = computed(() => {
-  const titles = route.meta?.crumbs || []
-  return titles.map(t => menuPathByTitle(t))
+// 访问轨迹面包屑：静态层级（meta.crumbs 中间层）+ 本会话内点过的页面链。
+// 例：首页 → UI自动化测试 → 测试集详情 → 报告详情，全程可点回跳。
+const STATIC_PARENT_PATHS = {
+  '用例管理': '/cases',
+  '执行记录与报告': '/reports',
+  'UI自动化测试': '/auto/ui',
+}
+const MAX_TRAIL = 6
+const visitTrail = ref([]) // [{ title, path }]
+const lastRecorded = ref('')
+
+watch(() => route.fullPath, () => {
+  const title = currentTitle.value
+  const path = route.path
+  // 同页参数变化（如详情页内切换 id）不重复入栈
+  if (visitTrail.value.length && visitTrail.value[visitTrail.value.length - 1].path === path) return
+  if (lastRecorded.value === path + '|' + title) return
+  lastRecorded.value = path + '|' + title
+  // 去重：回到轨迹中已有页面则截断到该处（返回语义）
+  const idx = visitTrail.value.findIndex(v => v.path === path)
+  if (idx >= 0) {
+    visitTrail.value = visitTrail.value.slice(0, idx)
+    return
+  }
+  visitTrail.value.push({ title, path })
+  if (visitTrail.value.length > MAX_TRAIL) visitTrail.value.shift()
+}, { immediate: true })
+
+const trail = computed(() => {
+  // 静态中间层（meta.crumbs）在最前，然后是访问轨迹（不含当前页——当前页已是轨迹最后一项）
+  const crumbs = (route.meta?.crumbs || []).map(t => ({
+    title: t, path: STATIC_PARENT_PATHS[t] || '', key: 'static-' + t,
+  }))
+  return [...crumbs, ...visitTrail.value.map((v, i) => ({ ...v, key: `v${i}-${v.path}` }))]
 })
 
-function menuPathByTitle(title) {
-  for (const item of document.querySelectorAll('.sidebar-menu .el-menu-item')) {
-    if ((item.textContent || '').trim() === title) {
-      const idx = item.getAttribute('index') || ''
-      if (idx.startsWith('/')) return idx
-    }
-  }
-  return ''
-}
 </script>
 
 <style scoped>
