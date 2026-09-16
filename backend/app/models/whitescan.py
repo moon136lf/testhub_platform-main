@@ -1,6 +1,6 @@
 """Whitescan models: code_scan + code_issue (req §5.1)."""
 import uuid
-from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -95,4 +95,42 @@ class CodeIssue(Base):
             "case_outdated": self.case_outdated,
             "handled_by": self.handled_by,
             "handled_at": self.handled_at.isoformat() if self.handled_at else None,
+        }
+
+
+class StaticScanComponent(Base):
+    """静态扫描组件hash表：hash未变组件跳过AI生成复用定位器"""
+
+    __tablename__ = "static_scan_component"
+    __table_args__ = (
+        UniqueConstraint("project_id", "file_path", name="uq_static_scan_component_file"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    scan_id = Column(UUID(as_uuid=True), ForeignKey("code_scan.id", ondelete="CASCADE"), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    component_name = Column(String(200))
+    content_hash = Column(String(64))
+    page_id = Column(UUID(as_uuid=True), ForeignKey("page_repository.id", ondelete="SET NULL"))
+    element_count = Column(Integer, default=0)
+    ai_generated = Column(Boolean, default=False)
+    reused = Column(Boolean, default=False)
+    ai_failed = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "project_id": str(self.project_id),
+            "scan_id": str(self.scan_id),
+            "file_path": self.file_path,
+            "component_name": self.component_name,
+            "content_hash": self.content_hash,
+            "page_id": str(self.page_id) if self.page_id else None,
+            "element_count": self.element_count,
+            "ai_generated": self.ai_generated,
+            "reused": self.reused,
+            "ai_failed": self.ai_failed,
         }
