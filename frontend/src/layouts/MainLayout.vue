@@ -81,7 +81,10 @@
         <div class="header-left">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-            <el-breadcrumb-item>{{ currentTitle }}</el-breadcrumb-item>
+            <el-breadcrumb-item
+              v-for="(c, i) in crumbTitles" :key="i"
+              :to="i < crumbTitles.length - 1 && crumbPaths[i] ? { path: crumbPaths[i] } : undefined"
+            >{{ c }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
         <div class="header-right">
@@ -105,6 +108,27 @@ const route = useRoute()
 
 const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => route.meta?.title || '首页')
+
+// 面包屑完整路径：meta.crumbs 为中间层级标题链（如 测试集详情 = ['UI自动化', 'UI自动化测试']），
+// 中间层若能对应到菜单路由则可点击跳转，最后一节为当前页（不可点）
+const crumbTitles = computed(() => {
+  const crumbs = route.meta?.crumbs || []
+  return [...crumbs, currentTitle.value]
+})
+const crumbPaths = computed(() => {
+  const titles = route.meta?.crumbs || []
+  return titles.map(t => menuPathByTitle(t))
+})
+
+function menuPathByTitle(title) {
+  for (const item of document.querySelectorAll('.sidebar-menu .el-menu-item')) {
+    if ((item.textContent || '').trim() === title) {
+      const idx = item.getAttribute('index') || ''
+      if (idx.startsWith('/')) return idx
+    }
+  }
+  return ''
+}
 </script>
 
 <style scoped>
@@ -218,4 +242,5 @@ const currentTitle = computed(() => route.meta?.title || '首页')
   color: var(--mt-primary);
   font-weight: 500;
 }
+/* 中间层级不可点时保持默认灰（无 is-link class 则无 hover） */
 </style>
