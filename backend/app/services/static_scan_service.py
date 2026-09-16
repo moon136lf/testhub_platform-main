@@ -90,8 +90,31 @@ class StaticScanService:
         )
 
     @staticmethod
+    def compute_component_hash(comp: Dict[str, Any]) -> str:
+        """组件内容 hash = snippet 摘要 + 完整提取元素清单规范化摘要。
+
+        snippet 截断到 SNIPPET_MAX 后，截断点之外的元素属性变化仅体现在
+        elements 列表——把元素关键字段一并纳入 hash 输入，避免复用过期定位器。
+        """
+        canonical_elements = []
+        for e in comp.get("elements") or []:
+            canonical_elements.append({
+                k: e.get(k)
+                for k in ("tag", "id", "name", "data_testid", "v_model", "text", "pos")
+            })
+        digest_input = _json.dumps(
+            {
+                "snippet": comp.get("template_snippet") or "",
+                "elements": canonical_elements,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        return hashlib.sha1(digest_input.encode("utf-8")).hexdigest()
+
+    @staticmethod
     def parse_ai_output(content: str):
-        """解析 AI 输出：裸 JSON 或 ```json 围栏。失败返回 None。"""
+        """解析 AI 输出：裸 JSON / ```json 围栏 / 前导文字+围栏或裸 JSON。失败返回 None。"""
         if not content:
             return None
         text = content.strip()
@@ -101,7 +124,18 @@ class StaticScanService:
         try:
             data = _json.loads(text)
         except _json.JSONDecodeError:
-            return None
+            # 前导文字（"好的：```json..."）兜底：提取首个 [ 到末个 ]（或 { 到 }）再试
+            data = None
+            for open_c, close_c in (("[", "]"), ("{", "}")):
+                start, end = text.find(open_c), text.rfind(close_c)
+                if start != -1 and end > start:
+                    try:
+                        data = _json.loads(text[start:end + 1])
+                        break
+                    except _json.JSONDecodeError:
+                        continue
+            if data is None:
+                return None
         return data if isinstance(data, list) else None
 
     async def generate_component(self, comp: Dict[str, Any]) -> Dict[str, Any]:
@@ -216,11 +250,12 @@ class StaticScanService:
                 continue
             component_name = os.path.splitext(os.path.basename(abs_path))[0]
             snippet = template.strip()[:SNIPPET_MAX]
-            comps.append({
+            comp = {
                 "file_path": rel,
                 "component_name": component_name,
                 "template_snippet": snippet,
-                "content_hash": hashlib.sha1(snippet.encode("utf-8")).hexdigest(),
                 "elements": self._extract_elements(template),
-            })
+            }
+            comp["content_hash"] = self.compute_component_hash(comp)
+            comps.append(comp)
         return comps

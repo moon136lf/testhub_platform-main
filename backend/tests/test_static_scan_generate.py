@@ -35,6 +35,16 @@ class TestParse:
     def test_parse_garbage_returns_none(self):
         assert StaticScanService.parse_ai_output("不是JSON") is None
 
+    def test_parse_leading_text_with_fenced_json(self):
+        out = [{"index": 0, "strategies": [{"type": "id", "value": "#x", "priority": 1}]}]
+        text = f"好的，以下是结果：\n```json\n{json.dumps(out)}\n```"
+        assert StaticScanService.parse_ai_output(text) == out
+
+    def test_parse_leading_text_with_bare_json(self):
+        out = [{"index": 0, "strategies": [{"type": "id", "value": "#x", "priority": 1}]}]
+        text = f"分析如下：\n{json.dumps(out)}\n希望有帮助"
+        assert StaticScanService.parse_ai_output(text) == out
+
 
 class TestGenerateComponent:
     @pytest.mark.asyncio
@@ -87,3 +97,31 @@ class TestReuseDecision:
     def test_no_prior_record(self):
         svc = StaticScanService(gateway=MagicMock())
         assert svc.decide_reuse(_comp(), {}) is None
+
+    def test_truncated_snippet_attr_change_no_reuse(self):
+        """缺陷2：元素属性变化在 snippet 截断点之后，元素摘要 hash 仍须识别变化→重生成"""
+        svc = StaticScanService(gateway=MagicMock())
+        comp = _comp()
+        # 首次：input 元素 id=old_user，snippet 超 4000 字符被截断
+        comp["elements"] = [{"tag": "input", "text": None, "v_model": "form.user",
+                             "placeholder": None, "id": "old_user", "href": None,
+                             "name": None, "data_testid": None, "pos": 900}]
+        comp["template_snippet"] = "<div>" + "x" * 4000 + "<input id='old_user' v-model='form.user'></div>"
+        h1 = StaticScanService.compute_component_hash(comp)
+        # 属性变化（id 改名）在截断点之后，snippet 相同部分不变
+        comp["elements"] = [{"tag": "input", "text": None, "v_model": "form.user",
+                             "placeholder": None, "id": "new_user", "href": None,
+                             "name": None, "data_testid": None, "pos": 900}]
+        h2 = StaticScanService.compute_component_hash(comp)
+        assert h1 != h2
+        # decide_reuse：旧 hash → 不复用
+        old = {"src/views/Cases.vue": {"content_hash": h1,
+              "strategies_by_index": {0: {"strategies": [{"type": "id", "value": "#old_user", "priority": 1}]}}}}
+        assert svc.decide_reuse(comp, old) is None
+
+    def test_hash_stable_when_nothing_changed(self):
+        svc = StaticScanService(gateway=MagicMock())
+        comp = _comp()
+        h1 = StaticScanService.compute_component_hash(comp)
+        h2 = StaticScanService.compute_component_hash(_comp())
+        assert h1 == h2
