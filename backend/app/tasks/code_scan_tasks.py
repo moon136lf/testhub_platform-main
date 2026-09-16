@@ -221,13 +221,11 @@ def _uuid(v):
     return v if isinstance(v, UUID) else UUID(str(v))
 
 
-async def _locator_branch(scan_id: str, project_id: str, zip_path: str, work_dir: str,
+async def _locator_branch(scan_id: str, project_id: str, work_dir: str,
                           svc=None, prior_loader=None) -> dict:
-    """B 支路编排（svc/prior_loader 可注入供测试）：解压→提取→hash增量→AI→入库→组件记录。"""
+    """B 支路编排（svc/prior_loader 可注入供测试）：提取→hash增量→AI→入库→组件记录。
+    （zip 已由编排层在支路提交前同步解压到 work_dir，此处不再解压——缺陷2竞态修复）"""
     from app.services.static_scan_service import StaticScanService
-
-    os.makedirs(work_dir, exist_ok=True)
-    _safe_extract(zip_path, work_dir)
 
     svc = svc or StaticScanService(gateway=_build_gateway())
     prior = await (prior_loader or _load_prior_components)(project_id)
@@ -275,13 +273,18 @@ def _a_branch(scan_id: str, work_dir: str) -> dict:
 
 def run_locator_scan_task_inner(scan_id: str, project_id: str, zip_path: str,
                                 a_branch=None, b_branch=None) -> dict:
-    """双支路并行编排（可注入 a/b 支路供测试）。双失败才 raise，单失败另一支路结果有效。"""
+    """双支路并行编排（可注入 a/b 支路供测试）。双失败才 raise，单失败另一支路结果有效。
+
+    解压（_safe_extract）在提交双支路之前同步执行——缺陷2：消除 B 支路解压与
+    A 支路 semgrep 扫同一 work_dir 的竞态。"""
     from concurrent.futures import ThreadPoolExecutor
     work_dir = tempfile.mkdtemp(prefix="static_scan_work_")
     try:
+        # 解压先于支路提交：A 支路扫解压产物，B 支路直接读 work_dir
+        _safe_extract(zip_path, work_dir)
         a_branch = a_branch or (lambda: _a_branch(scan_id, work_dir))
         b_branch = b_branch or (lambda: _run_async(
-            _locator_branch(scan_id, project_id, zip_path, work_dir)))
+            _locator_branch(scan_id, project_id, work_dir)))
         # B 支路需要 zip 原样（_safe_extract 校验+解压），A 支路扫解压产物
         with ThreadPoolExecutor(max_workers=2) as pool:
             fa = pool.submit(a_branch)
@@ -300,6 +303,21 @@ def run_locator_scan_task_inner(scan_id: str, project_id: str, zip_path: str,
                 logger.error(f"【源码定位器】定位器支路失败 | scan={scan_id}: {e}")
         if a_err and b_err:
             raise RuntimeError(f"both branches failed: a={a_err} b={b_err}")
+        # 缺陷1：单支路失败不污染终态——run_scan_sync 的 except 可能已把 scan
+        # 标为 failed（A 支路）；此处用独立 session 覆盖回终态 done 并写 error_msg
+        if a_err or b_err:
+            err_msg = a_err or b_err
+
+            async def _done():
+                from app.services.code_scan_service import CodeScanService
+                async with AsyncSessionLocal() as db:
+                    await CodeScanService(db).mark_scan_done(
+                        scan_id, total=0, high=0, mid=0, low=0,
+                        file_count=0, duration_ms=0, error_msg=err_msg)
+            try:
+                _run_async(_done())
+            except Exception as e:
+                logger.warning(f"【源码定位器】单失败终态覆盖失败 | scan={scan_id}: {e}")
         return {"semgrep": a_result if a_result is not None else {"error": a_err},
                 "static": b_result if b_result is not None else {"error": b_err}}
     finally:

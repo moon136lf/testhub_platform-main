@@ -143,7 +143,7 @@ class CodeScanService:
 
     async def mark_scan_done(self, scan_id: str, *, total: int, high: int,
                              mid: int, low: int, file_count: int,
-                             duration_ms: int) -> Optional[dict]:
+                             duration_ms: int, error_msg: Optional[str] = None) -> Optional[dict]:
         q = select(CodeScan).where(CodeScan.id == UUID(scan_id))
         scan = (await self.db.execute(q)).scalar_one_or_none()
         if not scan:
@@ -151,6 +151,9 @@ class CodeScanService:
         scan.status = "done"
         scan.progress = 100
         scan.stage = "done"
+        if error_msg:
+            # 单支路失败但整体 done 时保留该支路错误信息供前端/排查展示（截断与 failed 一致）
+            scan.error_msg = error_msg[:2000]
         scan.total_issues = total
         scan.high_count = high
         scan.mid_count = mid

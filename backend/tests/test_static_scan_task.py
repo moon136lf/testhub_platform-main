@@ -10,6 +10,7 @@ from app.tasks.code_scan_tasks import (
     _locator_branch,
     _normalize_prior,
     _safe_extract,
+    run_locator_scan_task,
     run_locator_scan_task_inner,
 )
 
@@ -69,7 +70,7 @@ class TestLocatorBranch:
         svc = _make_svc()
         prior_loader = AsyncMock(return_value={})
         with patch("app.tasks.code_scan_tasks._record_component", mock_record):
-            result = _run(_locator_branch("scan-1", "proj-1", zip_path, str(zip_path) + "_work",
+            result = _run(_locator_branch("scan-1", "proj-1", str(zip_path) + "_work",
                                           svc=svc, prior_loader=prior_loader))
         assert result["components"] == 1
         assert result["imported"] == 1
@@ -84,7 +85,7 @@ class TestLocatorBranch:
         svc = _make_svc(decision={"reused": True})
         prior_loader = AsyncMock(return_value={})
         with patch("app.tasks.code_scan_tasks._record_component", AsyncMock()):
-            result = _run(_locator_branch("scan-1", "proj-1", zip_path, str(zip_path) + "_work",
+            result = _run(_locator_branch("scan-1", "proj-1", str(zip_path) + "_work",
                                           svc=svc, prior_loader=prior_loader))
         assert result["reused"] == 1
         svc.generate_component.assert_not_awaited()
@@ -96,7 +97,7 @@ class TestLocatorBranch:
         prior_loader = AsyncMock(return_value={})
         mock_record = AsyncMock()
         with patch("app.tasks.code_scan_tasks._record_component", mock_record):
-            result = _run(_locator_branch("scan-1", "proj-1", zip_path, str(zip_path) + "_work",
+            result = _run(_locator_branch("scan-1", "proj-1", str(zip_path) + "_work",
                                           svc=svc, prior_loader=prior_loader))
         assert result["ai_failed"] == 1
         assert result["imported"] == 0
@@ -104,7 +105,92 @@ class TestLocatorBranch:
         mock_record.assert_awaited_once()  # ai_failed 组件仍落 hash 表
 
 
-class TestInnerOrchestration:
+class TestExtractBeforeBranches:
+    """缺陷2：解压提前到双支路提交之前同步执行，B 支路内不再解压（消除与 semgrep 的竞态）"""
+
+    def test_extract_done_before_branch_submit(self, zip_path):
+        """_safe_extract 在 a_branch 启动前已执行完"""
+        import app.tasks.code_scan_tasks as m
+        order = []
+        work_dir_holder = {}
+
+        def fake_extract(zp, dest):
+            order.append("extract")
+            work_dir_holder["dest"] = dest
+            # 模拟真实解压，A 支路可断言文件已存在
+            os.makedirs(os.path.join(dest, "src"), exist_ok=True)
+
+        def a_branch():
+            order.append("a")
+            assert os.path.isdir(work_dir_holder["dest"]), "解压未在支路提交前完成"
+            return {"ok": True}
+
+        b_branch = MagicMock(side_effect=lambda: order.append("b") or {"ok": True})
+        with patch.object(m, "_safe_extract", side_effect=fake_extract):
+            run_locator_scan_task_inner("scan-1", "proj-1", zip_path,
+                                        a_branch=a_branch, b_branch=b_branch)
+        assert order[0] == "extract"
+
+    def test_b_branch_no_extract_inside(self, zip_path, fake_db):
+        """B 支路内部无解压调用（解压已上移）"""
+        svc = _make_svc()
+        prior_loader = AsyncMock(return_value={})
+        with patch("app.tasks.code_scan_tasks._record_component", AsyncMock()), \
+             patch("app.tasks.code_scan_tasks._safe_extract") as mock_ex:
+            _run(_locator_branch("scan-1", "proj-1", str(zip_path) + "_work",
+                                 svc=svc, prior_loader=prior_loader))
+        mock_ex.assert_not_called()
+
+
+class TestSingleBranchFailureTerminalState:
+    """缺陷1：单支路失败时终态应为 done（stage done / progress 100），error_msg 记录该支路错误；双失败才 failed"""
+
+    def _patch_common(self, mock_svc_cls):
+        scan = {"id": "scan-1", "project_id": "proj-1"}
+        db = MagicMock()
+        mock_svc = MagicMock()
+        mock_svc.mark_scan_done = AsyncMock(return_value=None)
+        mock_svc.get_scan = AsyncMock(return_value=scan)
+        mock_svc.update_progress = AsyncMock()
+        mock_svc.mark_scan_failed = AsyncMock(return_value=None)
+        mock_svc_cls.return_value = mock_svc
+        return mock_svc
+
+    def test_a_fail_b_done_terminal(self, zip_path):
+        """A 失败 B 成功：终态 done + error_msg 写 A 支路错误"""
+        import app.tasks.code_scan_tasks as m
+        with patch.object(m, "AsyncSessionLocal", _FakeSessionCM()), \
+             patch("app.services.code_scan_service.CodeScanService") as svc_cls:
+            mock_svc = self._patch_common(svc_cls)
+            result = run_locator_scan_task_inner(
+                "scan-1", "proj-1", zip_path,
+                a_branch=MagicMock(side_effect=RuntimeError("semgrep boom")),
+                b_branch=MagicMock(return_value={"components": 1}),
+            )
+        assert result["static"] == {"components": 1}
+        # 覆盖 A 支路 mark_scan_failed 造成的 failed 终态
+        mock_svc.mark_scan_done.assert_awaited_once()
+        kwargs = mock_svc.mark_scan_done.await_args.kwargs
+        assert kwargs["error_msg"] and "semgrep boom" in kwargs["error_msg"]
+
+    def test_b_fail_a_done_terminal(self, zip_path):
+        """B 失败 A 成功：终态 done + error_msg 写 B 支路错误"""
+        import app.tasks.code_scan_tasks as m
+        with patch.object(m, "AsyncSessionLocal", _FakeSessionCM()), \
+             patch("app.services.code_scan_service.CodeScanService") as svc_cls:
+            mock_svc = self._patch_common(svc_cls)
+            result = run_locator_scan_task_inner(
+                "scan-1", "proj-1", zip_path,
+                a_branch=MagicMock(return_value={"total": 3}),
+                b_branch=MagicMock(side_effect=RuntimeError("locator boom")),
+            )
+        assert result["semgrep"] == {"total": 3}
+        mock_svc.mark_scan_done.assert_awaited_once()
+        kwargs = mock_svc.mark_scan_done.await_args.kwargs
+        assert kwargs["error_msg"] and "locator boom" in kwargs["error_msg"]
+
+
+class TestTempCleanupOnFailure:
     def test_single_branch_failure_does_not_raise(self, zip_path):
         """A 支路失败不阻断：B 成功则任务正常返回且带 a 错误信息"""
         staging = os.path.dirname(zip_path)
