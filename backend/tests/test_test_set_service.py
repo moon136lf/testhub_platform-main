@@ -112,10 +112,29 @@ class TestCrud:
     async def test_list_by_project(self):
         db = _db()
         rows = [MagicMock(), MagicMock()]
-        db.execute = _exec(rows)
+        calls = []
+
+        async def _execute(q):
+            calls.append(q)
+            r = MagicMock()
+            if len(calls) == 1:
+                r.scalar.return_value = 2  # count
+            else:
+                r.scalars.return_value.all.return_value = rows
+            return r
+
+        db.execute = _execute
         svc = TestSetService(db)
-        out = await svc.list_sets("p1")
-        assert out == rows
+        items, total = await svc.list_sets("p1")
+        assert items == rows
+        assert total == 2
+        assert len(calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_list_empty_project(self):
+        db = _db()
+        svc = TestSetService(db)
+        assert await svc.list_sets("") == ([], 0)
 
 
 class TestCaseManagement:

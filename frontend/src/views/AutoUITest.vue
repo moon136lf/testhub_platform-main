@@ -62,7 +62,7 @@
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="240">
+            <el-table-column label="操作" width="260" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" link :loading="runningId === row.id" @click="openRunCfgDialog(row)">运行</el-button>
                 <el-button type="primary" link @click="openStepEditor(row)">编辑脚本</el-button>
@@ -109,6 +109,8 @@
               </template>
             </el-table-column>
           </el-table>
+          <el-pagination v-if="form.projectId" style="margin-top: 12px; justify-content: flex-end" v-model:current-page="setPage"
+            :page-size="setPageSize" :total="setTotal" layout="total, prev, pager, next" @current-change="loadSets" />
           <el-empty v-else description="请先选择项目" :image-size="80" />
         </el-card>
       </el-tab-pane>
@@ -303,6 +305,9 @@ const sourceTagType = (s) => ({ convert_page: 'success', ai_regression: 'warning
 // ================= Tab2 测试集 =================
 const sets = ref([])
 const setFilter = ref('')
+const setPage = ref(1)
+const setPageSize = 20
+const setTotal = ref(0)
 const loadingSets = ref(false)
 const pendingRunSet = ref(null)
 const running = ref(false)
@@ -319,8 +324,9 @@ const loadSets = async () => {
   if (!form.projectId) { sets.value = []; return }
   loadingSets.value = true
   try {
-    const resp = await testSetAPI.listSets(form.projectId)
+    const resp = await testSetAPI.listSets(form.projectId, { page: setPage.value, pageSize: setPageSize })
     sets.value = resp.data || []
+    setTotal.value = resp.total ?? (resp.data || []).length
   } catch { ElMessage.error('测试集列表加载失败'); sets.value = [] }
   finally { loadingSets.value = false }
 }
@@ -332,6 +338,7 @@ const delSet = async (s) => {
   try {
     await testSetAPI.deleteSet(s.id)
     ElMessage.success('已删除')
+    if (sets.value.length === 1 && setPage.value > 1) setPage.value--
     loadSets()
   } catch (e) { ElMessage.error(e?.response?.data?.detail || '删除失败') }
 }
@@ -359,6 +366,7 @@ const handleRunSet = async () => {
 }
 
 const onProjectChange = () => {
+  setPage.value = 1
   loadSets()
   loadScripts()
 }
@@ -643,17 +651,17 @@ const handleIdentify = async () => {
   } catch (e) { ElMessage.error('识别失败') } finally { identifying.value = false }
 }
 
+const route = useRoute()
+const router = useRouter()
 onMounted(async () => {
   const presp = await projectAPI.list()
   projects.value = presp.items || presp.data || presp || []
   if (projects.value.length) form.projectId = projects.value[0].id
+  loadSets() // 无条件加载测试集
   // 转脚本页跳转定位：/auto/ui?caseId=xx → 脚本库按用例过滤
-  const route = useRoute()
-  const router = useRouter()
   const caseId = route.query.caseId
   if (caseId && projects.value.length) {
     activeTab.value = 'library'
-    loadScripts()
     try {
       const resp = await scriptAPI.list({ project_id: form.projectId, case_id: caseId, include_regression: true })
       scripts.value = resp.data || []
@@ -661,8 +669,8 @@ onMounted(async () => {
     } catch { ElMessage.error('脚本定位失败') }
     // 定位完成后清理 query，避免刷新/切换时残留过滤
     router.replace({ query: {} })
-  } else if (form.projectId) {
-    loadSets(); loadScripts()
+  } else {
+    loadScripts()
   }
 })
 </script>

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.test_set import TestSet
@@ -73,13 +73,18 @@ class TestSetService:
             return None
         return await self.db.get(TestSet, sid)
 
-    async def list_sets(self, project_id: str) -> List[TestSet]:
+    async def list_sets(self, project_id: str, page: int = 1, page_size: int = 20):
+        """测试集列表（分页）。返回 (items, total)。"""
         if not project_id:
-            return []
+            return [], 0
+        total = (await self.db.execute(
+            select(func.count()).select_from(TestSet)
+            .where(TestSet.project_id == project_id))).scalar() or 0
         result = await self.db.execute(
             select(TestSet).where(TestSet.project_id == project_id)
-            .order_by(TestSet.updated_at.desc()))
-        return result.scalars().all()
+            .order_by(TestSet.updated_at.desc())
+            .offset((page - 1) * page_size).limit(page_size))
+        return result.scalars().all(), total
 
     async def add_cases(self, set_id: str, case_ids: List[str]) -> None:
         """合并用例（去重）。"""
