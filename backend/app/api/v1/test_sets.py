@@ -30,10 +30,15 @@ class TestSetCasesRequest(BaseModel):
 
 
 @router.get("/test-sets")
-async def list_test_sets(project_id: str = Query(...), db: AsyncSession = Depends(get_db)):
-    """测试集列表。"""
-    sets = await TestSetService(db).list_sets(project_id)
-    return {"code": 0, "data": [s.to_dict() for s in sets]}
+async def list_test_sets(
+    project_id: str = Query(...),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """测试集列表（分页）。"""
+    sets, total = await TestSetService(db).list_sets(project_id, page=page, page_size=page_size)
+    return {"code": 0, "data": [s.to_dict() for s in sets], "total": total}
 
 
 @router.post("/test-sets")
