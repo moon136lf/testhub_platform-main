@@ -9,6 +9,11 @@ import logging
 import os
 import re
 from typing import Any, Dict, List
+from uuid import UUID as _UUID
+
+from sqlalchemy import select as _select
+
+from app.models.element import PageRepository, ElementRepository
 
 logger = logging.getLogger(__name__)
 
@@ -259,3 +264,101 @@ class StaticScanService:
             comp["content_hash"] = self.compute_component_hash(comp)
             comps.append(comp)
         return comps
+
+    # ---------- 入库 ----------
+
+    @staticmethod
+    def build_element_id(file_path: str, elem: Dict[str, Any], pos: int = 0) -> str:
+        """源码场景元素标识：文件短名 + 优先 id/testid/name/text，兜底 tag+行号。"""
+        stem = os.path.splitext(os.path.basename(file_path))[0].lower()
+        for key in ("id", "data_testid", "name", "text"):
+            v = elem.get(key)
+            if v and str(v).strip():
+                return f"{stem}_{str(v).strip()[:80]}"[:100]
+        return f"{stem}_{elem.get('tag', 'elem')}_{pos}"[:100]
+
+    async def _get_or_create_page(self, db, project_id: str, comp: Dict[str, Any],
+                                  route_path: str | None) -> str:
+        """组件 → 页面树节点。page_url 用路由路径（有路由表）或文件相对路径，幂等。"""
+        page_url = route_path or f"static:{comp['file_path']}"
+        existing = await db.execute(
+            _select(PageRepository).where(
+                PageRepository.project_id == _UUID(project_id),
+                PageRepository.page_url == page_url,
+            )
+        )
+        page = existing.scalar_one_or_none()
+        if page:
+            return page.id
+        page = PageRepository(
+            project_id=_UUID(project_id),
+            page_name=comp["component_name"][:100],
+            page_url=page_url[:500],
+            screenshot_url=None,
+            element_count=0,
+            created_by="static_scan",
+        )
+        db.add(page)
+        await db.flush()  # 拿 id，不 commit（由 import_component 统一 commit）
+        return page.id
+
+    async def import_component(self, db, project_id: str, comp: Dict[str, Any],
+                               route_path: str | None) -> tuple:
+        """单组件入库。返回 (page_id, imported, skipped)。ai_failed 组件跳过不入库。"""
+        if comp.get("ai_failed") or not comp.get("elements"):
+            return None, 0, 0
+        page_id = await self._get_or_create_page(db, project_id, comp, route_path)
+
+        existing = await db.execute(
+            _select(ElementRepository.element_id).where(
+                ElementRepository.page_id == page_id)
+        )
+        existing_ids = {row[0] for row in existing.all()}
+
+        imported, skipped = 0, 0
+        seen = set()
+        type_counters: Dict[str, int] = {}
+        for i, e in enumerate(comp["elements"]):
+            if "locator_strategies" not in e:
+                skipped += 1  # AI 未产出该元素的策略
+                continue
+            element_id = self.build_element_id(comp["file_path"], e, pos=e.get("pos", i))
+            if element_id in seen or element_id in existing_ids:
+                skipped += 1
+                continue
+            seen.add(element_id)
+
+            text = (e.get("text") or "").strip()
+            element_text = text[:200] if text else None
+            elem_type = "link" if e["tag"] == "a" else ("input" if e["tag"] in ("el-input", "input", "textarea", "el-textarea") else "button")
+            type_counters[elem_type] = type_counters.get(elem_type, 0) + 1
+
+            name = (e.get("text") or "").strip() or f"{elem_type}{type_counters[elem_type]}"
+
+            db.add(ElementRepository(
+                page_id=page_id,
+                project_id=_UUID(project_id),
+                element_id=element_id,
+                element_name=name[:100],
+                element_type=elem_type,
+                element_text=element_text,
+                locator_strategies=e["locator_strategies"],
+                semantic_info={
+                    "type": elem_type,
+                    "text": element_text,
+                    "placeholder": e.get("placeholder"),
+                    "context": {"source_file": comp["file_path"], "line": e.get("pos")},
+                    "coords": {"x": 0, "y": 0, "width": 0, "height": 0},
+                },
+                attributes={k: v for k, v in {
+                    "id": e.get("id"), "name": e.get("name"),
+                    "placeholder": e.get("placeholder"), "data-testid": e.get("data_testid"),
+                }.items() if v} or None,
+                status="active",
+                confidence=5,
+                source="static_scan",
+                created_by="system",
+            ))
+            imported += 1
+        await db.commit()
+        return page_id, imported, skipped
