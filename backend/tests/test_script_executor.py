@@ -406,3 +406,183 @@ class TestScriptExecutorHealFill:
         finally:
             es_mod.ElementService = orig_es
 
+
+
+# ---------- 修1+修2：验证码识别重写（兜底选择器/刷新重试/SSE透出） + error_msg 透出 ----------
+from app.services.script_executor import (
+    _recognize_captcha, _screenshot_captcha_image, _CAPTCHA_FALLBACK_SELECTORS,
+    dispatch_editor_action,
+)
+
+
+class _FakeEl:
+    """模拟 Playwright Locator：page.locator(sel).first 返回元素自身。"""
+    def __init__(self, img=b"img-bytes", visible=True, box=None):
+        self.img, self.visible = img, visible
+        self.box = box if box is not None else {"width": 100, "height": 40}
+        self.click_called = False
+        self.filled = None
+        self.first = self  # page.locator(sel).first
+    async def click(self):
+        self.click_called = True
+    async def fill(self, v):
+        self.filled = v
+    async def count(self):
+        return 0 if self.img is None else 1
+    async def is_visible(self):
+        return self.visible
+    async def bounding_box(self):
+        return self.box
+    async def screenshot(self):
+        return self.img
+
+
+class _FakeLocatorFactory:
+    """按 selector 返回 _FakeEl；未知 selector 返回 count=0 的空元素。"""
+    def __init__(self, mapping):
+        self.mapping = mapping
+        self.selector_calls = []
+    def __call__(self, selector):
+        self.selector_calls.append(selector)
+        el = self.mapping.get(selector)
+        return el if el is not None else _FakeEl(img=None)
+
+
+def _make_page(locator_factory):
+    page = MagicMock()
+    page.locator = locator_factory
+    page.wait_for_timeout = AsyncMock()
+    page._script_vars = {}
+    return page
+
+
+class TestScreenshotCaptchaImage:
+    def test_target_found_screenshots(self):
+        lf = _FakeLocatorFactory({"#cap": _FakeEl(img=b"ok")})
+        page = _make_page(lf)
+        assert asyncio_run(_screenshot_captcha_image(page, "#cap")) == b"ok"
+
+    def test_invisible_or_small_box_skipped(self):
+        # 裂图/隐藏节点（宽高<=20 或不可见）跳过
+        lf = _FakeLocatorFactory({"#cap": _FakeEl(visible=False),
+                                  'img[src*="captcha"]': _FakeEl(box={"width": 10, "height": 30})})
+        page = _make_page(lf)
+        assert asyncio_run(_screenshot_captcha_image(page, "#cap")) is None
+
+    def test_fallback_selector_when_target_missing(self):
+        # target count=0 → 兜底选择器命中
+        lf = _FakeLocatorFactory({".login-code img": _FakeEl(img=b"fallback")})
+        page = _make_page(lf)
+        assert asyncio_run(_screenshot_captcha_image(page, "#cap")) == b"fallback"
+        assert ".login-code img" in lf.selector_calls
+
+
+class TestRecognizeCaptcha:
+    def _run(self, page, ocr_result, target="#cap"):
+        import app.services.script_executor as mod
+        orig = mod._get_ocr
+        mod._get_ocr = lambda: MagicMock(classification=lambda b: ocr_result)
+        try:
+            return asyncio_run(_recognize_captcha(page, target))
+        finally:
+            mod._get_ocr = orig
+
+    def test_success_first_attempt(self):
+        lf = _FakeLocatorFactory({"#cap": _FakeEl()})
+        page = _make_page(lf)
+        assert self._run(page, "ab3d") == "ab3d"
+
+    def test_empty_then_refresh_retry_success(self):
+        # mock ocr 前两轮空第三轮 4 位 → 点击图刷新
+        import app.services.script_executor as mod
+        orig = mod._get_ocr
+        results = ["", "x", "w9yz"]
+        mod._get_ocr = lambda: MagicMock(classification=lambda b: results.pop(0))
+        cap = _FakeEl()
+        lf = _FakeLocatorFactory({"#cap": cap})
+        page = _make_page(lf)
+        try:
+            assert asyncio_run(_recognize_captcha(page, "#cap")) == "w9yz"
+        finally:
+            mod._get_ocr = orig
+        assert cap.click_called  # 刷新点击发生过
+        assert page.wait_for_timeout.await_count >= 2
+
+    def test_all_empty_raises_with_refresh_count(self):
+        lf = _FakeLocatorFactory({"#cap": _FakeEl()})
+        page = _make_page(lf)
+        with pytest.raises(RuntimeError, match="重试 3 次"):
+            self._run(page, "")
+
+    def test_image_not_located_raises(self):
+        lf = _FakeLocatorFactory({})  # 全部 count=0
+        page = _make_page(lf)
+        with pytest.raises(RuntimeError, match="未定位到"):
+            self._run(page, "ab3d")
+
+    def test_progress_callback_reports_result(self):
+        logs = []
+        import app.services.script_executor as mod
+        orig = mod._get_ocr
+        mod._get_ocr = lambda: MagicMock(classification=lambda b: "cd5e")
+        lf = _FakeLocatorFactory({"#cap": _FakeEl()})
+        page = _make_page(lf)
+        try:
+            async def _cb(msg, a):
+                logs.append(msg)
+            asyncio_run(_recognize_captcha(page, "#cap", on_progress=_cb))
+        finally:
+            mod._get_ocr = orig
+        assert any("验证码识别结果：cd5e" in m for m in logs)
+
+
+class TestDispatchCaptchaSseTransparency:
+    def _exec_captcha_script(self, mock_ocr_value="ab3d"):
+        """editor 分支执行 captcha_recognize 步骤，检查 SSE 透出识别结果。"""
+        import app.services.script_executor as mod
+        orig = mod._get_ocr
+        mod._get_ocr = lambda: MagicMock(classification=lambda b: mock_ocr_value)
+        cap = _FakeEl()
+        lf = _FakeLocatorFactory({"#cap": cap, "#user": _FakeEl()})
+        page = _make_page(lf)
+        sa = _make_script_asset([
+            {"step": 1, "action": "captcha_recognize", "target": "#cap", "value": "",
+             "element_name": None, "status": "ok", "case_req": "", "impl": None,
+             "page_name": None, "assertion": None, "seq": 1},
+            {"step": 2, "action": "fill", "target": "#user", "value": "{captcha_text}",
+             "element_name": None, "status": "ok", "case_req": "", "impl": None,
+             "page_name": None, "assertion": None, "seq": 2},
+        ])
+        try:
+            detail, sse, db = TestScriptExecutorExecute()._exec(sa, mock_page=page)
+        finally:
+            mod._get_ocr = orig
+        return detail, sse, page
+
+    def test_captcha_result_visible_in_sse(self):
+        detail, sse, page = self._exec_captcha_script()
+        assert detail.status == "pass"
+        assert any("验证码识别结果：ab3d" in (m.get("content", "")) for m in sse.messages)
+        # 变量已存且 _captcha_log 已消费（不残留重复透出）
+        assert page._script_vars.get("captcha_text") == "ab3d"
+        assert "_captcha_log" not in page._script_vars
+
+    def test_captcha_fail_sse_contains_error_msg(self):
+        # 全轮识别失败 → 失败消息带具体原因（不再是裸 script_error）
+        detail, sse, page = self._exec_captcha_script(mock_ocr_value="")
+        assert detail.status == "fail"
+        err_msgs = [m for m in sse.messages if m.get("type") == "error"]
+        assert any("识别失败" in (m.get("content", "")) for m in err_msgs), err_msgs
+
+    def test_error_msg_appended_to_failure_sse(self):
+        """修2：任意失败步 SSE 带 error_msg 截断版。"""
+        sa = _make_script_asset([{"step": 1, "action": "navigate", "target": "", "value": "",
+                                  "element_name": None, "status": "ok", "case_req": "", "impl": None,
+                                  "page_name": None, "assertion": None, "seq": 1}])
+        page = MagicMock()
+        page.goto = AsyncMock(side_effect=RuntimeError("netERR_NAME_NOT_RESOLVED xxx"))
+        page.close = AsyncMock()
+        detail, sse, db = TestScriptExecutorExecute()._exec(sa, mock_page=page)
+        assert detail.status == "fail"
+        err_msgs = [m for m in sse.messages if m.get("type") == "error"]
+        assert any("netERR_NAME_NOT_RESOLVED" in (m.get("content", "")) for m in err_msgs), err_msgs
