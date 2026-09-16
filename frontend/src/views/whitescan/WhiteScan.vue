@@ -23,8 +23,15 @@
         <el-form-item label="分支">
           <el-input v-model="branch" placeholder="main" style="width: 120px" />
         </el-form-item>
+        <el-form-item label="源码zip">
+          <el-upload :auto-upload="false" :limit="1" :on-change="onZipChange"
+                     accept=".zip" :file-list="zipFiles" :on-remove="() => zipFiles = []">
+            <el-button :icon="Upload">选择zip</el-button>
+          </el-upload>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="scanning" @click="onScan">开始扫描</el-button>
+          <el-button type="success" :loading="locScanning" @click="onLocatorScan">静态定位器扫描</el-button>
           <el-button :icon="Refresh" :loading="loading" @click="loadScans">刷新</el-button>
         </el-form-item>
       </el-form>
@@ -101,6 +108,23 @@
         </el-table>
       </template>
 
+      <!-- ③b 静态定位器产出 -->
+      <template v-if="currentScan">
+        <el-divider content-position="left">元素定位器（静态扫描）</el-divider>
+        <el-table :data="staticElements" border style="margin-bottom: 16px">
+          <el-table-column prop="component_name" label="组件" width="160" show-overflow-tooltip />
+          <el-table-column prop="file_path" label="文件" min-width="240" show-overflow-tooltip />
+          <el-table-column prop="element_count" label="元素数" width="80" />
+          <el-table-column label="来源" width="100">
+            <template #default="{ row }">
+              <el-tag v-if="row.reused" type="info" size="small">复用</el-tag>
+              <el-tag v-else-if="row.ai_failed" type="danger" size="small">AI失败</el-tag>
+              <el-tag v-else type="success" size="small">AI生成</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
+
       <!-- ④ 产出物下载 -->
       <div style="margin-top: 16px" v-if="currentScan">
         <el-button size="small" @click="onExport('xlsx')">下载BUG清单</el-button>
@@ -127,7 +151,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Upload } from '@element-plus/icons-vue'
 import { whitescanAPI } from '@/api/whitescan.js'
 import { projectAPI } from '@/api/project.js'
 import axios from '@/api/axios.js'
@@ -154,6 +178,10 @@ const sevFilter = ref('')
 const statusFilter = ref('')
 const fixDialog = ref(false)
 const fixing = ref(null)
+const zipFiles = ref([])
+const locScanning = ref(false)
+const staticElements = ref([])
+const selectedZip = ref(null)
 let pollTimer = null
 
 const statusLabel = (s) => ({ open: '待处理', fixed: '已修复', false_positive: '误报' }[s] || s)
@@ -209,7 +237,46 @@ const loadIssues = async () => {
 
 const onScanSelect = async (row) => {
   currentScan.value = row
-  if (row) await loadIssues()
+  if (row) { await loadIssues(); await loadStaticElements() }
+}
+
+const onZipChange = (file, fileList) => {
+  zipFiles.value = fileList
+  selectedZip.value = file.raw || null
+}
+
+const loadStaticElements = async () => {
+  if (!currentScan.value) { staticElements.value = []; return }
+  try {
+    const res = await whitescanAPI.listStaticElements(currentScan.value.id)
+    staticElements.value = (res.data || res)?.items || []
+  } catch (e) { staticElements.value = [] }
+}
+
+const onLocatorScan = async () => {
+  if (!projectId.value) { ElMessage.warning('先选择项目'); return }
+  if (!selectedZip.value) { ElMessage.warning('选择源码 zip 文件'); return }
+  if (selectedZip.value.size > 50 * 1024 * 1024) { ElMessage.warning('zip 不能超过 50MB'); return }
+  locScanning.value = true
+  try {
+    const res = await whitescanAPI.locatorScan(projectId.value, selectedZip.value)
+    const sid = (res.data || res).scan_id
+    ElMessage.success('静态扫描已提交，异步执行中')
+    stopPolling()
+    pollTimer = setInterval(async () => {
+      try {
+        const s = (await whitescanAPI.getScan(sid)).data || {}
+        if (s.status !== 'scanning') {
+          stopPolling(); locScanning.value = false
+          s.status === 'done' ? ElMessage.success('静态扫描完成') : ElMessage.error('静态扫描失败')
+          loadScans()
+        }
+      } catch (e) { console.error(e) }
+    }, 3000)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '上传失败')
+    locScanning.value = false
+  }
 }
 
 const onScan = async () => {

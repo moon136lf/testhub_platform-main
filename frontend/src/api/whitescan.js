@@ -22,6 +22,17 @@ export const whitescanAPI = {
   generateCases(scanId, projectId) {
     return axios.post(`/whitescan/scans/${scanId}/generate-cases`, null, { params: { project_id: projectId } }).then(r => r.data)
   },
+  locatorScan(projectId, file) {
+    const fd = new FormData()
+    fd.append('project_id', projectId)
+    fd.append('file', file)
+    return axios.post('/whitescan/locator-scan', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
+  listStaticElements(scanId) {
+    return axios.get(`/whitescan/scans/${scanId}/static-elements`).then(r => r.data)
+  },
   exportUrl(scanId, format = 'xlsx') {
     return `/whitescan/scans/${scanId}/export?format=${format}`
   },
