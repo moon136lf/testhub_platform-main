@@ -11,7 +11,7 @@ import re
 from typing import Any, Dict, List
 from uuid import UUID as _UUID
 
-from sqlalchemy import select as _select
+from sqlalchemy import select as _select, update as _update, func as _func
 
 from app.models.element import PageRepository, ElementRepository
 
@@ -309,13 +309,14 @@ class StaticScanService:
             return None, 0, 0
         page_id = await self._get_or_create_page(db, project_id, comp, route_path)
 
+        # 已有元素 element_id → locator_strategies（I-1: 重导入 diff 刷新定位器）
         existing = await db.execute(
-            _select(ElementRepository.element_id).where(
+            _select(ElementRepository.element_id, ElementRepository.locator_strategies).where(
                 ElementRepository.page_id == page_id)
         )
-        existing_ids = {row[0] for row in existing.all()}
+        existing_map = {row[0]: row[1] for row in existing.all()}
 
-        imported, skipped = 0, 0
+        imported, skipped, updated = 0, 0, 0
         seen = set()
         type_counters: Dict[str, int] = {}
         for i, e in enumerate(comp["elements"]):
@@ -323,10 +324,25 @@ class StaticScanService:
                 skipped += 1  # AI 未产出该元素的策略
                 continue
             element_id = self.build_element_id(comp["file_path"], e, pos=e.get("pos", i))
-            if element_id in seen or element_id in existing_ids:
+            if element_id in seen:
                 skipped += 1
                 continue
             seen.add(element_id)
+
+            if element_id in existing_map:
+                # I-1: 定位器变化则刷新，相同则 skip
+                if existing_map[element_id] != e["locator_strategies"]:
+                    await db.execute(
+                        _update(ElementRepository)
+                        .where(ElementRepository.page_id == page_id,
+                               ElementRepository.element_id == element_id)
+                        .values(locator_strategies=e["locator_strategies"],
+                                updated_at=_func.now())
+                    )
+                    updated += 1
+                else:
+                    skipped += 1
+                continue
 
             text = (e.get("text") or "").strip()
             element_text = text[:200] if text else None
@@ -360,5 +376,13 @@ class StaticScanService:
                 created_by="system",
             ))
             imported += 1
+
+        # I-2: element_count 回填/累加（本次新建元素数，更新的不重复计数）
+        if imported:
+            await db.execute(
+                _update(PageRepository)
+                .where(PageRepository.id == page_id)
+                .values(element_count=_func.coalesce(PageRepository.element_count, 0) + imported)
+            )
         await db.commit()
         return page_id, imported, skipped
