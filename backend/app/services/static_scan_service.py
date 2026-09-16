@@ -42,9 +42,117 @@ _TEXT_RE = re.compile(
 
 SNIPPET_MAX = 4000
 
+import json as _json
+
+PROMPT_TEMPLATE = """你是前端测试专家。以下是一个 Vue 组件的 template 片段和其中可交互元素清单。
+为每个元素生成 Playwright 可用的定位策略链。
+
+【可用策略类型】id, css, xpath, placeholder, text, role, anchor, sibling-label。
+anchor: 唯一 id/data-testid 祖先 + 1-2 层相对路径，如 "[data-testid='save-btn'] > button"。
+sibling-label: XPath 兄弟表单定位，如 "//label[contains(.,'用户名')]/following-sibling::input"（撇号用双引号字面量，XPath 1.0 无转义）。
+
+【要求】
+1. 输出纯 JSON 数组（无 markdown 围栏），每项 {{"index": <元素序号>, "strategies": [{{"type": "...", "value": "...", "priority": 1}}]}}
+2. index 对应元素清单顺序（从 0 开始）
+3. 每元素 1-4 条策略，稳定策略优先（id/data-testid > anchor > sibling-label > css > text）
+4. v-model 通常是表单字段名，label 文本常在 el-form-item label 属性——参考片段上下文推断
+5. 不得虚构片段中不存在的属性
+
+【组件】{component_name}（文件 {file_path}）
+
+【template 片段】
+{snippet}
+
+【元素清单】
+{element_list}
+"""
+
 
 class StaticScanService:
     """源码静态提取 + AI 定位器生成 + 入库"""
+
+    def __init__(self, gateway=None):
+        self.gateway = gateway
+
+    # ---------- AI 生成 ----------
+
+    @staticmethod
+    def build_prompt(comp: Dict[str, Any]) -> str:
+        lines = []
+        for i, e in enumerate(comp["elements"]):
+            attrs = {k: e.get(k) for k in ("text", "v_model", "placeholder", "id", "name", "data_testid") if e.get(k)}
+            lines.append(f"{i}. <{e['tag']}> {attrs}")
+        return PROMPT_TEMPLATE.format(
+            component_name=comp["component_name"],
+            file_path=comp["file_path"],
+            snippet=comp["template_snippet"],
+            element_list="\n".join(lines),
+        )
+
+    @staticmethod
+    def parse_ai_output(content: str):
+        """解析 AI 输出：裸 JSON 或 ```json 围栏。失败返回 None。"""
+        if not content:
+            return None
+        text = content.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
+        try:
+            data = _json.loads(text)
+        except _json.JSONDecodeError:
+            return None
+        return data if isinstance(data, list) else None
+
+    async def generate_component(self, comp: Dict[str, Any]) -> Dict[str, Any]:
+        """调 glm 生成组件内所有元素的定位器。失败重试 1 次，仍失败标记 ai_failed。"""
+        prompt = self.build_prompt(comp)
+        content = None
+        for attempt in (1, 2):
+            try:
+                resp = await self.gateway.chat(
+                    [{"role": "user", "content": prompt}],
+                    provider="glm-2.5",  # provider key 历史遗留，实际模型 glm-5.2
+                    stage="static_scan_locator",
+                )
+                data = self.parse_ai_output(resp.get("content", ""))
+                if data is not None:
+                    content = data
+                    break
+            except Exception as e:
+                logger.warning(f"AI generate attempt {attempt} failed | component={comp['component_name']}: {e}")
+        if content is None:
+            comp["ai_failed"] = True
+            return comp
+        by_index = {item.get("index"): item.get("strategies") for item in content if isinstance(item, dict)}
+        for i, e in enumerate(comp["elements"]):
+            strategies = by_index.get(i)
+            if isinstance(strategies, list) and strategies:
+                e["locator_strategies"] = {"strategies": strategies}
+        comp["ai_failed"] = False
+        return comp
+
+    # ---------- hash 增量 ----------
+
+    @staticmethod
+    def decide_reuse(comp: Dict[str, Any], prior: Dict[str, Dict]) -> Dict[str, Any] | None:
+        """hash 未变 → 复用旧定位器（写回 elements），返回 reused 决策；否则 None。
+
+        prior: {file_path: {content_hash, strategies_by_index: {index: {"strategies": [...]}}}}
+        """
+        record = prior.get(comp["file_path"])
+        if not record or record.get("content_hash") != comp["content_hash"]:
+            return None
+        prior_strategies = record.get("strategies_by_index") or {}
+        # 元素数量或位置变化则不复用（索引错位风险）
+        if len(prior_strategies) != len(comp["elements"]) or not comp["elements"]:
+            return None
+        for i, e in enumerate(comp["elements"]):
+            s = prior_strategies.get(i)
+            if not s:
+                return None
+            e["locator_strategies"] = {"strategies": s["strategies"]}
+        return {"reused": True}
 
     # ---------- 提取 ----------
 
