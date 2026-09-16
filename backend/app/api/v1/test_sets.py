@@ -34,10 +34,12 @@ async def list_test_sets(
     project_id: str = Query(...),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    name: str = Query("", max_length=100),
     db: AsyncSession = Depends(get_db),
 ):
-    """测试集列表（分页）。"""
-    sets, total = await TestSetService(db).list_sets(project_id, page=page, page_size=page_size)
+    """测试集列表（分页+名称模糊过滤）。"""
+    sets, total = await TestSetService(db).list_sets(
+        project_id, page=page, page_size=page_size, name=name)
     return {"code": 0, "data": [s.to_dict() for s in sets], "total": total}
 
 

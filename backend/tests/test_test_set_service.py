@@ -136,6 +136,30 @@ class TestCrud:
         svc = TestSetService(db)
         assert await svc.list_sets("") == ([], 0)
 
+    @pytest.mark.asyncio
+    async def test_list_name_filter_short_circuit_and_query(self):
+        # 空 name：查询条件只含 project_id（字符串内含 project_id 过滤即可，mock 下验证不抛错）
+        db = _db()
+        rows = [MagicMock()]
+        calls = []
+
+        async def _execute(q):
+            calls.append(q)
+            r = MagicMock()
+            if len(calls) == 1:
+                r.scalar.return_value = 1
+            else:
+                r.scalars.return_value.all.return_value = rows
+            return r
+
+        db.execute = _execute
+        svc = TestSetService(db)
+        items, total = await svc.list_sets("p1", name="登录")
+        assert items == rows
+        assert total == 1
+        # 两条 SQL（count+select）都拼进了 name 过滤条件
+        assert len(calls) == 2
+
 
 class TestCaseManagement:
     @pytest.mark.asyncio

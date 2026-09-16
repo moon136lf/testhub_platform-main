@@ -82,12 +82,12 @@
       <el-tab-pane label="测试集" name="sets">
         <el-card>
           <div class="toolbar">
-            <el-input v-model="setFilter" placeholder="测试集名称" clearable style="width: 200px" @input="loadSets" />
+            <el-input v-model="setFilter" placeholder="测试集名称" clearable style="width: 200px" @input="onSetFilter" />
             <el-button :icon="Refresh" @click="loadSets">刷新</el-button>
             <el-button type="warning" :loading="identifying" @click="handleIdentify">AI识别回归</el-button>
           </div>
 
-          <el-table v-if="form.projectId" :data="filteredSets" v-loading="loadingSets" stripe style="margin-top: 12px">
+          <el-table v-if="form.projectId" :data="sets" v-loading="loadingSets" stripe style="margin-top: 12px">
             <el-table-column prop="name" label="测试集名称" min-width="220" show-overflow-tooltip />
             <el-table-column label="来源" width="120">
               <template #default="{ row }"><el-tag size="small" :type="sourceTagType(row.source)">{{ sourceLabel(row.source) }}</el-tag></template>
@@ -267,7 +267,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -314,17 +314,15 @@ const running = ref(false)
 const runDialogVisible = ref(false)
 const runOpts = reactive({ headless: true, fail_fast: false, timeout: 60 })
 
-const filteredSets = computed(() => {
-  const kw = (setFilter.value || '').trim().toLowerCase()
-  if (!kw) return sets.value
-  return sets.value.filter(s => (s.name || '').toLowerCase().includes(kw))
-})
+const onSetFilter = () => { setPage.value = 1; loadSets() }
 
 const loadSets = async () => {
   if (!form.projectId) { sets.value = []; return }
   loadingSets.value = true
   try {
-    const resp = await testSetAPI.listSets(form.projectId, { page: setPage.value, pageSize: setPageSize })
+    const resp = await testSetAPI.listSets(form.projectId, {
+      page: setPage.value, pageSize: setPageSize, name: (setFilter.value || '').trim(),
+    })
     sets.value = resp.data || []
     setTotal.value = resp.total ?? (resp.data || []).length
   } catch { ElMessage.error('测试集列表加载失败'); sets.value = [] }

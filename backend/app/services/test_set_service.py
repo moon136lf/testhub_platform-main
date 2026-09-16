@@ -73,15 +73,19 @@ class TestSetService:
             return None
         return await self.db.get(TestSet, sid)
 
-    async def list_sets(self, project_id: str, page: int = 1, page_size: int = 20):
-        """测试集列表（分页）。返回 (items, total)。"""
+    async def list_sets(self, project_id: str, page: int = 1, page_size: int = 20,
+                        name: str = ""):
+        """测试集列表（分页+名称模糊过滤）。返回 (items, total)。"""
         if not project_id:
             return [], 0
+        conds = [TestSet.project_id == project_id]
+        if name:
+            conds.append(TestSet.name.ilike(f"%{name}%"))
         total = (await self.db.execute(
             select(func.count()).select_from(TestSet)
-            .where(TestSet.project_id == project_id))).scalar() or 0
+            .where(*conds))).scalar() or 0
         result = await self.db.execute(
-            select(TestSet).where(TestSet.project_id == project_id)
+            select(TestSet).where(*conds)
             .order_by(TestSet.updated_at.desc())
             .offset((page - 1) * page_size).limit(page_size))
         return result.scalars().all(), total

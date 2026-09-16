@@ -1,8 +1,8 @@
 import axios from './axios'
 
 export const testSetAPI = {
-  async listSets(projectId, { page = 1, pageSize = 20 } = {}) {
-    const response = await axios.get('/test-sets', { params: { project_id: projectId, page, page_size: pageSize } })
+  async listSets(projectId, { page = 1, pageSize = 20, name = '' } = {}) {
+    const response = await axios.get('/test-sets', { params: { project_id: projectId, page, page_size: pageSize, name } })
     return response.data
   },
   async createSet(projectId, name, caseIds, source = 'convert_page', description = '') {
