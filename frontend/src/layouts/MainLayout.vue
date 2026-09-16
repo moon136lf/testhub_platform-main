@@ -80,9 +80,9 @@
       <el-header class="header" height="56px">
         <div class="header-left">
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-            <el-breadcrumb-item v-for="(c, i) in trail" :key="c.key"
+            <el-breadcrumb-item v-for="(c, i) in trail" :key="c.key || c.title"
               :to="c.path ? { path: c.path } : undefined">{{ c.title }}</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="showCurrentTitle">{{ currentTitle }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
         <div class="header-right">
@@ -99,49 +99,50 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const router = useRouter()
 
 const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => route.meta?.title || '首页')
 
-// 访问轨迹面包屑：静态层级（meta.crumbs 中间层）+ 本会话内点过的页面链。
-// 例：首页 → UI自动化测试 → 测试集详情 → 报告详情，全程可点回跳。
-const STATIC_PARENT_PATHS = {
-  '用例管理': '/cases',
-  '执行记录与报告': '/reports',
-  'UI自动化测试': '/auto/ui',
-}
-const MAX_TRAIL = 6
-const visitTrail = ref([]) // [{ title, path }]
-const lastRecorded = ref('')
-
-watch(() => route.fullPath, () => {
-  const title = currentTitle.value
-  const path = route.path
-  // 同页参数变化（如详情页内切换 id）不重复入栈
-  if (visitTrail.value.length && visitTrail.value[visitTrail.value.length - 1].path === path) return
-  if (lastRecorded.value === path + '|' + title) return
-  lastRecorded.value = path + '|' + title
-  // 去重：回到轨迹中已有页面则截断到该处（返回语义）
-  const idx = visitTrail.value.findIndex(v => v.path === path)
-  if (idx >= 0) {
-    visitTrail.value = visitTrail.value.slice(0, idx)
-    return
+// 面包屑规则（用户定稿）：
+// 1. 无「首页」——顶级页面只显示自身标题（首页路由 title 即『首页』）
+// 2. 静态层级 = 菜单结构：列表页显示 分组/页面（meta.crumbs 只在详情类页面用）；
+//    菜单内页面 crumbs 自动从侧边栏结构推导，详情页由 router meta.crumbs 声明完整链
+// 3. 不再用访问轨迹——层级只反映菜单/页面归属，与点击历史无关
+// 菜单结构映射（与 template 中侧边栏一致；维护两处需同步）
+const MENU_MAP = [
+  { group: null, items: [['仪表盘', '/dashboard'], ['项目管理', '/projects']] },
+  { group: '用例资产', items: [['用例管理', '/cases'], ['用例评审与E2E精修', '/reviews'], ['AI智能用例生成', '/ai/generate'], ['知识库管理', '/ai/knowledge'], ['生成历史', '/ai/history']] },
+  { group: '元素资产', items: [['元素抓取', '/elements/capture'], ['元素管理', '/elements/list']] },
+  { group: '自动化', items: [['用例转自动化脚本', '/ai/convert'], ['UI自动化测试', '/auto/ui']] },
+  { group: null, items: [['白盒测试', '/whitescan']] },
+  { group: '系统设置', items: [['AI设置', '/settings/ai'], ['运行配置', '/settings/runtime'], ['环境管理', '/settings/env'], ['Token成本管理', '/settings/tokens']] },
+]
+const menuCrumbs = computed(() => {
+  for (const g of MENU_MAP) {
+    for (const [t, p] of g.items) {
+      if (p === route.path) return g.group ? [{ title: g.group, path: '' }] : []
+    }
   }
-  visitTrail.value.push({ title, path })
-  if (visitTrail.value.length > MAX_TRAIL) visitTrail.value.shift()
-}, { immediate: true })
+  return null // 非菜单直达页（详情等）走 meta.crumbs
+})
+
+const showCurrentTitle = computed(() => route.path !== '/dashboard')
 
 const trail = computed(() => {
-  // 静态中间层（meta.crumbs）在最前，然后是访问轨迹（不含当前页——当前页已是轨迹最后一项）
+  if (route.path === '/dashboard') return [] // 首页本身不显示
+  const mc = menuCrumbs.value
+  if (mc !== null) return mc
+  // 详情类页面：router meta.crumbs 声明的完整静态链（含可点父页）+ 当前页标题
   const crumbs = (route.meta?.crumbs || []).map(t => ({
-    title: t, path: STATIC_PARENT_PATHS[t] || '', key: 'static-' + t,
+    title: t,
+    path: { '用例管理': '/cases', '执行记录与报告': '/reports', 'UI自动化测试': '/auto/ui' }[t] || '',
+    key: 'static-' + t,
   }))
-  return [...crumbs, ...visitTrail.value.map((v, i) => ({ ...v, key: `v${i}-${v.path}` }))]
+  return crumbs
 })
 
 </script>
