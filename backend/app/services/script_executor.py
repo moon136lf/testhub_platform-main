@@ -20,6 +20,102 @@ logger = logging.getLogger(__name__)
 # 受支持且需验证的断言类型 (其余如 dialog_closed/ambiguous 暂不验证, 标 TODO)
 _ASSERTION_TYPES_REQUIRING_CHECK = ("toast_message", "field_value")
 
+# ddddocr 单例（懒加载）：模型只加载一次，非每次调用 new（首帧慢 ~1s）。
+# import 失败时置 False，验证码步骤给出明确提示而非裸 ImportError。
+_ocr_instance = None
+_ocr_available = None  # None=未探测, True/False=探测结果
+
+
+def _get_ocr():
+    """懒加载 ddddocr 单例。不可用返回 None（调用方给明确错误信息）。"""
+    global _ocr_instance, _ocr_available
+    if _ocr_available is None:
+        try:
+            import ddddocr  # noqa: F401
+            _ocr_available = True
+        except ImportError:
+            _ocr_available = False
+    if not _ocr_available:
+        return None
+    if _ocr_instance is None:
+        import ddddocr
+        _ocr_instance = ddddocr.DdddOcr(show_ad=False)
+    return _ocr_instance
+
+
+# 验证码图兜底选择器（对齐用户旧平台跑通逻辑 scripts/run-playwright.ts）
+_CAPTCHA_FALLBACK_SELECTORS = (
+    'img[src*="captcha"]',
+    'img[src*="kaptcha"]',
+    'img[src*="code"]',
+    '.captcha img',
+    '.login-code img',
+    'form img',
+)
+
+
+async def _screenshot_captcha_image(page, target) -> Optional[bytes]:
+    """截图验证码图片字节。target 优先，失败走兜底选择器；全失败返回 None。
+
+    元素级截图前置校验：count>0 + is_visible + boundingBox 宽高>20
+    （防隐藏占位节点/裂图——旧平台验证过的细节）。"""
+    candidates = []
+    if target:
+        candidates.append(target)
+    for sel in _CAPTCHA_FALLBACK_SELECTORS:
+        if sel != target:
+            candidates.append(sel)
+    for loc in candidates:
+        try:
+            el = page.locator(loc).first
+            if await el.count() == 0:
+                continue
+            if not await el.is_visible():
+                continue
+            box = await el.bounding_box()
+            if not box or box.get("width", 0) <= 20 or box.get("height", 0) <= 20:
+                continue
+            return await el.screenshot()
+        except Exception:
+            continue
+    return None
+
+
+async def _recognize_captcha(page, target, on_progress=None, max_retry: int = 3) -> str:
+    """识别验证码文本。识别结果长度>=3 才有效；无效则点击验证码图刷新换一张再试。
+
+    on_progress(text, attempt): SSE 透出识别结果回调（用户要求直播可见识别对错）。
+    max_retry 轮全空 → RuntimeError。"""
+    ocr = _get_ocr()
+    if ocr is None:
+        raise RuntimeError("ddddocr 未安装（requirements 含 ddddocr==1.5.6，需 pip install）")
+    last_err = None
+    for attempt in range(1, max_retry + 1):
+        img_bytes = await _screenshot_captcha_image(page, target)
+        if img_bytes is None:
+            last_err = f"验证码图片未定位到（已尝试 target+{len(_CAPTCHA_FALLBACK_SELECTORS)} 个兜底选择器, attempt={attempt}）"
+            if on_progress:
+                await on_progress(f"识别失败：{last_err}", attempt)
+            await page.wait_for_timeout(800)
+            continue
+        text = (ocr.classification(img_bytes) or "").strip()
+        if text and len(text) >= 3:
+            if on_progress:
+                await on_progress(f"验证码识别结果：{text}", attempt)
+            return text
+        last_err = f"OCR 识别结果无效（「{text}」长度<3, attempt={attempt}）"
+        if on_progress:
+            await on_progress(f"{last_err}，点击验证码图刷新换一张", attempt)
+        # 识别失败 → 点验证码图刷新换一张（旧平台验证过的重试逻辑）
+        try:
+            refresh_loc = target or 'img[src*="captcha"]'
+            await page.locator(refresh_loc).first.click()
+        except Exception:
+            pass
+        await page.wait_for_timeout(800)
+    raise RuntimeError(f"验证码识别失败（已刷新重试 {max_retry} 次）: {last_err}。"
+                       f"ddddocr 仅支持普通字符型图形验证码，算术题/滑块/点选类需人工处理")
+
 
 def classify_error(error: Exception) -> str:
     """错误四分类: locate_failed/timeout/assertion_failed/script_error."""
@@ -127,38 +223,21 @@ async def dispatch_editor_action(page, step, expect_mod=None, db_query=None):
     if action == "input_captcha":
         # 复合动作：截图验证码图片(target) → ddddocr 识别 → 自动填入输入框(value)
         # target=验证码图片元素定位器, value=验证码输入框定位器
-        import ddddocr
-        ocr = ddddocr.DdddOcr(show_ad=False)
-        last_err = None
-        for attempt in range(2):  # 识别失败重试 1 次（普通字符型验证码识别率 ~90%）
-            img_bytes = await page.locator(target).screenshot()
-            text = ocr.classification(img_bytes)
-            text = (text or "").strip()
-            if text:
-                await page.locator(value).fill(text)
-                return None
-            last_err = f"OCR 识别结果为空 (attempt={attempt + 1})"
-            await page.wait_for_timeout(500)
-        raise RuntimeError(f"验证码识别失败: {last_err}。ddddocr 仅支持普通字符型图形验证码，"
-                           f"算术题/滑块/点选类需人工处理")
+        # （识别失败自动点图刷新换一张重试，最多 3 轮；识别结果 SSE 透出）
+        text = await _recognize_captcha(page, target)
+        await page.locator(value).fill(text)
+        return None
     if action == "captcha_recognize":
         # 需求②：只识别验证码（截图 target → ddddocr），存全局变量 captcha_text，不填写
         # 填写由后续 input/fill 步骤用 {captcha_text} 引用完成
-        import ddddocr
-        ocr = ddddocr.DdddOcr(show_ad=False)
-        last_err = None
-        for attempt in range(2):
-            img_bytes = await page.locator(target).screenshot()
-            text = ocr.classification(img_bytes)
-            text = (text or "").strip()
-            if text:
-                page._script_vars = getattr(page, "_script_vars", {})
-                page._script_vars["captcha_text"] = text
-                return None
-            last_err = f"OCR 识别结果为空 (attempt={attempt + 1})"
-            await page.wait_for_timeout(500)
-        raise RuntimeError(f"验证码识别失败: {last_err}。ddddocr 仅支持普通字符型图形验证码，"
-                           f"算术题/滑块/点选类需人工处理")
+        # （识别失败自动点图刷新换一张重试，最多 3 轮；识别结果 SSE 由调用方透出——
+        #   dispatch 无 sse 句柄，借 page._script_vars 带出最近识别日志供 execute 层透出）
+        async def _save_progress(msg, attempt):
+            page._script_vars = getattr(page, "_script_vars", {})
+            page._script_vars["_captcha_log"] = msg
+        text = await _recognize_captcha(page, target, on_progress=_save_progress)
+        page._script_vars["captcha_text"] = text
+        return None
     if action == "select":
         await page.locator(target).select_option(value)
         return None
@@ -406,6 +485,12 @@ class ScriptExecutor:
                                        progress=(i / max(len(steps), 1)) * 0.9)
                 try:
                     await dispatch_editor_action(page, sm, _async_expect)
+                    # 验证码识别结果透出（dispatch 借 _script_vars 带回日志）
+                    captcha_log = (getattr(page, "_script_vars", None) or {}).pop("_captcha_log", None)
+                    if captcha_log:
+                        await sse.send_message(type="system", stage="execute",
+                                               content=captcha_log,
+                                               progress=((i + 1) / max(len(steps), 1)) * 0.9)
                     await sse.send_message(type="system", stage="execute",
                                            content=f"第 {step} 步：✅ 通过",
                                            progress=((i + 1) / max(len(steps), 1)) * 0.9)
@@ -418,7 +503,7 @@ class ScriptExecutor:
                     failures += 1
                     overall_status = "fail"
                     await sse.send_message(type="error", stage="execute",
-                                           content=f"第 {step} 步：❌ 失败（{last_failure['error_type']}）",
+                                           content=f"第 {step} 步：❌ 失败（{last_failure['error_type']}）：{str(e)[:150]}",
                                            progress=((i + 1) / max(len(steps), 1)) * 0.9)
                     if failures >= max_failures:
                         break
@@ -477,7 +562,7 @@ class ScriptExecutor:
                     if failed_heal_log:
                         heal_logs.append(failed_heal_log)
                     await sse.send_message(type="error", stage="execute",
-                                           content=f"第 {step} 步：❌ 失败（{last_failure['error_type']}）",
+                                           content=f"第 {step} 步：❌ 失败（{last_failure['error_type']}）：{str(e)[:150]}",
                                            progress=((i + 1) / max(len(steps), 1)) * 0.9)
                     if failures >= max_failures:
                         break
