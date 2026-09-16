@@ -115,7 +115,7 @@ const loadTrend = async () => {
     }
   } finally { trendLoading.value = false }
 }
-const goDetail = (row) => router.push(`/reports/${row.exec_id}`)
+const goDetail = (row) => router.push({ path: `/reports/${row.exec_id}`, query: { from: '/reports', fromTitle: '执行记录与报告' } })
 onMounted(loadProjects)
 onBeforeUnmount(() => { if (chart) chart.dispose() })
 </script>

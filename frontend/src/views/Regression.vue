@@ -138,7 +138,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { scriptAPI } from '@/api/script.js'
 import { regressionAPI } from '@/api/regression.js'
@@ -147,6 +147,7 @@ import { projectAPI } from '@/api/project.js'
 import DiagnosisCard from '@/components/DiagnosisCard.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 const projects = ref([])
 const projectId = ref('')
@@ -327,7 +328,7 @@ const viewReport = async (row) => {
   try {
     const resp = await regressionAPI.latestExecution(row.script.id)
     if (resp.data?.record) {
-      router.push(`/reports/${resp.data.record.exec_id}`)
+      router.push({ path: `/reports/${resp.data.record.exec_id}`, query: { from: route.path, fromTitle: route.meta?.title || '执行记录' } })
     } else {
       ElMessage.info('该脚本暂无执行记录')
     }
