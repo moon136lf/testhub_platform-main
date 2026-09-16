@@ -366,6 +366,7 @@ const handleRunSet = async () => {
 }
 
 const onProjectChange = () => {
+  setPage.value = 1
   loadSets()
   loadScripts()
 }
