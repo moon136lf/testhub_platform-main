@@ -1,9 +1,17 @@
 <template>
   <div class="page-container">
-    <el-page-header @back="$router.back()" :content="set?.name || '测试集详情'" />
+    <div class="page-header">
+      <div>
+        <h2>测试集详情</h2>
+        <div class="page-subtitle">{{ set?.name || '' }} · 执行与记录</div>
+      </div>
+      <div class="header-actions">
+        <el-button link type="primary" @click="$router.back()">← 返回</el-button>
+      </div>
+    </div>
     <!-- 信息卡 -->
     <el-card v-if="set" style="margin-top: 12px">
-      <el-descriptions :column="4" border size="small">
+      <el-descriptions :column="4">
         <el-descriptions-item label="名称">{{ set.name }}</el-descriptions-item>
         <el-descriptions-item label="来源">{{ SOURCE_CN[set.source] || set.source }}</el-descriptions-item>
         <el-descriptions-item label="用例数">{{ (set.case_ids || []).length }}</el-descriptions-item>
@@ -24,7 +32,7 @@
     </el-card>
     <el-tabs v-model="tab" style="margin-top: 12px">
       <el-tab-pane label="成员用例" name="cases">
-        <el-table :data="caseRows" border size="small">
+        <el-table :data="caseRows" stripe>
           <el-table-column type="index" label="#" width="55" />
           <el-table-column prop="name" label="用例名" min-width="240" show-overflow-tooltip />
           <el-table-column prop="priority" label="优先级" width="90" />
@@ -41,7 +49,7 @@
           <el-radio-button value="success">成功</el-radio-button>
           <el-radio-button value="failed">有失败</el-radio-button>
         </el-radio-group>
-        <el-table :data="records" style="margin-top: 12px" border size="small">
+        <el-table :data="records" style="margin-top: 12px" stripe>
           <el-table-column label="触发时间" width="170">
             <template #default="{ row }">{{ formatTime(row.started_at) }}</template>
           </el-table-column>
@@ -217,9 +225,11 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.trend-title { font-size: 13px; color: #909399; margin-bottom: 8px; }
+.trend-title { font-size: 13px; color: var(--mt-text-secondary); margin-bottom: 8px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; }
+.page-subtitle { font-size: 13px; color: var(--mt-text-secondary); margin-top: 4px; }
 .trend-bar { display: flex; align-items: flex-end; gap: 6px; height: 80px; }
-.trend-col { width: 28px; height: 100%; display: flex; align-items: flex-end; background: #f5f7fa; border-radius: 3px 3px 0 0; overflow: hidden; }
+.trend-col { width: 28px; height: 100%; display: flex; align-items: flex-end; background: var(--el-fill-color-lighter, #f5f7fa); border-radius: 3px 3px 0 0; overflow: hidden; }
 .trend-fill { width: 100%; border-radius: 3px 3px 0 0; }
 .trend-fill.ok { background: #67c23a; }
 .trend-fill.bad { background: #e6a23c; }
