@@ -650,17 +650,17 @@ const handleIdentify = async () => {
   } catch (e) { ElMessage.error('识别失败') } finally { identifying.value = false }
 }
 
+const route = useRoute()
+const router = useRouter()
 onMounted(async () => {
   const presp = await projectAPI.list()
   projects.value = presp.items || presp.data || presp || []
   if (projects.value.length) form.projectId = projects.value[0].id
+  loadSets() // 无条件加载测试集
   // 转脚本页跳转定位：/auto/ui?caseId=xx → 脚本库按用例过滤
-  const route = useRoute()
-  const router = useRouter()
   const caseId = route.query.caseId
   if (caseId && projects.value.length) {
     activeTab.value = 'library'
-    loadScripts()
     try {
       const resp = await scriptAPI.list({ project_id: form.projectId, case_id: caseId, include_regression: true })
       scripts.value = resp.data || []
@@ -668,8 +668,8 @@ onMounted(async () => {
     } catch { ElMessage.error('脚本定位失败') }
     // 定位完成后清理 query，避免刷新/切换时残留过滤
     router.replace({ query: {} })
-  } else if (form.projectId) {
-    loadSets(); loadScripts()
+  } else {
+    loadScripts()
   }
 })
 </script>
