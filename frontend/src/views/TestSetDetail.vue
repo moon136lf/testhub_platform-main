@@ -191,7 +191,7 @@ const showUnexecReason = (row) => {
 
 const viewReport = (row) => {
   if (!row.exec_id) { ElMessage.warning('该记录无报告'); return }
-  router.push(`/reports/${row.exec_id}`)
+  router.push({ path: `/reports/${row.exec_id}`, query: { from: `/auto/ui/set/${setId}`, fromTitle: '测试集详情' } })
 }
 
 // 执行：调现有 run API（后端透传 test_set_id 到 ExecutionRecord），直播仍在 AutoUITest 页

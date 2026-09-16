@@ -108,10 +108,11 @@ const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => route.meta?.title || '首页')
 
 // 面包屑规则（用户定稿）：
-// 1. 无「首页」——顶级页面只显示自身标题（首页路由 title 即『首页』）
-// 2. 静态层级 = 菜单结构：列表页显示 分组/页面（meta.crumbs 只在详情类页面用）；
-//    菜单内页面 crumbs 自动从侧边栏结构推导，详情页由 router meta.crumbs 声明完整链
-// 3. 不再用访问轨迹——层级只反映菜单/页面归属，与点击历史无关
+// 1. 无「首页」——顶级页面只显示自身标题
+// 2. 静态层级 = 菜单结构：菜单内页面显示 分组/页面（MENU_MAP 自动推导）；
+//    详情页由 router meta.crumbs 声明默认完整链
+// 3. 来源覆盖：进入详情页时带 from 查询参数（?from=/auto/ui/set/xx&fromTitle=测试集详情）
+//    则显示 来源链/当前页，替代静态 crumbs——用户要求「从哪进的就显示哪条链」
 // 菜单结构映射（与 template 中侧边栏一致；维护两处需同步）
 const MENU_MAP = [
   { group: null, items: [['仪表盘', '/dashboard'], ['项目管理', '/projects']] },
@@ -136,14 +137,34 @@ const trail = computed(() => {
   if (route.path === '/dashboard') return [] // 首页本身不显示
   const mc = menuCrumbs.value
   if (mc !== null) return mc
-  // 详情类页面：router meta.crumbs 声明的完整静态链（含可点父页）+ 当前页标题
-  const crumbs = (route.meta?.crumbs || []).map(t => ({
+  // 来源覆盖：URL 带 from/fromTitle 时，先展开 from 页的静态链再拼来源页标题
+  const fromPath = route.query?.from
+  const fromTitle = route.query?.fromTitle
+  if (fromPath && fromTitle) {
+    const fromCrumb = menuCrumbsForPath(fromPath)
+    const chain = fromPath !== '/dashboard' ? [...fromCrumb, { title: fromTitle, path: fromPath }] : []
+    return [...chain, ...(route.meta?.crumbs || []).map(t => ({
+      title: t,
+      path: { '用例管理': '/cases', '执行记录与报告': '/reports', 'UI自动化测试': '/auto/ui' }[t] || '',
+      key: 'static-' + t,
+    }))]
+  }
+  // 默认：router meta.crumbs 声明的完整静态链（含可点父页）
+  return (route.meta?.crumbs || []).map(t => ({
     title: t,
     path: { '用例管理': '/cases', '执行记录与报告': '/reports', 'UI自动化测试': '/auto/ui' }[t] || '',
     key: 'static-' + t,
   }))
-  return crumbs
 })
+
+function menuCrumbsForPath(path) {
+  for (const g of MENU_MAP) {
+    for (const [t, p] of g.items) {
+      if (p === path) return g.group ? [{ title: g.group, path: '' }] : []
+    }
+  }
+  return []
+}
 
 </script>
 
