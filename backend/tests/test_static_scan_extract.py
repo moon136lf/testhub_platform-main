@@ -21,6 +21,17 @@ MIN_VUE = """<template><button @click="go">提交</button></template>
 """
 
 
+ATTRS_VUE = """<template>
+  <div>
+    <el-button data-id="btn1">数据编号</el-button>
+    <el-button id="real-id" name="real-name" data-testid="tid">正常属性</el-button>
+    <el-input v-model="q"></el-input><div>搜索</div>
+    <el-button><el-icon>+</el-icon>新建</el-button>
+    <input type="text" />
+  </div>
+</template>
+"""
+
 @pytest.fixture
 def repo(tmp_path):
     views = tmp_path / "src" / "views"
@@ -28,6 +39,7 @@ def repo(tmp_path):
     (views / "Cases.vue").write_text(CASES_VUE, encoding="utf-8")
     (views / "Min.vue").write_text(MIN_VUE, encoding="utf-8")
     (views / "no_template.css").write_text(".a{}", encoding="utf-8")
+    (views / "Attrs.vue").write_text(ATTRS_VUE, encoding="utf-8")
     return tmp_path
 
 
@@ -83,3 +95,42 @@ class TestExtract:
         svc = StaticScanService()
         paths = {c["file_path"] for c in svc.extract_components(str(repo))}
         assert all("node_modules" not in p for p in paths)
+
+
+def _attrs_elements(repo):
+    svc = StaticScanService()
+    comp = next(c for c in svc.extract_components(str(repo))
+                if c["component_name"] == "Attrs")
+    return comp["elements"]
+
+
+class TestFixes:
+    def test_empty_tag_no_sibling_text(self, repo):
+        # I-1: 空非自闭合标签不应抓到兄弟文本 "搜索"
+        els = _attrs_elements(repo)
+        inp = next(e for e in els if e.get("v_model") == "q")
+        assert inp["text"] is None
+
+    def test_nested_child_not_own_text(self, repo):
+        # I-1: 嵌套子元素 "+" 不归属父按钮，text 取 "新建"
+        els = _attrs_elements(repo)
+        btn = next(e for e in els if e["text"] == "新建")
+        assert btn is not None
+
+    def test_data_id_not_matched_as_id(self, repo):
+        # I-2: data-id 不应被当作 id
+        els = _attrs_elements(repo)
+        btn = next(e for e in els if e["text"] == "数据编号")
+        assert btn["id"] is None
+
+    def test_id_name_testid_normal(self, repo):
+        els = _attrs_elements(repo)
+        btn = next(e for e in els if e["text"] == "正常属性")
+        assert btn["id"] == "real-id"
+        assert btn["name"] == "real-name"
+        assert btn["data_testid"] == "tid"
+
+    def test_self_closing_no_text(self, repo):
+        els = _attrs_elements(repo)
+        inp = next(e for e in els if e["tag"] == "input")
+        assert inp["text"] is None

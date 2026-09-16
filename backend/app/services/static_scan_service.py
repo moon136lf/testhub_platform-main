@@ -27,13 +27,18 @@ _INTERACTIVE_TAGS = (
 _TAG_OPEN_RE = re.compile(r"<([a-zA-Z][\w-]*)\b([^>]*)>")
 _ATTR_V_MODEL_RE = re.compile(r"v-model(?:\.\w+)*\s*=\s*[\"']([^\"']+)[\"']")
 _ATTR_PLACEHOLDER_RE = re.compile(r"placeholder\s*=\s*[\"']([^\"']+)[\"']")
-_ATTR_ID_RE = re.compile(r"(?::)?id\s*=\s*[\"']([^\"']+)[\"']")
+_ATTR_ID_RE = re.compile(r"(?<![\w-])(?::)?id\s*=\s*[\"']([^\"']+)[\"']")
 _ATTR_HREF_RE = re.compile(r"href\s*=\s*[\"']([^\"']+)[\"']")
 _ATTR_NAME_RE = re.compile(r"(?<!\w)name\s*=\s*[\"']([^\"']+)[\"']")
 _ATTR_TESTID_RE = re.compile(r"data-testid\s*=\s*[\"']([^\"']+)[\"']")
 _TEMPLATE_RE = re.compile(r"<template>(.*)</template>", re.DOTALL | re.IGNORECASE)
-# 插值/静态文本: 紧跟开标签之后的标签间可见文本
-_TEXT_RE = re.compile(r"\s*([^<>{}]{1,50}?)\s*<")
+# 插值/静态文本: 从开标签结束处 match——先跳过若干完整嵌套子元素（<x>…</x>），
+# 再取紧邻的第一个文本节点，且其后第一个标签必须是与当前标签同名的闭合标签
+# （保证文本归属当前元素，不误抓空标签的兄弟文本/嵌套子元素的文本）
+_TEXT_RE = re.compile(
+    r"\s*(?:<[a-zA-Z][^<>]*>.*?</[a-zA-Z][\w-]*>\s*)*([^<>{}]{1,50}?)\s*</([a-zA-Z][\w-]*)>",
+    re.DOTALL,
+)
 
 SNIPPET_MAX = 4000
 
@@ -63,11 +68,13 @@ class StaticScanService:
             tag, attrs = m.group(1).lower(), m.group(2)
             if tag not in _INTERACTIVE_TAGS:
                 continue
-            # 自闭合标签（<input .../>）无子文本；否则取紧随其后的文本
+            # 自闭合标签（<input .../>）无子文本；否则取紧随其后的文本，
+            # 且文本后第一个闭合标签须与当前标签同名（防止兄弟/子元素文本误归属）
             text = None
-            tm = _TEXT_RE.search(template, m.end())
-            if tm and not attrs.rstrip().endswith("/"):
-                text = tm.group(1).strip() or None
+            if not attrs.rstrip().endswith("/"):
+                tm = _TEXT_RE.match(template, m.end())
+                if tm and tm.group(2).lower() == tag:
+                    text = tm.group(1).strip() or None
             el = {
                 "tag": tag,
                 "text": text,
